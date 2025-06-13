@@ -1,4 +1,4 @@
-package com.openedope.open_e_reloading_assistant;
+package com.openedope.open_edope;
 
 public interface NfcProgressListener {
     void onProgress(int percent);

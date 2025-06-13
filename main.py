@@ -153,7 +153,7 @@ class HomeScreen(Screen):
     pass
 
 
-class SavedCartridgesScreen(Screen):
+class SavedCardsScreen(Screen):
     def on_enter(self):
         try:
             print("File and folder list refreshed on screen enter.")
@@ -170,7 +170,7 @@ class SavedCartridgesScreen(Screen):
             filechooser.sort_type = sort_by
             filechooser.sort_order = 'desc' if reverse else 'asc'
             filechooser.sort_dirs_first = True
-            self.populate_swipe_file_list()
+            filechooser._update_files()
             print(f"Sorted by {sort_by}, reverse={reverse}")
         except Exception as e:
             print(f"Error accessing filechooser: {e}")
@@ -213,7 +213,7 @@ class ManageDataScreen(Screen):
             title="Manage Data",
             type="custom",
             content_cls=Label(
-            text="Here you can manage and delete your saved load data and folders.\nUse With Caution: deleted data cannot be recovered.",
+            text="Here you can manage and delete your saved data cards and folders.\nUse With Caution: deleted data cannot be recovered.",
             halign="center",
             valign="middle",
             color=(0, 0, 0, 1),
@@ -274,7 +274,7 @@ class ManageDataScreen(Screen):
                     else:
                         os.remove(item_path)
                 print("All files and folders in assets/CSV deleted.")
-                toast("All Load Data files and folders deleted.")
+                toast("All Data Card  files and folders deleted.")
             except Exception as e:
                 print(f"Error deleting CSV files: {e}")
                 toast(f"Error deleting files: {e}")
@@ -282,7 +282,7 @@ class ManageDataScreen(Screen):
 
         dialog = MDDialog(
             title="Confirm Delete",
-            text="Are you sure you want to delete ALL Cartides and Load Data in? This cannot be undone.",
+            text="Are you sure you want to delete ALL Events and Data Cards in? This cannot be undone.",
             buttons=[
                 MDFlatButton(
                     text="CANCEL",
@@ -378,38 +378,22 @@ class MainApp(MDApp):
         import os
         return os.path.basename(path)
     def on_nfc_button_press(self, *args):
-        """Handle the NFC button press: add manual data if present, display table, and generate the bitmap."""
+        """Handle the NFC button press: generate the bitmap from current data."""
         print("NFC button pressed!")
-
-        # Only add manual data if at least one field is filled in
-        if (
-            hasattr(self, "manual_data_rows")
-            and self.manual_data_rows
-            and any(
-                any(field.text.strip() for field in row_fields.values())
-                for row_fields in self.manual_data_rows
-            )
-        ):
-            print("Manual data input detected, adding manual data before NFC transfer.")
-            self.add_manual_data()
-
-        # Display the updated table (if not already)
-        if hasattr(self, "current_data") and self.current_data:
-            self.display_table(self.current_data)
-            output_path = self.csv_to_bitmap(self.current_data)
-            if output_path:
-                print(f"Bitmap generated and saved to: {output_path}")
-            else:
-                print("Failed to generate bitmap.")
-        else:
+        if not hasattr(self, "current_data") or not self.current_data:
             print("No data loaded to generate bitmap.")
+            return
+        output_path = self.csv_to_bitmap(self.current_data)
+        if output_path:
+            print(f"Bitmap generated and saved to: {output_path}")
+        else:
+            print("Failed to generate bitmap.")
 
     def update_nfc_progress(self, percent):
         if hasattr(self, "nfc_progress_bar") and self.nfc_progress_bar:
             # If percent is 100, delay the update by 3 seconds
             if percent >= 100:
                 Clock.schedule_once(lambda dt: self._finish_nfc_progress(), 3)
-                
             else:
                 self.nfc_progress_bar.value = percent
 
@@ -420,14 +404,14 @@ class MainApp(MDApp):
             self.nfc_progress_label.text = "Transfer successful!"
             self.nfc_progress_label.color = (0, 0.6, 0, 1)
         Clock.schedule_once(lambda dt: self.hide_nfc_progress_dialog(), 1.5)
-        #clear the table data and show manual input
-        self.clear_table_data()
         
     def on_nfc_transfer_error(self, error_message="Transfer failed!"):
         if hasattr(self, "nfc_progress_label"):
             self.nfc_progress_label.text = error_message
             self.nfc_progress_label.color = (1, 0, 0, 1)  # Red color for error
         Clock.schedule_once(lambda dt: self.hide_nfc_progress_dialog(), 2)
+         # Clear the data table, stage notes, and stage name after success
+        self.clear_table_data()
         
     def show_nfc_progress_dialog(self, message="Transferring data..."):
         # Vibrate for 500ms when the dialog opens (Android only)
@@ -700,7 +684,7 @@ class MainApp(MDApp):
 
         # Dynamically set the rootpath for the FileChooserListView
         self.root = Builder.load_file("layout.kv")  # Load the root widget from the KV file
-        saved_cartridges_screen = self.root.ids.screen_manager.get_screen("saved_cartridges")
+        saved_cards_screen = self.root.ids.screen_manager.get_screen("saved_cards")
         csv_directory = self.ensure_csv_directory()
 
         # Handle the intent if the app was opened via an intent
@@ -756,16 +740,20 @@ class MainApp(MDApp):
         home_screen = self.root.ids.home_screen
         table_container = home_screen.ids.table_container
         table_container.clear_widgets()
-        # Clear the cartridge name and cartridge notes fields
+        # Clear the stage name and stage notes fields
         try:
-            home_screen.ids.cartridge_name_field.text = ""
-            home_screen.ids.cartridge_notes_field.text = ""
-            print("cartridge name and cartridge notes fields cleared.")
+            home_screen.ids.stage_name_field.text = ""
+            home_screen.ids.stage_notes_field.text = ""
+            print("Stage name and stage notes fields cleared.")
         except Exception as e:
-            print(f"Error clearing cartridge name or notes: {e}")
+            print(f"Error clearing stage name or notes: {e}")
         print("Data table cleared.")
         self.show_manual_data_input()  # Show manual data input fields again
 
+    global show_lead, show_range, show_2_wind_holds
+    show_lead = False
+    show_range = False
+    show_2_wind_holds = True
         
     def ensure_csv_directory(self):
         """Ensure the assets/CSV directory exists and is accessible."""
@@ -787,22 +775,22 @@ class MainApp(MDApp):
                 # If it's a folder, show its contents
                 self.populate_swipe_file_list(selected_path)
                 return
-            # Extract the file name and set it to the cartridge_name_field
+            # Extract the file name and set it to the stage_name_field
             file_name = os.path.basename(selected_path)
-            self.root.ids.home_screen.ids.cartridge_name_field.text = os.path.splitext(file_name)[0]
-            # If the selected file is a CSV, extract the cartridge notes footer and display it in the cartridge_notes_field
+            self.root.ids.home_screen.ids.stage_name_field.text = os.path.splitext(file_name)[0]
+            # If the selected file is a CSV, extract the stage notes footer and display it in the stage_notes_field
             if selected_path.endswith(".csv"):
                 try:
                     with open(selected_path, mode="r", encoding="utf-8") as csv_file:
                         lines = csv_file.readlines()
-                        # Look for the "cartridge Notes:" footer and extract the notes
+                        # Look for the "Stage Notes:" footer and extract the notes
                         for i, line in enumerate(lines):
-                            if line.strip().lower() == "cartridge notes:":
-                                cartridge_notes = "".join(lines[i + 1:]).strip()
-                                self.root.ids.home_screen.ids.cartridge_notes_field.text = cartridge_notes
+                            if line.strip().lower() == "stage notes:":
+                                stage_notes = "".join(lines[i + 1:]).strip()
+                                self.root.ids.home_screen.ids.stage_notes_field.text = stage_notes
                                 break
                 except Exception as e:
-                    print(f"Error extracting cartridge notes: {e}")
+                    print(f"Error extracting stage notes: {e}")
             print(f"Selected: {selected_path}")  # Log the selected file or folder
 
             # Check if the selected file is a CSV
@@ -819,7 +807,7 @@ class MainApp(MDApp):
                     self.display_table(processed_data)
 
                     # Reset the FileChooserListView to its rootpath
-                    saved_cartridges_screen = self.root.ids.screen_manager.get_screen("saved_cartridges")
+                    saved_cards_screen = self.root.ids.screen_manager.get_screen("saved_cards")
 
                     # Navigate back to the Home Screen
                     self.root.ids.screen_manager.current = "home"  # Reference the Home Screen by its name in layout.kv
@@ -833,36 +821,29 @@ class MainApp(MDApp):
             print("No file selected")
 
     def read_csv_to_dict(self, file_or_path):
-        headers = ["Projectile", "Powder", "Charge", "Primer", "Brass", "Headspace", "Ogive", "OAL", "Velocity"]
+        """Reads a CSV file or file-like object and maps it to static column names, ignoring the headers and skipping the first 6 lines."""
+        static_columns = ["Target", "Range", "Elv", "Wnd1", "Wnd2", "Lead"]  # Static column names
         data = []
         try:
             print(f"Reading CSV: {file_or_path}")
+            # Detect if file_or_path is a path or file-like object
             if isinstance(file_or_path, str):
-                csv_file = open(file_or_path, mode="r", encoding="utf-8")
+                csv_file = open(file_or_path, mode="r", encoding="latin-1")
                 close_after = True
             else:
                 csv_file = file_or_path
                 close_after = False
 
             reader = csv.reader(csv_file)
-            # Find the header row (skip empty lines)
-            for row in reader:
-                if row and row[0].strip().lower() == "projectile":
-                    break
-            else:
-                print("Header row not found!")
-                if close_after:
-                    csv_file.close()
-                return []
-
-            # Read data rows until "Cartridge Notes:" or empty
-            for row in reader:
-                if not row or (row[0].strip().lower() == "cartridge notes:"):
-                    break
-                # Skip empty or short rows
-                if all(cell.strip() == "" for cell in row):
+            # Skip the first 6 lines
+            for _ in range(6):
+                next(reader, None)
+            for index, row in enumerate(reader, start=1):
+                if not row:
                     continue
-                mapped_row = {headers[i]: row[i] if i < len(row) else "" for i in range(len(headers))}
+                if row[0].strip().lower() == "stage notes:":
+                    break
+                mapped_row = {static_columns[i]: row[i] if i < len(row) else "" for i in range(len(static_columns))}
                 data.append(mapped_row)
             if close_after:
                 csv_file.close()
@@ -872,49 +853,97 @@ class MainApp(MDApp):
         return data
 
     def preprocess_data(self, data):
-        """Preprocess data for reloading table. No shifting needed for reloading headers."""
-        # Only keep the relevant headers and preserve order
-        headers = ["Projectile", "Powder", "Charge", "Primer", "Brass", "Headspace", "Ogive", "OAL", "Velocity"]
+        """Shift columns to the right by one if 'Target' contains a number."""
         processed_data = []
         for row in data:
-            processed_row = {header: row.get(header, "") for header in headers}
-            processed_data.append(processed_row)
+            target_value = row.get("Target", "")
+            # Check if the "Target" column contains a number
+            try:
+                float(target_value)
+                is_number = float(target_value) > 40
+            except (ValueError, TypeError):
+                is_number = False
+
+            if is_number:
+                # Shift the columns across to the right by one
+                shifted_row = {}
+                keys = list(row.keys())
+                for i in range(len(keys) - 1):
+                    shifted_row[keys[i + 1]] = row[keys[i]]
+                shifted_row[keys[0]] = ""  # Set the first column to empty
+                processed_data.append(shifted_row)
+            else:
+                # Keep the row as is if "Target" is not a number
+                processed_data.append(row)
         return processed_data
 
     def display_table(self, data):
+        global show_range
         # Check if data is empty
         if not data:
             print("No data to display.")
             return
 
-        # --- Use the same headers as display_table ---
-        headers = ["Projectile", "Powder", "Charge", "Primer", "Brass", "Headspace", "Ogive", "OAL", "Velocity"]
+        # Preprocess the data to handle numeric "Target" values
+        data = self.preprocess_data(data)
 
-        # Transpose data for column display (each field is a row, each value is a column)
-        table_rows = []
+        # --- Filter out rows where all values after "Target" are "---" ---
+        if data:
+            header = data[0]
+            filtered_data = [header]
+            for row in data[1:]:
+                values_after_target = [v for k, v in row.items() if k != "Target"]
+                if not all(str(v).strip() == "---" for v in values_after_target):
+                    filtered_data.append(row)
+            data = filtered_data
+
+    # Check if Range is the first column in the data
+        if data and list(data[0].keys())[0] == "Range":
+            show_range = True
+            print("Range is in column 0, setting show_range = True")
+
+        # --- Use the exact header and row logic as display_table ---
+        static_headers = ["Target", "Range", "Elv", "Wnd1", "Wnd2", "Lead"]
+        headers = ["Elv", "Wnd1"]
+        target_present = any(row.get("Target") for row in data)
+        if target_present:
+            headers.insert(0, "Target")
+        if show_range:
+            if not target_present:
+                headers.insert(0, "Range")
+            else:
+                headers.insert(1, "Range")
+        if show_2_wind_holds:
+            headers.append("Wnd2")
+        if show_lead:
+            headers.append("Lead")
+
+        # Filter the data rows based on the selected headers
+        filtered_data = [
+            {header: row.get(header, "") for header in headers} for row in data
+        ]
+
+        # Calculate the maximum width for each column, using the displayed header text
+        column_widths = {}
         for header in headers:
-            row = [header] + [str(row.get(header, "")) for row in data]
-            table_rows.append(row)
+            display_header = "Tgt" if header == "Target" else "Rng" if header == "Range" else header
+            column_widths[header] = len(display_header)
 
-        # Calculate the maximum width for each column
-        num_columns = max(len(row) for row in table_rows)
-        column_widths = [0] * num_columns
-        for row in table_rows:
-            for i, cell in enumerate(row):
-                column_widths[i] = max(column_widths[i], len(cell))
+        for row in filtered_data:
+            for header in headers:
+                column_widths[header] = max(column_widths[header], len(str(row.get(header, ""))))
 
-        # Build the table as a string
-        table_text = ""
-        for row in table_rows:
-            row_text = " | ".join(
-                f"{cell:<{column_widths[i]}}" for i, cell in enumerate(row)
-            )
-            table_text += row_text + "\n"
+        # Format the headers and rows as text
+        table_text = " | ".join(f"{header:<{column_widths[header]}}" for header in headers) + "\n"  # Add headers
+        table_text += "-" * (sum(column_widths.values()) + len(headers) * 3 - 1) + "\n"  # Add a separator line
+        for row in filtered_data:
+            table_text += " | ".join(
+                f"{str(row.get(header, '')):<{column_widths[header]}}" for header in headers) + "\n"  # Add rows
 
         # Add the text to the table_container in Home Screen
         home_screen = self.root.ids.home_screen
         table_container = home_screen.ids.table_container
-        table_container.clear_widgets()
+        table_container.clear_widgets()  # Clear any existing widgets in the container
 
         # Create a Label to display the table text
         table_label = Label(
@@ -923,16 +952,46 @@ class MainApp(MDApp):
             valign="center",
             size_hint=(1, 1),
             text_size=(table_container.width, None),
-            color=(0, 0, 0, 1),
-            font_name="assets/fonts/RobotoMono-Regular.ttf",
+            color=(0, 0, 0, 1),  # Set text color to black
+            font_name="assets/fonts/RobotoMono-Regular.ttf",  # Path to the font file
         )
         table_container.add_widget(table_label)
 
     def on_dots_press(self, instance):
-       
+        global show_lead, show_range, show_2_wind_holds
+
+        # Dismiss the existing menu if it exists
+        if hasattr(self, "menu") and self.menu:
+            self.menu.dismiss()
+
+        # Update the "Show Lead" menu item dynamically
+        if show_lead:
+            lead_menu = {"text": "Hide Lead",
+                         "on_release": lambda: (self.menu_callback("Hide Lead"), self.menu.dismiss())}
+        else:
+            lead_menu = {"text": "Show Lead",
+                         "on_release": lambda: (self.menu_callback("Show Lead"), self.menu.dismiss())}
+        # Update the "Show Range" menu item dynamically
+        if show_range:
+            range_menu = {"text": "Hide Range",
+                          "on_release": lambda: (self.menu_callback("Hide Range"), self.menu.dismiss())}
+        else:
+            range_menu = {"text": "Show Range",
+                          "on_release": lambda: (self.menu_callback("Show Range"), self.menu.dismiss())}
+        # Update the "Show 2 Wind Holds" menu item dynamically
+        if show_2_wind_holds:
+            wind_holds_menu = {"text": "Show 1 Wind Hold",
+                               "on_release": lambda: (self.menu_callback("Show 1 Wind Hold"), self.menu.dismiss())}
+        else:
+            wind_holds_menu = {"text": "Show 2 Wind Holds",
+                               "on_release": lambda: (self.menu_callback("Show 2 Wind Holds"), self.menu.dismiss())}
+
         # Define menu items
         menu_items = [
             {"text": "Settings", "on_release": lambda: self.menu_callback("Settings")},
+            lead_menu,
+            range_menu,
+            wind_holds_menu,
         ]
 
         # Create the dropdown menu
@@ -943,7 +1002,22 @@ class MainApp(MDApp):
         self.menu.open()
 
     def menu_callback(self, option):
-        if option == "Settings":
+        global show_lead, show_range, show_2_wind_holds
+
+        # Handle the selected option
+        if option == "Hide Lead":
+            show_lead = False
+        elif option == "Show Lead":
+            show_lead = True
+        if option == "Hide Range":
+            show_range = False
+        elif option == "Show Range":
+            show_range = True
+        if option == "Show 1 Wind Hold":
+            show_2_wind_holds = False
+        elif option == "Show 2 Wind Holds":
+            show_2_wind_holds = True
+        elif option == "Settings":
             # Navigate to the settings screen
             self.root.ids.screen_manager.current = "settings"
 
@@ -962,12 +1036,30 @@ class MainApp(MDApp):
             filtered_data = self.filter_table_data(self.current_data)
             self.display_table(filtered_data)
 
+    def filter_table_data(self, data):
+        """Filters the table data based on the show_lead and show_2_wind_holds flags."""
+        filtered_data = []
+        for row in data:
+            filtered_row = {}
+            # Add columns in the static order
+            filtered_row["Target"] = row.get("Target", "")
+            if show_range:
+                filtered_row["Range"] = row.get("Range", "")
+            filtered_row["Elv"] = row.get("Elv", "")
+            filtered_row["Wnd1"] = row.get("Wnd1", "")
+            if show_2_wind_holds:
+                filtered_row["Wnd2"] = row.get("Wnd2", "")
+            if show_lead:
+                filtered_row["Lead"] = row.get("Lead", "")
+            filtered_data.append(filtered_row)
+        return filtered_data
+
     def on_fab_press(self):
         """Handle the floating action button press."""
-        # Get the cartridge name from the text field
-        cartridge_name = self.root.ids.home_screen.ids.cartridge_name_field.text.strip()
-        if not cartridge_name:
-            toast("cartridge Name required for Save")
+        # Get the stage name from the text field
+        stage_name = self.root.ids.home_screen.ids.stage_name_field.text.strip()
+        if not stage_name:
+            toast("Stage Name required for Save")
             return  # Do not open the save dialog
 
         if not self.dialog:
@@ -1047,7 +1139,7 @@ class MainApp(MDApp):
                     MDFlatButton(
                         text="SAVE",
                         on_release=lambda x: (
-                            self.handle_save_dialog(text_input),
+                            self.save_data(new_event_name=text_input.text.strip() if text_input.text.strip() else None),
                             self.dialog.dismiss()  # Automatically close the dialog after saving
                         ),
                         theme_text_color="Custom",          # Make the text color custom
@@ -1057,24 +1149,6 @@ class MainApp(MDApp):
             )
 
         self.dialog.open()
-
-    def handle_save_dialog(self, text_input):
-        home_screen = self.root.ids.home_screen
-        table_container = home_screen.ids.table_container
-        # Add manual data if any manual fields are filled
-        if (
-            table_container.children
-            and hasattr(self, "manual_data_rows")
-            and self.manual_data_rows
-            and any(
-                any(field.text.strip() for field in row_fields.values())
-                for row_fields in self.manual_data_rows
-            )
-        ):
-            print("Manual data input detected, adding manual data before saving.")
-            self.add_manual_data()
-        self.save_data(new_event_name=text_input.text.strip() if text_input.text.strip() else None)
-        self.dialog.dismiss()
 
     def save_data(self, new_event_name=None):
         if hasattr(self, "current_data") and self.current_data:
@@ -1096,7 +1170,7 @@ class MainApp(MDApp):
                         os.makedirs(csv_folder_path)
 
                     # Construct the file name and path
-                    file_name = f"{self.root.ids.home_screen.ids.cartridge_name_field.text}.csv"
+                    file_name = f"{self.root.ids.home_screen.ids.stage_name_field.text}.csv"
                     if new_event_name:
                         # Use the new event name to create a folder inside the CSV folder
                         event_folder_path = os.path.join(csv_folder_path, new_event_name)
@@ -1121,26 +1195,26 @@ class MainApp(MDApp):
                             writer.writerow([])
 
                         # Write the headers
-                        headers = ["Projectile", "Powder", "Charge", "Primer", "Brass", "Headspace", "Ogive", "OAL", "Velocity"]
+                        headers = self.current_data[0].keys()
                         writer.writerow(headers)
 
                         # Write the data rows
                         for row in self.current_data:
-                            writer.writerow([row.get(h, "") for h in headers])
+                            writer.writerow(row.values())
 
-                        # Write the Cartridge notes as the footer
-                        cartridge_notes = self.root.ids.home_screen.ids.cartridge_notes_field.text.strip()
-                        if cartridge_notes:
+                        # Write the stage notes as the footer
+                        stage_notes = self.root.ids.home_screen.ids.stage_notes_field.text.strip()
+                        if stage_notes:
                             writer.writerow([])  # Add an empty row before the footer
-                            writer.writerow(["Cartridge Notes:"])
-                            writer.writerow([cartridge_notes])
+                            writer.writerow(["Stage Notes:"])
+                            writer.writerow([stage_notes])
 
                         print(f"Data saved to: {file_path}")
                         toast(f"Data saved")
 
                         # Refresh the FileChooserListView
-                        saved_cartridges_screen = self.root.ids.screen_manager.get_screen("saved_cartridges")
-                        self.populate_swipe_file_list()
+                        saved_cards_screen = self.root.ids.screen_manager.get_screen("saved_cards")
+                        filechooser._update_files()  # Refresh the file and folder list
                         print("File and folder list refreshed.")
                 except Exception as e:
                     print(f"Error saving data to CSV: {e}")
@@ -1159,6 +1233,10 @@ class MainApp(MDApp):
             self.config_parser.set("Settings", "display_model", self.selected_display)
             self.config_parser.set("Settings", "orientation", self.selected_orientation)
             self.config_parser.set("Settings", "standalone_mode", str(self.standalone_mode_enabled))
+            # Save show/hide preferences
+            self.config_parser.set("Settings", "show_lead", str(show_lead))
+            self.config_parser.set("Settings", "show_range", str(show_range))
+            self.config_parser.set("Settings", "show_2_wind_holds", str(show_2_wind_holds))
             # Save sort settings
             self.config_parser.set("Settings", "sort_type", getattr(self, "sort_type", "date"))
             self.config_parser.set("Settings", "sort_order", getattr(self, "sort_order", "asc"))
@@ -1171,12 +1249,20 @@ class MainApp(MDApp):
             print(f"Error saving settings: {e}")
 
     def load_settings(self):
+        global show_lead, show_range, show_2_wind_holds
         try:
             self.config_parser.read(self.config_file)
             if self.config_parser.has_option("Settings", "display_model"):
                 self.selected_display = self.config_parser.get("Settings", "display_model")
             if self.config_parser.has_option("Settings", "orientation"):
                 self.selected_orientation = self.config_parser.get("Settings", "orientation")
+            # Load show/hide preferences
+            if self.config_parser.has_option("Settings", "show_lead"):
+                show_lead = self.config_parser.getboolean("Settings", "show_lead")
+            if self.config_parser.has_option("Settings", "show_range"):
+                show_range = self.config_parser.getboolean("Settings", "show_range")
+            if self.config_parser.has_option("Settings", "show_2_wind_holds"):
+                show_2_wind_holds = self.config_parser.getboolean("Settings", "show_2_wind_holds")
             # Set native_resolution and selected_resolution based on loaded display/orientation
             display_resolutions = {
                 "Good Display 3.7-inch": (240, 416),
@@ -1217,6 +1303,7 @@ class MainApp(MDApp):
             # Default resolution if no display is selected
             display_width, display_height = 240, 416
 
+           
             # Load the font file (ensure the font file is in the correct path)
             font_path = os.path.join(os.path.dirname(__file__), "assets", "fonts", "RobotoMono-Regular.ttf")
             font = ImageFont.truetype(font_path, 12)  # Load the font file
@@ -1226,74 +1313,97 @@ class MainApp(MDApp):
             image = Image.new("RGB", (base_width, base_height), "white")
             draw = ImageDraw.Draw(image)
 
-            # Add the cartridge name at the top
-            cartridge_name = self.root.ids.home_screen.ids.cartridge_name_field.text  # Get the cartridge name from the text field
+            # Add the stage name at the top
+            stage_name = self.root.ids.home_screen.ids.stage_name_field.text  # Get the stage name from the text field
             y = 10  # Starting vertical position
-            text_bbox = draw.textbbox((0, 0), cartridge_name, font=font)  # Get the bounding box of the text
+            text_bbox = draw.textbbox((0, 0), stage_name, font=font)  # Get the bounding box of the text
             text_width = text_bbox[2] - text_bbox[0]  # Calculate the text width
             x = (base_width - text_width) // 2  # Center the text horizontally
-            draw.text((x, y), cartridge_name, fill="black", font=font)
-            y += 20  # Add some spacing after the cartridge name
+            draw.text((x, y), stage_name, fill="black", font=font)
+            y += 20  # Add some spacing after the stage name
 
-            # Draw a horizontal line under the cartridge name
+            # Draw a horizontal line under the stage name
             draw.line((10, y, base_width - 10, y), fill="black", width=1)
             y += 20  # Add some spacing after the line
 
-            # --- Use the same headers as display_table ---
-            headers = ["Projectile", "Powder", "Charge", "Primer", "Brass", "Headspace", "Ogive", "OAL", "Velocity"]
+            # --- Use the exact header and row logic as display_table ---
+            processed_data = self.preprocess_data(csv_data)
 
-            # Transpose data for column display (each field is a row, each value is a column)
-            table_rows = []
+            # Filter out rows where all values after "Target" are "---"
+            if processed_data:
+                header = processed_data[0]
+                filtered_data = [header]
+                for row in processed_data[1:]:
+                    values_after_target = [v for k, v in row.items() if k != "Target"]
+                    if not all(str(v).strip() == "---" for v in values_after_target):
+                        filtered_data.append(row)
+                processed_data = filtered_data
+
+            static_headers = ["Target", "Range", "Elv", "Wnd1", "Wnd2", "Lead"]
+            headers = ["Elv", "Wnd1"]
+            target_present = any(row.get("Target") for row in processed_data)
+            if target_present:
+                headers.insert(0, "Target")
+            if show_range:
+                if not target_present:
+                    headers.insert(0, "Range")
+                else:
+                    headers.insert(1, "Range")
+            if show_2_wind_holds:
+                headers.append("Wnd2")
+            if show_lead:
+                headers.append("Lead")
+
+            filtered_data = [
+                {header: row.get(header, "") for header in headers} for row in processed_data
+            ]
+
+            # Calculate the maximum width for each column, using the displayed header text
+            column_widths = {}
             for header in headers:
-                row = [header] + [str(row.get(header, "")) for row in csv_data]
-                table_rows.append(row)
+                display_header = "Tgt" if header == "Target" else "Rng" if header == "Range" else header
+                column_widths[header] = len(display_header)
 
-            # Calculate the maximum width for each column
-            num_columns = max(len(row) for row in table_rows)
-            column_widths = [0] * num_columns
-            for row in table_rows:
-                for i, cell in enumerate(row):
-                    column_widths[i] = max(column_widths[i], len(cell))
+            for row in filtered_data:
+                for header in headers:
+                    column_widths[header] = max(column_widths[header], len(str(row.get(header, ""))))
 
-            # Draw the table as columns (vertical) onto the bitmap
-            for row in table_rows:
-                row_text = " | ".join(
-                    f"{cell:<{column_widths[i]}}" for i, cell in enumerate(row)
-                )
+            # Write headers to the image
+            headers_text = " | ".join(
+                f"{('Tgt' if header == 'Target' else 'Rng' if header == 'Range' else header):<{column_widths[header]}}"
+                for header in headers
+            )
+            text_bbox = draw.textbbox((0, 0), headers_text, font=font)
+            text_width = text_bbox[2] - text_bbox[0]
+            x = (base_width - text_width) // 2
+            draw.text((x, y), headers_text, fill="black", font=font)
+            y += 20
+
+            # Write CSV data to the image
+            for row in filtered_data:
+                row_text = " | ".join(f"{str(row.get(header, '')):<{column_widths[header]}}" for header in headers)
                 text_bbox = draw.textbbox((0, 0), row_text, font=font)
                 text_width = text_bbox[2] - text_bbox[0]
                 x = (base_width - text_width) // 2
                 draw.text((x, y), row_text, fill="black", font=font)
-                y += 20  # Move down for the next row
+                y += 20
 
-            # Get the cartridge notes from the UI
-            cartridge_notes = self.root.ids.home_screen.ids.cartridge_notes_field.text.strip()
-
-            # Add spacing before notes
-            y += 10
-
-            # Draw a horizontal line before notes
-            draw.line((10, y, base_width - 10, y), fill="black", width=1)
-            y += 10
-
-            # Draw the "Cartridge Notes:" header
-            notes_header = "Cartridge Notes:"
-            text_bbox = draw.textbbox((0, 0), notes_header, font=font)
-            text_width = text_bbox[2] - text_bbox[0]
-            x = (base_width - text_width) // 2
-            draw.text((x, y), notes_header, fill="black", font=font)
-            y += 20
-
-            # Draw the notes text, wrapping if needed
-            if cartridge_notes:
-                import textwrap
-                wrapped_lines = textwrap.wrap(cartridge_notes, width=38)  # Adjust width as needed
-                for line in wrapped_lines:
-                    text_bbox = draw.textbbox((0, 0), line, font=font)
-                    text_width = text_bbox[2] - text_bbox[0]
-                    x = (base_width - text_width) // 2
-                    draw.text((x, y), line, fill="black", font=font)
-                    y += 18  # Adjust line spacing as needed
+            # Add the stage notes below the table data
+            stage_notes = self.root.ids.home_screen.ids.stage_notes_field.text  # Get the stage notes from the text field
+            y += 20  # Add some spacing before the stage notes
+            draw.line((10, y, base_width - 10, y), fill="black", width=1)  # Draw a line above the stage notes
+            y += 10  # Add some spacing after the line
+            text_bbox = draw.textbbox((0, 0), "Stage Notes:", font=font)  # Get the bounding box of the stage notes label
+            text_width = text_bbox[2] - text_bbox[0]  # Calculate the text width
+            x = (base_width - text_width) // 2  # Center the text horizontally
+            draw.text((x, y), "Stage Notes:", fill="black", font=font)
+            y += 30  # Add some spacing after the stage notes label
+            draw.line((10, y, base_width - 10, y), fill="black", width=1)  # Draw a horizontal line under the stage notes label
+            y += 20  # Add some spacing after the line
+            text_bbox = draw.textbbox((0, 0), stage_notes, font=font)  # Get the bounding box of the stage notes
+            text_width = text_bbox[2] - text_bbox[0]  # Calculate the text width
+            x = (base_width - text_width) // 2  # Center the text horizontally
+            draw.text((x, y), stage_notes, fill="black", font=font)
 
             # 2. Determine the final output size based on orientation and selected display
             portrait_resolution = self.selected_resolution  # e.g., (240, 416) for 3.7"
@@ -1301,10 +1411,10 @@ class MainApp(MDApp):
                 final_resolution = (portrait_resolution[1], portrait_resolution[0])  # e.g., (416, 240)
             else:
                 final_resolution = portrait_resolution  # e.g., (240, 416)
-    
+
             # 3. Resize to the final resolution (this will stretch/squash if needed)
             image = image.resize(final_resolution, Image.LANCZOS)
-    
+
             # Save the resized image as a bitmap
             bw_image = image.convert("1")  # Convert to 1-bit pixels
             bw_image.save(output_path)
@@ -1324,8 +1434,8 @@ class MainApp(MDApp):
         self.search_text = search_text.strip().lower() if search_text else ""
         self.populate_swipe_file_list()
 
-    def limit_cartridge_notes(self, text_field):
-        """Limit the cartridge notes to 2 lines."""
+    def limit_stage_notes(self, text_field):
+        """Limit the stage notes to 2 lines."""
         max_lines = 2
         lines = text_field.text.split("\n")
         if len(lines) > max_lines:
@@ -1587,15 +1697,7 @@ class MainApp(MDApp):
                         home_screen = self.root.ids.home_screen
                     table_container = home_screen.ids.table_container
                     # If manual data input is displayed (BoxLayout with MDRaisedButton "ADD" present)
-                    if (
-                        table_container.children
-                        and hasattr(self, "manual_data_rows")
-                        and self.manual_data_rows
-                        and any(
-                            any(field.text.strip() for field in row_fields.values())
-                            for row_fields in self.manual_data_rows
-                        )
-                    ):
+                    if table_container.children and hasattr(self, "manual_data_rows") and self.manual_data_rows:
                         print("Manual data input detected, adding manual data before NFC transfer.")
                         self.add_manual_data()
                     Clock.schedule_once(lambda dt: self.show_nfc_progress_dialog("Transferring data to NFC tag..."))
@@ -1663,7 +1765,6 @@ class MainApp(MDApp):
                             else:
                                 try:
                                     input_stream = content_resolver.openInputStream(stream_uri)
-                                   
                                     if input_stream:
                                         ByteArrayOutputStream = autoclass('java.io.ByteArrayOutputStream')
                                         buffer = ByteArrayOutputStream()
@@ -1704,8 +1805,6 @@ class MainApp(MDApp):
 
             print(f"Resolving URI: {uri}")
 
-
-
             # Check if the URI has a valid scheme
             scheme = uri.getScheme()
             if scheme == "file":
@@ -1714,14 +1813,12 @@ class MainApp(MDApp):
                 # Query the content resolver for the file path
                 projection = [autoclass("android.provider.MediaStore$MediaColumns").DATA]
                 cursor = content_resolver.query(uri, projection, None, None, None)
-               
-               
                 if cursor is not None:
                     column_index = cursor.getColumnIndexOrThrow(projection[0])
                     cursor.moveToFirst()
                     file_path = cursor.getString(column_index)
                     cursor.close()
-                    return file_path
+                    return None
             else:
                 print(f"Unsupported URI scheme: {scheme}")
                 return None
@@ -1867,7 +1964,7 @@ class MainApp(MDApp):
         try:
             base_dir = os.path.abspath(self.get_private_storage_path())
             abs_path = os.path.abspath(path)
-            saved_cartridges_screen = self.root.ids.screen_manager.get_screen("saved_cartridges")
+            saved_cards_screen = self.root.ids.screen_manager.get_screen("saved_cards")
 
             # If deleting a folder or a non-csv file, always go to assets/CSV first
             if not abs_path.lower().endswith(".csv"):
@@ -1889,15 +1986,15 @@ class MainApp(MDApp):
                 print("File and folder list refreshed.")
 
                 self.clear_table_data()
-                self.root.ids.screen_manager.current = "saved_cartridges"
+                self.root.ids.screen_manager.current = "saved_cards"
             else:
                 print(f"Path does not exist: {abs_path}")
         except Exception as e:
             print(f"Error deleting file or folder: {e}")
 
     def populate_swipe_file_list(self, target_dir=None, sort_by=None, reverse=None):
-        saved_cartridges_screen = self.root.ids.screen_manager.get_screen("saved_cartridges")
-        swipe_file_list = saved_cartridges_screen.ids.swipe_file_list
+        saved_cards_screen = self.root.ids.screen_manager.get_screen("saved_cards")
+        swipe_file_list = saved_cards_screen.ids.swipe_file_list
         swipe_file_list.clear_widgets()
 
         if target_dir is None:
@@ -1947,106 +2044,130 @@ SwipeFileItem:
             swipe_file_list.add_widget(item)
 
     def show_manual_data_input(self):
-        """Display manual data input fields for reloading data."""
+        """Display manual data input fields in the CSV data table location based on filtered display options."""
         home_screen = self.root.ids.home_screen
+       
         table_container = home_screen.ids.table_container
+
+        # Clear any existing widgets in the table container
         table_container.clear_widgets()
 
-        # Add "Projectile" to reloading data fields
-        reloading_fields = {
-            "Projectile": {"hint_text": "Projectile", "show": True},
-            "Powder": {"hint_text": "Powder", "show": True},
-            "Charge": {"hint_text": "Charge (gr)", "show": True},
-            "Primer": {"hint_text": "Primer", "show": True},
-            "Brass": {"hint_text": "Brass", "show": True},
-            "Headspace": {"hint_text": "Headspace (in)", "show": True},  # <-- Add this line
-            "Ogive": {"hint_text": "Ogive (in)", "show": True},  # <-- Add this line
-            "OAL": {"hint_text": "OAL (in)", "show": True},
-            "Velocity": {"hint_text": "Velocity (fps)", "show": True},
+               # Create a vertical layout to hold the rows and buttons
+        main_layout = BoxLayout(orientation="vertical", spacing="10dp", size_hint=(1, None))
+        main_layout.bind(minimum_height=main_layout.setter("height"))  # Adjust height dynamically
+
+        # Define the available fields and their display options
+        available_fields = {
+            "Target": {"hint_text": "Target", "show": True},  # Always show Target
+            "Range": {"hint_text": "Range", "show": show_range},  # Controlled by show_range
+            "Elv": {"hint_text": "Elevation", "show": True},  # Always show Elevation
+            "Wnd1": {"hint_text": "Wind 1", "show": True},  # Always show Wind 1
+            "Wnd2": {"hint_text": "Wind 2", "show": show_2_wind_holds},  # Controlled by show_2_wind_holds
+            "Lead": {"hint_text": "Lead", "show": show_lead},  # Controlled by show_lead
         }
-        self.available_fields = reloading_fields
+
+        # Store the available fields for later use
+        self.available_fields = available_fields
 
         # Add the first row of input fields
-        self.add_data_row(table_container)
+        self.add_data_row(main_layout)
 
-        # Add buttons for adding/deleting rows as before...
-        main_layout = BoxLayout(orientation="vertical", spacing="10dp", size_hint=(1, None))
-        main_layout.bind(minimum_height=main_layout.setter("height"))
+        # Create a layout for the "ADD ROW" and "DELETE ROW" buttons
         add_row_layout = BoxLayout(
             orientation="horizontal",
             spacing="10dp",
-            size_hint=(None, None),
+            size_hint=(None, None),  # Not stretching horizontally
             height=dp(50),
         )
-        add_row_layout.width = dp(260)
-        add_row_layout.pos_hint = {"center_x": 0.5}
+        add_row_layout.width = dp(260)  # 2 buttons * 120dp + 1 spacing * 10dp
+        add_row_layout.pos_hint = {"center_x": 0.5}  # Center horizontally
+
+        add_row_layout.add_widget(
+            MDRaisedButton(
+                text="ADD ROW",
+                size_hint=(None, None),
+                size=(dp(120), dp(40)),
+                on_release=lambda x: self.add_data_row(main_layout)
+            )
+        )
+        add_row_layout.add_widget(
+            MDRaisedButton(
+                text="DELETE ROW",
+                size_hint=(None, None),
+                size=(dp(120), dp(40)),
+                md_bg_color=(1, 0, 0, 1),
+                on_release=lambda x: self.delete_last_row(main_layout)
+            )
+        )
+
+        # Create a layout for the "CANCEL" and "ADD" buttons
+        action_buttons_layout = BoxLayout(orientation="horizontal", spacing="10dp", size_hint=(1, None), height=dp(50))
+
+        # Add the button layouts to the main layout
         main_layout.add_widget(add_row_layout)
+        main_layout.add_widget(action_buttons_layout)
+
+        # Add the main layout to the table container
         table_container.add_widget(main_layout)
 
     def add_data_row(self, table_container):
-        """Add a new row of data fields as a vertical column, centered."""
-        home_screen = self.root.ids.home_screen
-        cartridge_name_field = home_screen.ids.cartridge_name_field
+        """Add a new row of data fields directly underneath the existing rows."""
+        # Create a layout for the new row
+        row_layout = BoxLayout(orientation="horizontal", spacing="10dp", size_hint=(1, None))
+        row_layout.height = dp(50)  # Adjust height for a single row of text fields
 
-        row_layout = BoxLayout(
-            orientation="vertical",
-            spacing="10dp",
-            size_hint_x=None,
-            width=cartridge_name_field.width,
-            size_hint_y=None,
-            height=dp(50) * len(self.available_fields),
-            pos_hint={"center_x": 0.5}
-        )
-
+        # Add text fields for manual data input based on display options
         row_fields = {}
         for field_name, field_options in self.available_fields.items():
-            if field_options["show"]:
+            if field_options["show"]:  # Only add fields that are enabled
+
                 text_field = MDTextField(
                     hint_text=field_options["hint_text"],
                     multiline=False,
-                    size_hint_x=1
+                    size_hint_x=0.15
                 )
                 row_fields[field_name] = text_field
                 row_layout.add_widget(text_field)
 
+        # Store the row fields for later use
         if not hasattr(self, "manual_data_rows"):
             self.manual_data_rows = []
         self.manual_data_rows.append(row_fields)
 
-        # Insert above the button layout
+        # Find the correct index to insert the new row
+        # The new row should be added above the button layouts
         button_index = 0
         for i, child in enumerate(reversed(table_container.children)):
             if isinstance(child, BoxLayout) and any(
-                    isinstance(widget, MDRaisedButton) or isinstance(widget, MDFlatButton) for widget in child.children):
+                    isinstance(widget, MDRaisedButton) or isinstance(widget, MDFlatButton) for widget in
+                    child.children):
                 button_index = len(table_container.children) - i
                 break
 
+        # Add the new row at the calculated index
         table_container.add_widget(row_layout, index=button_index)
 
-        # Bind width for dynamic resizing
-        def update_width(instance, value):
-            row_layout.width = value
-        cartridge_name_field.bind(width=update_width)
-
     def add_manual_data(self):
-        """Add the manually entered reloading data to the current data and display it."""
+        """Add the manually entered data to the current data and display it."""
         try:
+            # Collect data from all rows of text fields
             for row_fields in self.manual_data_rows:
-                # Initialize the row with all columns, defaulting to empty string
-                manual_data = {key: "" for key in self.available_fields.keys()}
+                # Initialize the row with all columns, defaulting to "0"
+                manual_data = {key: "0" for key in self.available_fields.keys()}
 
                 # Populate the row with data from the input fields
                 for key, field in row_fields.items():
-                    manual_data[key] = field.text.strip()
+                    manual_data[key] = field.text if field.text.strip() else "0"
 
-                # Validate the data (optional, e.g., Powder and Charge required)
-                if not manual_data["Powder"] or not manual_data["Charge"]:
-                    toast("Powder and Charge are required.")
+                # Validate the data (optional)
+                if not manual_data["Target"]:
+                    print("Target is required.")
+                    toast("Target is required.")
                     return
 
                 # Add the data to the current data
                 if not hasattr(self, "current_data") or not self.current_data:
-                    self.current_data = []
+                    self.current_data = []  # Initialize if no data is loaded
                 self.current_data.append(manual_data)
 
             # Display the updated data
@@ -2054,9 +2175,9 @@ SwipeFileItem:
 
             # Clear the input fields
             self.cancel_manual_data_input()
-            print("Manual reloading data added:", self.current_data)
+            print("Manual data added:", self.current_data)
         except Exception as e:
-            print(f"Error adding manual reloading data: {e}")
+            print(f"Error adding manual data: {e}")
 
     def copy_directory_from_assets(self, asset_manager, source_path, dest_path):
         """Recursively copy a directory from the assets folder to the destination."""
@@ -2069,10 +2190,6 @@ SwipeFileItem:
                 if asset_manager.list(sub_source_path):  # Check if it's a directory
                     if not os.path.exists(sub_dest_path):
                         os.makedirs(sub_dest_path)
-                    # Recursively copy the directory
-                    self.copy_directory_from_assets(asset_manager, sub_source_path, sub_dest_path)
-                else:
-                    # Copy a single file
                     with asset_manager.open(sub_source_path) as asset_file:
                         with open(sub_dest_path, "wb") as output_file:
                             output_file.write(asset_file.read())
@@ -2325,5 +2442,6 @@ def pack_image_column_major(img):
                     byte |= (1 << (7 - bit))
             packed.append(byte)
     return bytes(packed)
+
 if __name__ == "__main__":
     MainApp().run()

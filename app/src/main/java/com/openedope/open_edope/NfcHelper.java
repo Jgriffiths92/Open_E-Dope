@@ -1,4 +1,4 @@
-package com.openedope.open_e_reloading_assistant;
+package com.openedope.open_edope;
 
 import android.content.Intent;
 import android.nfc.NfcAdapter;
