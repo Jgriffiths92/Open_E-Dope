@@ -404,14 +404,14 @@ class MainApp(MDApp):
             self.nfc_progress_label.text = "Transfer successful!"
             self.nfc_progress_label.color = (0, 0.6, 0, 1)
         Clock.schedule_once(lambda dt: self.hide_nfc_progress_dialog(), 1.5)
-        
+         # Clear the data table, stage notes, and stage name after success
+        self.clear_table_data()        
     def on_nfc_transfer_error(self, error_message="Transfer failed!"):
         if hasattr(self, "nfc_progress_label"):
             self.nfc_progress_label.text = error_message
             self.nfc_progress_label.color = (1, 0, 0, 1)  # Red color for error
         Clock.schedule_once(lambda dt: self.hide_nfc_progress_dialog(), 2)
-         # Clear the data table, stage notes, and stage name after success
-        self.clear_table_data()
+
         
     def show_nfc_progress_dialog(self, message="Transferring data..."):
         # Vibrate for 500ms when the dialog opens (Android only)
@@ -1139,7 +1139,7 @@ class MainApp(MDApp):
                     MDFlatButton(
                         text="SAVE",
                         on_release=lambda x: (
-                            self.save_data(new_event_name=text_input.text.strip() if text_input.text.strip() else None),
+                            self.handle_save_dialog(text_input),
                             self.dialog.dismiss()  # Automatically close the dialog after saving
                         ),
                         theme_text_color="Custom",          # Make the text color custom
@@ -1149,7 +1149,26 @@ class MainApp(MDApp):
             )
 
         self.dialog.open()
-
+    def handle_save_dialog(self, text_input):
+        home_screen = self.root.ids.home_screen
+        table_container = home_screen.ids.table_container
+    
+        # Add manual data if any manual fields are filled
+        if (
+            table_container.children
+            and hasattr(self, "manual_data_rows")
+            and self.manual_data_rows
+            and any(
+                any(field.text.strip() for field in row_fields.values())
+                for row_fields in self.manual_data_rows
+            )
+        ):
+            print("Manual data input detected, adding manual data before saving.")
+            self.add_manual_data()
+    
+        self.save_data(new_event_name=text_input.text.strip() if text_input.text.strip() else None)
+        self.dialog.dismiss()
+    
     def save_data(self, new_event_name=None):
         if hasattr(self, "current_data") and self.current_data:
             # Filter out rows where all values after "Target" are "---"
@@ -2288,6 +2307,7 @@ SwipeFileItem:
             self.nfc_progress_label.text = "Transfer successful!"
             self.nfc_progress_label.color = (0, 0.6, 0, 1)
         Clock.schedule_once(lambda dt: self.hide_nfc_progress_dialog(), 1.5)
+        
 
     def hide_nfc_button(self):
         """Hide the NFC button if running on Android."""
