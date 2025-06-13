@@ -409,6 +409,7 @@ class MainApp(MDApp):
             # If percent is 100, delay the update by 3 seconds
             if percent >= 100:
                 Clock.schedule_once(lambda dt: self._finish_nfc_progress(), 3)
+                
             else:
                 self.nfc_progress_bar.value = percent
 
@@ -419,14 +420,14 @@ class MainApp(MDApp):
             self.nfc_progress_label.text = "Transfer successful!"
             self.nfc_progress_label.color = (0, 0.6, 0, 1)
         Clock.schedule_once(lambda dt: self.hide_nfc_progress_dialog(), 1.5)
+        #clear the table data and show manual input
+        self.clear_table_data()
         
     def on_nfc_transfer_error(self, error_message="Transfer failed!"):
         if hasattr(self, "nfc_progress_label"):
             self.nfc_progress_label.text = error_message
             self.nfc_progress_label.color = (1, 0, 0, 1)  # Red color for error
         Clock.schedule_once(lambda dt: self.hide_nfc_progress_dialog(), 2)
-         # Clear the data table, cartridge notes, and cartridge name after success
-        self.clear_table_data()
         
     def show_nfc_progress_dialog(self, message="Transferring data..."):
         # Vibrate for 500ms when the dialog opens (Android only)
