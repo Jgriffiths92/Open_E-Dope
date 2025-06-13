@@ -1,10 +1,10 @@
 [app]
 
 # (str) Title of your application
-title = Open E-Reloading-Assistant
+title = Open E-Dope
 
 # (str) Package name
-package.name = open_e_reloading_assistant 
+package.name = open_e_dope
 
 # (str) Package domain (needed for android/ios packaging)
 package.domain = com.openedope
