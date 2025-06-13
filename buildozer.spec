@@ -4,7 +4,7 @@
 title = Open E-Dope
 
 # (str) Package name
-package.name = open_e_dope
+package.name = open_edope
 
 # (str) Package domain (needed for android/ios packaging)
 package.domain = com.openedope
