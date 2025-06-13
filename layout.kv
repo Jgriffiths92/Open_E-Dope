@@ -12,9 +12,9 @@ MDNavigationLayout:
         HomeScreen:
             id: home_screen
             name: "home"
-        SavedCardsScreen:
-            id: saved_cards_screen
-            name: "saved_cards"
+        SavedCartridgesScreen:
+            id: saved_cartridges_screen
+            name: "saved_cartridges"
         ManageDataScreen:
             id: manage_data_screen
             name: "manage_data"
@@ -38,7 +38,7 @@ MDNavigationLayout:
                     pos_hint: {"center_x": 0.5}
 
                 MDLabel:
-                    text: "Open E-Dope"
+                    text: "Open E-Reloading\nAssistant"
                     theme_text_color: "Custom"
                     text_color: 0, 0, 0, 1
                     halign: "center"
@@ -51,10 +51,10 @@ MDNavigationLayout:
                     app.root.ids.drawer.set_state("close")
 
             MDNavigationDrawerItem:
-                text: "Saved Cards"
+                text: "Saved Cartridges"
                 icon: "content-save"
                 on_release:
-                    screen_manager.current = "saved_cards"
+                    screen_manager.current = "saved_cartridges"
                     app.root.ids.drawer.set_state("close")
 
             MDNavigationDrawerItem:
@@ -74,30 +74,32 @@ MDNavigationLayout:
             md_bg_color: 0.678, 0.0, 0.969, 1
 
         MDTextField:
-            id: stage_name_field
-            hint_text: "Stage Name"
+            id: cartridge_name_field
+            hint_text: "Cartridge Name"
             hint_text_mode: "on_focus"
             multiline: False
             halign: "center"
             size_hint_y: None
             size_hint_x: 0.8
             pos_hint: {"center_x": 0.5, "center_y": 0.5}
-            on_text_validate: app.on_stage_name_entered(self.text)
-
-        BoxLayout:
-            id: table_container
-            orientation: "vertical"
-            size_hint: 1, 1
-
+            on_text_validate: app.on_cartridge_name_entered(self.text)
+        ScrollView:
+            size_hint_y: 1
+            do_scroll_x: False
+            do_scroll_y: True
+            BoxLayout:
+                id: table_container
+                orientation: "vertical"
+                size_hint: 1, 1
         BoxLayout:
             orientation: "vertical"
             size_hint: 1, None
-            height: dp(160)
+            height: dp(100)
             padding: "10dp"
 
             MDTextField:
-                id: stage_notes_field
-                hint_text: "Stage Notes (e.g., shoot to move/hit to move)"
+                id: cartridge_notes_field
+                hint_text: "Cartridge Notes"
                 hint_text_mode: "on_focus"
                 multiline: True
                 halign: "center"
@@ -105,8 +107,8 @@ MDNavigationLayout:
                 height: dp(96)
                 size_hint_x: 0.8
                 pos_hint: {"center_x": 0.5}
-                on_text: app.limit_stage_notes(self)
-                on_text_validate: app.on_stage_notes_entered(self.text)
+                on_text: app.limit_cartridge_notes(self)
+                on_text_validate: app.on_cartridge_notes_entered(self.text)
 
             AnchorLayout:
                 anchor_x: "right"
@@ -144,17 +146,17 @@ MDNavigationLayout:
                         md_bg_color: 0.91, 0.74, 0.09, 1
                         on_release: app.clear_table_data()
 
-<SavedCardsScreen>:
+<SavedCartridgesScreen>:
     MDBoxLayout:
         orientation: "vertical"
         MDTopAppBar:
-            title: "Saved Cards"
+            title: "Saved Cartridges"
             left_action_items: [["menu", lambda x: app.root.ids.drawer.set_state("open")]]
             right_action_items: [["sort", lambda x: root.open_sort_menu(x)], ["dots-vertical", lambda x: app.on_dots_press(x)]]
             md_bg_color: 0.678, 0.0, 0.969, 1
         MDTextField:
             id: search_field
-            hint_text: "Search Cards"
+            hint_text: "Search Cartridges"
             hint_text_mode: "on_focus"
             multiline: False
             size_hint_x: 0.8
@@ -191,7 +193,7 @@ MDNavigationLayout:
                     size_hint_y: None
                     height: dp(16)  # Adjust this value for more/less gap
                 MDLabel:
-                    text: "Delete Saved Cards After"
+                    text: "Delete Saved Cartridges After"
                     halign: "center"
                 MDFlatButton:
                     id: delete_option_button
@@ -201,13 +203,13 @@ MDNavigationLayout:
                     height: dp(32)
                     on_release: root.open_delete_option_menu(self)
                 MDLabel:
-                    text: "Delete All Saved Data Card Files"
+                    text: "Delete All Saved Cartridge Files"
                     halign: "center"
                 Widget:
                     size_hint_y: None
                     height: dp(10)  # Adjust this value for more/less gap
                 MDRaisedButton:
-                    text: "Delete ALL Data Card Files"
+                    text: "Delete ALL Cartridge Files"
                     pos_hint: {"center_x": 0.5}
                     size_hint_y: None
                     height: dp(32)
