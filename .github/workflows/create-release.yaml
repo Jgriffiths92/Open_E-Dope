@@ -1,55 +1,42 @@
-name: Create Release
+name: Build Kivy APK with Buildozer
 
 on:
   push:
     tags:
-      - 'v*' # Triggers on tags like v1.0, v2.0.1, etc.
-
-permissions:
-  contents: write
+      - 'v*'  # e.g., v1.0.0
 
 jobs:
   build:
+    name: Build APK
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v2
+      - name: Checkout repository
+        uses: actions/checkout@v3
 
-      - name: Buildozer dependencies
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.10
+
+      - name: Install dependencies
         run: |
-          sudo apt update
-          sudo apt install -y git zip unzip python3-pip autoconf libtool pkg-config zlib1g-dev libncurses5-dev libncursesw5-dev cmake libffi-dev libssl-dev automake
-          sudo apt-get install libltdl-dev
-          pip install --user virtualenv Cython==0.29.33
-          pip install --user --upgrade buildozer
+          sudo apt-get update
+          sudo apt-get install -y python3-pip build-essential git zip unzip openjdk-17-jdk
+          python3 -m pip install --upgrade pip
+          pip install buildozer cython
+
+      - name: Initialize Buildozer if needed
+        run: |
+          if [ ! -f buildozer.spec ]; then buildozer init; fi
 
       - name: Build APK
         run: |
-          export JAVA_HOME=/usr/lib/jvm/temurin-17-jdk-amd64
-          export PATH=$JAVA_HOME/bin:$PATH
-          yes | buildozer android release
+          buildozer android debug
 
-      - name: Get APK filename
-        id: apk
-        run: |
-          APK_PATH=$(ls bin/*.apk | head -n 1)
-          echo "apk_path=$APK_PATH" >> $GITHUB_OUTPUT
-
-      - name: Create Release
-        id: create_release
-        uses: softprops/action-gh-release@v1
+      - name: Upload APK to GitHub Release
+        uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.ref_name }}
-          name: Release ${{ github.ref_name }}
-          draft: false
-          prerelease: false
+          files: bin/*.apk
         env:
-          GITHUB_TOKEN: ${{ secrets.GH_PAT }}
-
-      - name: Upload Release Asset
-        uses: softprops/action-gh-release@v1
-        with:
-          files: ${{ steps.apk.outputs.apk_path }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GH_PAT }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
