@@ -1,9 +1,12 @@
-name: Build & Release APK with Buildozer
+name: Build and Release APK
 
 on:
   push:
     tags:
-      - 'v*'  # Triggers on version tags like v1.0.0
+      - 'v*'  # Triggers on tags like v1.0.0, v2.1, etc.
+
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -11,7 +14,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -51,20 +54,24 @@ jobs:
             libssl-dev \
             libsqlite3-dev \
             libpng-dev
-
-          pip install --upgrade Cython
-          pip install --user buildozer
-
-      - name: Add buildozer to PATH
-        run: echo "$HOME/.local/bin" >> $GITHUB_PATH
+          pip install --upgrade pip
+          pip install --user Cython==0.29.33
+          pip install --user --upgrade buildozer
 
       - name: Build APK
         run: |
-          buildozer android debug
+          export PATH=$PATH:$HOME/.local/bin
+          buildozer android release
 
-      - name: Upload APK to GitHub Release
-        uses: softprops/action-gh-release@v2
+      - name: Find APK
+        id: apk
+        run: |
+          APK_PATH=$(ls bin/*.apk | head -n 1)
+          echo "apk_path=$APK_PATH" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release and Upload APK
+        uses: softprops/action-gh-release@v1
         with:
-          files: bin/*.apk
+          files: ${{ steps.apk.outputs.apk_path }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
