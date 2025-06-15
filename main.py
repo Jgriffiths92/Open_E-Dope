@@ -170,7 +170,7 @@ class SavedCardsScreen(Screen):
             filechooser.sort_type = sort_by
             filechooser.sort_order = 'desc' if reverse else 'asc'
             filechooser.sort_dirs_first = True
-            filechooser._update_files()
+            filechooser.path = filechooser.path
             print(f"Sorted by {sort_by}, reverse={reverse}")
         except Exception as e:
             print(f"Error accessing filechooser: {e}")
@@ -338,7 +338,7 @@ if is_android():
     from jnius import PythonJavaClass, java_method
 
     class NfcProgressListener(PythonJavaClass):
-        __javainterfaces__ = ['com/openedope/open_edope/NfcProgressListener']
+        __javainterfaces__ = ['com/openedope/dope/NfcProgressListener']
         __javacontext__ = 'app'
 
         def __init__(self, app):
@@ -1233,11 +1233,10 @@ class MainApp(MDApp):
 
                         # Refresh the FileChooserListView
                         saved_cards_screen = self.root.ids.screen_manager.get_screen("saved_cards")
-                        filechooser._update_files()  # Refresh the file and folder list
+                        filechooser.path = filechooser.path  # Refresh the file and folder list
                         print("File and folder list refreshed.")
                 except Exception as e:
                     print(f"Error saving data to CSV: {e}")
-                    toast(f"Error saving data: {e}")
             else:
                 print("Private storage path is not available.")
         else:
