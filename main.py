@@ -1718,7 +1718,7 @@ class MainApp(MDApp):
                     if table_container.children and hasattr(self, "manual_data_rows") and self.manual_data_rows:
                         print("Manual data input detected, adding manual data before NFC transfer.")
                         self.add_manual_data()
-                    Clock.schedule_once(lambda dt: self.show_nfc_progress_dialog("Transferring data to NFC tag..."))
+                    Clock.schedule_once(lambda dt: self.show_nfc_progress_dialog("Transferring data to NFC tag..."), .01)
                     self.send_csv_bitmap_via_nfc(intent)
                     return  # Optionally return here if you don't want to process further
 
