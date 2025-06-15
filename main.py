@@ -2306,7 +2306,7 @@ SwipeFileItem:
             self.nfc_progress_label.text = "Transfer successful!"
             self.nfc_progress_label.color = (0, 0.6, 0, 1)
         Clock.schedule_once(lambda dt: self.hide_nfc_progress_dialog(), 1.5)
-        self.clear_table_data()
+        self.clear_table_data()  # This will clear the table and show manual data input
         
 
     def hide_nfc_button(self):
