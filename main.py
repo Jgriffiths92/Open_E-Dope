@@ -405,7 +405,7 @@ class MainApp(MDApp):
             self.nfc_progress_label.color = (0, 0.6, 0, 1)
         Clock.schedule_once(lambda dt: self.hide_nfc_progress_dialog(), 1.5)
          # Clear the data table, stage notes, and stage name after success
-        self.clear_table_data()        
+        Clock.schedule_once(lambda dt: self.clear_table_data())       
     def on_nfc_transfer_error(self, error_message="Transfer failed!"):
         if hasattr(self, "nfc_progress_label"):
             self.nfc_progress_label.text = error_message
@@ -1717,7 +1717,7 @@ class MainApp(MDApp):
                     # If manual data input is displayed (BoxLayout with MDRaisedButton "ADD" present)
                     if table_container.children and hasattr(self, "manual_data_rows") and self.manual_data_rows:
                         print("Manual data input detected, adding manual data before NFC transfer.")
-                        self.add_manual_data()
+                        Clock.schedule_once(lambda dt: self.add_manual_data())
                     Clock.schedule_once(lambda dt: self.show_nfc_progress_dialog("Transferring data to NFC tag..."), .01)
                     self.send_csv_bitmap_via_nfc(intent)
                     return  # Optionally return here if you don't want to process further
@@ -2306,7 +2306,7 @@ SwipeFileItem:
             self.nfc_progress_label.text = "Transfer successful!"
             self.nfc_progress_label.color = (0, 0.6, 0, 1)
         Clock.schedule_once(lambda dt: self.hide_nfc_progress_dialog(), 1.5)
-        self.clear_table_data()  # This will clear the table and show manual data input
+        Clock.schedule_once(lambda dt: self.clear_table_data())  # This will clear the table and show manual data input
         
 
     def hide_nfc_button(self):
