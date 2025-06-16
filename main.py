@@ -1396,7 +1396,16 @@ class MainApp(MDApp):
                     if not all(str(v).strip() == "---" for v in values_after_target):
                         filtered_data.append(row)
                 processed_data = filtered_data
-
+            # Filter out rows where all values are "0"
+            if processed_data:
+                header = processed_data[0]
+                filtered_data_zeros = [header]
+                for row in processed_data[1:]:
+                    # Check if all values in the row are "0" (as strings)
+                    if not all(str(v).strip() == "0" for v in row.values()):
+                        filtered_data_zeros.append(row)
+                processed_data = filtered_data_zeros
+                
             static_headers = ["Target", "Range", "Elv", "Wnd1", "Wnd2", "Lead"]
             headers = ["Elv", "Wnd1"]
             target_present = any(row.get("Target") for row in processed_data)
