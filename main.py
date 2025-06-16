@@ -2201,26 +2201,20 @@ SwipeFileItem:
 
         # Add the new row at the calculated index
         table_container.add_widget(row_layout, index=button_index)
-
     def add_manual_data(self):
-        """Add the manually entered data to the current data and display it."""
         try:
-            # Collect data from all rows of text fields
             for row_fields in self.manual_data_rows:
-                # Initialize the row with all columns, defaulting to "0"
                 manual_data = {key: "0" for key in self.available_fields.keys()}
-
-                # Populate the row with data from the input fields
                 for key, field in row_fields.items():
                     manual_data[key] = field.text if field.text.strip() else "0"
-
-                # Validate the data (optional)
                 if not manual_data["Target"]:
                     print("Target is required.")
                     toast("Target is required.")
                     return
-
-                # Add the data to the current data
+                required_keys = {"Target", "Range", "Elv", "Wnd1", "Wnd2", "Lead"}
+                for k in required_keys:
+                    if k not in manual_data:
+                        manual_data[k] = "0"
                 if not hasattr(self, "current_data") or not self.current_data:
                     self.current_data = []
                 self.current_data.append(manual_data)
