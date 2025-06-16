@@ -418,7 +418,8 @@ class MainApp(MDApp):
             self.nfc_progress_label.color = (1, 0, 0, 1)
         toast(f"NFC Error: {error_message}")
         Clock.schedule_once(lambda dt: self.hide_nfc_progress_dialog(), 2)
-        # Optionally re-enable manual input here
+        self.current_data = []
+        self.manual_data_rows = []
 
         
     def show_nfc_progress_dialog(self, message="Transferring data..."):
@@ -597,8 +598,9 @@ class MainApp(MDApp):
     def send_nfc_image(self, intent, width, height, image_buffer, epd_init):
         print("send_nfc_image called")
         print(f"image_buffer type: {type(image_buffer)}")
-        print("First 16 bytes of image_buffer:", list(image_buffer[:16]))
-        print("Image buffer length:", len(image_buffer))
+        print("image_buffer length:", len(image_buffer))
+        print("epd_init type:", type(epd_init))
+        print("epd_init contents:", epd_init)
         expected_size = width * height // 8
         if len(image_buffer) != expected_size:
             print(f"WARNING: Image buffer size ({len(image_buffer)}) does not match expected size ({expected_size}) for {width}x{height} display.")
@@ -1977,7 +1979,7 @@ class MainApp(MDApp):
 
                         if asset_manager.list(source_path):  # Check if it's a directory
                             if not os.path.exists(dest_path):
-                                os.makedirs(dest_path)  # Create the directory in the destination
+                                os.makedirs(dest_path)  # Create the directory if it doesn't exist
                             # Recursively copy the directory
                             self.copy_directory_from_assets(asset_manager, source_path, dest_path)
                         else:
@@ -2220,15 +2222,14 @@ SwipeFileItem:
 
                 # Add the data to the current data
                 if not hasattr(self, "current_data") or not self.current_data:
-                    self.current_data = []  # Initialize if no data is loaded
+                    self.current_data = []
                 self.current_data.append(manual_data)
-
-            # Display the updated data
             self.display_table(self.current_data)
-
-            # Clear the input fields
-            #self.clear_table_data()
-            #print("Manual data added:", self.current_data)
+            # Clear manual input fields after adding data
+            for row_fields in self.manual_data_rows:
+                for field in row_fields.values():
+                    field.text = ""
+            print("Manual data added and input fields cleared:", self.current_data)
         except Exception as e:
             print(f"Error adding manual data: {e}")
 

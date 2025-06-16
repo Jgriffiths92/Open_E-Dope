@@ -36,8 +36,23 @@ public class NfcHelper {
     }
 
     public static void processNfcIntentByteBuffer(Intent intent, int width0, int height0, java.nio.ByteBuffer buffer, String[] epd_init, NfcProgressListener listener) {
+        buffer.rewind(); // Always reset position before reading
         byte[] image_buffer = new byte[buffer.remaining()];
         buffer.get(image_buffer);
+
+        // Defensive checks
+        int expectedSize = width0 * height0 / 8;
+        if (image_buffer == null || epd_init == null || epd_init.length < 2) {
+            Log.e("NfcHelper", "Null or invalid arguments!");
+            if (listener != null) listener.onError("Null or invalid arguments.");
+            return;
+        }
+        if (image_buffer.length != expectedSize) {
+            Log.e("NfcHelper", "ERROR: image_buffer size (" + image_buffer.length + ") does not match expected (" + expectedSize + ")");
+            if (listener != null) listener.onError("Image buffer size mismatch.");
+            return;
+        }
+
         processNfcIntent(intent, width0, height0, image_buffer, epd_init, listener);
     }
 
