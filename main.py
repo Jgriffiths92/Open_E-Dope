@@ -584,31 +584,15 @@ class MainApp(MDApp):
         print("Image buffer length:", len(image_buffer))
 
         # 4. Final validation before sending to Java
-        from jnius import jarray
-
         # Check for all-zero (blank) image buffer
         if all(b == 0 for b in image_buffer):
             print("ERROR: Image buffer is all zeros (blank image)!")
             toast("Cannot send blank image to NFC tag.")
             return
 
-        # Ensure image_buffer is a Java byte array
-        try:
-            image_buffer_java = jarray('b')(image_buffer)
-        except Exception as e:
-            print(f"ERROR: Could not convert image_buffer to Java byte array: {e}")
-            toast("Critical error: Image buffer conversion failed.")
-            return
-
-        # Validate epd_init is a list of strings
-        if not isinstance(epd_init, (list, tuple)) or not all(isinstance(x, str) for x in epd_init):
-            print("ERROR: epd_init is not a list of strings!")
-            toast("Critical error: epd_init invalid.")
-            return
-
         # 4. Pass the intent down!
         print("epd_init[0] right before Java:", repr(epd_init[0]), len(epd_init[0]))
-        self.send_nfc_image(intent, width, height, image_buffer_java, epd_init)
+        self.send_nfc_image(intent, width, height, image_buffer, epd_init)
 
     def send_nfc_image(self, intent, width, height, image_buffer, epd_init):
         print("send_nfc_image called")
@@ -622,7 +606,7 @@ class MainApp(MDApp):
             return
         NfcHelper = autoclass('com.openedope.open_edope.NfcHelper')
         ByteBuffer = autoclass('java.nio.ByteBuffer')
-        image_buffer_bb = ByteBuffer.wrap(image_buffer)  # image_buffer is now a Java byte array
+        image_buffer_bb = ByteBuffer.wrap(image_buffer)
 
         # Convert epd_init to Java String[]
         String = autoclass('java.lang.String')
@@ -1751,6 +1735,7 @@ class MainApp(MDApp):
 
                 # --- NEW: Always check for NFC tag extra, even if action is not NFC ---
                 EXTRA_TAG = autoclass('android.nfc.NfcAdapter').EXTRA_TAG
+               
                 tag = intent.getParcelableExtra(EXTRA_TAG)
                 if tag:
                     print("NFC tag detected (regardless of action)!")
