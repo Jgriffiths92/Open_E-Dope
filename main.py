@@ -769,6 +769,9 @@ class MainApp(MDApp):
 
     def on_file_selected(self, selection):
         """Handle the file or folder selected in the FileChooserListView."""
+         # Clear current data and table before loading new file
+        self.current_data = []
+        self.clear_table_data()
         if selection:
             selected_path = selection[0]
             if os.path.isdir(selected_path):
@@ -1847,6 +1850,9 @@ class MainApp(MDApp):
     def process_received_csv(self, file_path_or_uri):
         """Process the received CSV file or CSV text."""
         import io
+         # Clear current data and table before loading new file
+        self.current_data = []
+        self.clear_table_data()
         try:
             # If it's CSV text (not a path or URI), parse directly
             if (
