@@ -168,6 +168,9 @@ public class NfcHelper {
                 }
             } catch (Exception e) {
                 Log.e("NfcHelper", "IsoDep Exception: " + e);
+                if (listener != null) {
+                    listener.onError("NFC error: " + e.getMessage());
+                }
             } finally {
                 try {
                     isoDep.close();
@@ -298,6 +301,9 @@ public class NfcHelper {
                     }
                 } catch (Exception e) {
                     Log.e("NfcHelper", "NfcA Exception: " + e);
+                    if (listener != null) {
+                        listener.onError("NFC error: " + e.getMessage());
+                    }
                 } finally {
                     try {
                         nfcA.close();

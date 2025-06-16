@@ -353,6 +353,11 @@ if is_android():
             from kivy.clock import Clock
             Clock.schedule_once(lambda dt: self.app.update_nfc_progress(percent))
 
+        @java_method('(Ljava/lang/String;)V')
+        def onError(self, message):
+            from kivy.clock import Clock
+            Clock.schedule_once(lambda dt: self.app.on_nfc_transfer_error(message))
+
 
 class MainApp(MDApp):
     search_text = ""
@@ -407,10 +412,13 @@ class MainApp(MDApp):
          # Clear the data table, stage notes, and stage name after success
         Clock.schedule_once(lambda dt: self.clear_table_data())       
     def on_nfc_transfer_error(self, error_message="Transfer failed!"):
+        self.nfc_transfer_in_progress = False
         if hasattr(self, "nfc_progress_label"):
             self.nfc_progress_label.text = error_message
-            self.nfc_progress_label.color = (1, 0, 0, 1)  # Red color for error
+            self.nfc_progress_label.color = (1, 0, 0, 1)
+        toast(f"NFC Error: {error_message}")
         Clock.schedule_once(lambda dt: self.hide_nfc_progress_dialog(), 2)
+        # Optionally re-enable manual input here
 
         
     def show_nfc_progress_dialog(self, message="Transferring data..."):
@@ -539,7 +547,7 @@ class MainApp(MDApp):
             print("Failed to create bitmap.")
             return
 
-        # 2. Read bitmap as 1bpp bytes
+        # 2. Read bitmap as 1bpp bytes and get dimensions &  Validate bitmap buffer size before sending to Java
         from PIL import Image
         with Image.open(output_path) as img:
             img = img.convert("1", dither=Image.FLOYDSTEINBERG)
@@ -547,13 +555,7 @@ class MainApp(MDApp):
                 img = img.rotate(-90, expand=True)
             # else: do not rotate for landscape
             image_buffer = pack_image_column_major(img)
-
-        # 3. Get bitmap dimensions
-        from PIL import Image
-        img = Image.open(output_path)
-        width, height = img.size
-
-        # Step 2: Validate bitmap buffer size before sending to Java
+            width, height = img.size
         expected_size = width * height // 8
         if len(image_buffer) != expected_size:
             toast("Bitmap size error. Cannot send to NFC.")
@@ -565,8 +567,6 @@ class MainApp(MDApp):
         if not epd_init:
             print(f"No epd_init found for display: {self.selected_display}")
             return
-
-        # Add these debug prints:
         print("epd_init[0] raw string:", repr(epd_init[0]))
         print("epd_init[0] hex length:", len(epd_init[0]))
         try:
@@ -583,7 +583,7 @@ class MainApp(MDApp):
         print("First 16 bytes of image_buffer:", list(image_buffer[:16]))
         print("Image buffer length:", len(image_buffer))
 
-        # 5. Pass the intent down!
+        # 4. Pass the intent down!
         print("epd_init[0] right before Java:", repr(epd_init[0]), len(epd_init[0]))
         self.send_nfc_image(intent, width, height, image_buffer, epd_init)
 
