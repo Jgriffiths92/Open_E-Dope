@@ -523,6 +523,16 @@ class MainApp(MDApp):
     dialog = None  # Store the dialog instance
 
     def send_csv_bitmap_via_nfc(self, intent):
+        # Step 1: Validate self.current_data before generating bitmap
+        required_keys = {"Target", "Range", "Elv", "Wnd1", "Wnd2", "Lead"}
+        if (
+            not self.current_data
+            or not isinstance(self.current_data, list)
+            or not all(isinstance(row, dict) and required_keys.issubset(row.keys()) for row in self.current_data)
+        ):
+            toast("Data is incomplete or malformed. Please reload or re-enter.")
+            return
+
         # 1. Convert CSV to bitmap
         output_path = self.csv_to_bitmap(self.current_data)
         if not output_path:
@@ -543,7 +553,14 @@ class MainApp(MDApp):
         img = Image.open(output_path)
         width, height = img.size
 
-        # 4. Prepare epd_init (replace with your actual values)
+        # Step 2: Validate bitmap buffer size before sending to Java
+        expected_size = width * height // 8
+        if len(image_buffer) != expected_size:
+            toast("Bitmap size error. Cannot send to NFC.")
+            print(f"Bitmap size error: got {len(image_buffer)}, expected {expected_size}")
+            return
+
+        # 3. Prepare epd_init (replace with your actual values)
         epd_init = self.EPD_INIT_MAP.get(self.selected_display)
         if not epd_init:
             print(f"No epd_init found for display: {self.selected_display}")
@@ -737,6 +754,8 @@ class MainApp(MDApp):
     def clear_table_data(self):
         """Clear the data in the table and update the UI."""
         self.current_data = []
+        if hasattr(self, "manual_data_rows"):
+            self.manual_data_rows = []
         home_screen = self.root.ids.home_screen
         table_container = home_screen.ids.table_container
         table_container.clear_widgets()
@@ -2265,7 +2284,7 @@ SwipeFileItem:
                     if not isinstance(stream_uri, Uri):
                         stream_uri = Uri.parse(str(stream_uri))  # Ensure it's a Uri object
 
-                    # Resolve the URI to a file path or input stream
+                    # Resolve the URI to a file path or read from InputStream
                     content_resolver = mActivity.getContentResolver()
                     file_path = self.resolve_uri_to_path(content_resolver, stream_uri)
 
