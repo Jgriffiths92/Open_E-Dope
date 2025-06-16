@@ -407,12 +407,11 @@ class MainApp(MDApp):
             self.nfc_progress_bar.value = 100
         if hasattr(self, "nfc_progress_label"):
             self.nfc_progress_label.text = "Transfer successful!"
-            self.nfc_progress_label.color = (0, 0.6, 0, 1)
+            self.nfc_progress_label.color = (0, 0.6, 0, 1) # Green for success
         Clock.schedule_once(lambda dt: self.hide_nfc_progress_dialog(), 1.5)
          # Clear the data table, stage notes, and stage name after success
         Clock.schedule_once(lambda dt: self.clear_table_data())       
     def on_nfc_transfer_error(self, error_message="Transfer failed!"):
-        self.nfc_transfer_in_progress = False
         if hasattr(self, "nfc_progress_label"):
             self.nfc_progress_label.text = error_message
             self.nfc_progress_label.color = (1, 0, 0, 1)
@@ -420,8 +419,6 @@ class MainApp(MDApp):
         Clock.schedule_once(lambda dt: self.hide_nfc_progress_dialog(), 2)
         self.current_data = []
         self.manual_data_rows = []
-
-        
     def show_nfc_progress_dialog(self, message="Transferring data..."):
         # Vibrate for 500ms when the dialog opens (Android only)
         if is_android() and mActivity and autoclass:
@@ -1734,56 +1731,45 @@ class MainApp(MDApp):
                 else:
                     print("No extras in intent.")
                 # --- End debug block ---
-
-                # --- NEW: Always check for NFC tag extra, even if action is not NFC ---
                 EXTRA_TAG = autoclass('android.nfc.NfcAdapter').EXTRA_TAG
                
                 tag = intent.getParcelableExtra(EXTRA_TAG)
                 if tag:
                     print("NFC tag detected (regardless of action)!")
                     tag = cast('android.nfc.Tag', tag)
-                    tech_list = tag.getTechList()
-                    print("Tag technologies detected by Android:")
-                    for tech in tech_list:
-                        print(f" - {tech}")
-                        home_screen = self.root.ids.home_screen
+                    # tech_list = tag.getTechList() # Optional: log tech list if needed for debugging
+                    # print("Tag technologies detected by Android:")
+                    # for tech in tech_list:
+                    #     print(f" - {tech}")
+
                     table_container = home_screen.ids.table_container
-                    # If manual data input is displayed (BoxLayout with MDRaisedButton "ADD" present)
+
+                    def perform_nfc_transfer():
+                        Clock.schedule_once(lambda dt: self.show_nfc_progress_dialog("Transferring data to NFC tag..."), 0.01)
+                        # Schedule the actual NFC sending slightly after to allow dialog to show
+                        Clock.schedule_once(lambda dt: self.send_csv_bitmap_via_nfc(intent), 0.05)
+
                     if table_container.children and hasattr(self, "manual_data_rows") and self.manual_data_rows:
                         print("Manual data input detected, adding manual data before NFC transfer.")
-                        Clock.schedule_once(lambda dt: self.add_manual_data())
-                    Clock.schedule_once(lambda dt: self.show_nfc_progress_dialog("Transferring data to NFC tag..."), .01)
-                    self.send_csv_bitmap_via_nfc(intent)
-                    return  # Optionally return here if you don't want to process further
+                        self.add_manual_data() # Call synchronously to ensure self.current_data is updated
+                    
+                    perform_nfc_transfer()
+                    intent.setAction("") # Clear action to prevent re-handling by polling or resume
+                    return
 
-                # NFC tag detected by action
-                if action in [
+                # Fallback for specific NFC actions if EXTRA_TAG wasn't found but action indicates NFC
+                # This might be redundant if EXTRA_TAG is always present for NFC events.
+                elif action in [
                     "android.nfc.action.TAG_DISCOVERED",
                     "android.nfc.action.NDEF_DISCOVERED",
                     "android.nfc.action.TECH_DISCOVERED",
                 ]:
                     print("NFC tag detected!")
-
-                    # Get the Tag object from the intent
-                    tag = intent.getParcelableExtra(EXTRA_TAG)
-                    if tag:
-                        # Get the list of supported techs
-                        tech_list = tag.getTechList()
-                        print("Tag technologies detected by Android:")
-                        for tech in tech_list:
-                            print(f" - {tech}")
-                    else:
-                        print("No Tag object found in intent.")
-
-                    # NEW: Get the tag ID and UID
-                    if tag:
-                        tag_id = tag.getId()
-                        tag_uid = ''.join('{:02X}'.format (byte) for byte in tag_id)
-                        print(f"Tag UID: {tag_uid}")
-                        # Optionally update a label in your UI
-
+                    # This path likely means EXTRA_TAG was null, which is unusual for these actions.
+                    # Proceeding with send_csv_bitmap_via_nfc might fail if tag cannot be extracted by Java.
                     self.send_csv_bitmap_via_nfc(intent)
-                    return  # Optionally return here if you don't want to process further
+                    intent.setAction("") # Clear action
+                    return
 
                 # Handle shared data (SEND/VIEW)
                 if action in ["android.intent.action.SEND", "android.intent.action.VIEW"]:
@@ -2320,7 +2306,12 @@ SwipeFileItem:
         if hasattr(self, "nfc_progress_dialog") and self.nfc_progress_dialog:
             self.nfc_progress_dialog.dismiss()
             self.nfc_progress_dialog = None
-        # Call self.hide_nfc_progress_dialog() at the end of your NFC transfer logic
+        # Nullify bar and label to ensure they are recreated fresh by show_nfc_progress_dialog
+        # and to prevent callbacks from trying to update stale UI elements.
+        if hasattr(self, "nfc_progress_bar"):
+            self.nfc_progress_bar = None
+        if hasattr(self, "nfc_progress_label"):
+            self.nfc_progress_label = None
     def update_nfc_progress(self, percent):
         if hasattr(self, "nfc_progress_bar") and self.nfc_progress_bar:
             # If percent is 100, delay the update by 3 seconds
