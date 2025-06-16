@@ -927,6 +927,16 @@ class MainApp(MDApp):
                     filtered_data.append(row)
             data = filtered_data
 
+        # --- Filter out rows where all values are "0" ---
+        if data:
+            header = data[0]
+            filtered_data_zeros = [header]
+            for row in data[1:]:
+                # Check if all values in the row are "0" (as strings)
+                if not all(str(v).strip() == "0" for v in row.values()):
+                    filtered_data_zeros.append(row)
+            data = filtered_data_zeros
+
     # Check if Range is the first column in the data
         if data and list(data[0].keys())[0] == "Range":
             show_range = True
