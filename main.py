@@ -2217,8 +2217,8 @@ SwipeFileItem:
             self.display_table(self.current_data)
 
             # Clear the input fields
-            self.cancel_manual_data_input()
-            print("Manual data added:", self.current_data)
+            #self.clear_table_data()
+            #print("Manual data added:", self.current_data)
         except Exception as e:
             print(f"Error adding manual data: {e}")
 
