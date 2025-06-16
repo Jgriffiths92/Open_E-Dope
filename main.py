@@ -411,7 +411,6 @@ class MainApp(MDApp):
         Clock.schedule_once(lambda dt: self.hide_nfc_progress_dialog(), 1.5)
          # Clear the data table, stage notes, and stage name after success
         Clock.schedule_once(lambda dt: self.clear_table_data())       
-        print("PYTHON: _finish_nfc_progress completed. self.current_data cleared.")
     def on_nfc_transfer_error(self, error_message="Transfer failed!"):
         if hasattr(self, "nfc_progress_label"):
             self.nfc_progress_label.text = error_message
@@ -420,7 +419,6 @@ class MainApp(MDApp):
         Clock.schedule_once(lambda dt: self.hide_nfc_progress_dialog(), 2)
         self.current_data = []
         self.manual_data_rows = []
-        print("PYTHON: on_nfc_transfer_error completed. self.current_data and manual_data_rows cleared.")
     def show_nfc_progress_dialog(self, message="Transferring data..."):
         # Vibrate for 500ms when the dialog opens (Android only)
         if is_android() and mActivity and autoclass:
@@ -497,7 +495,6 @@ class MainApp(MDApp):
         except Exception as e:
             print(f"Error generating bitmap: {e}")
     def on_permissions_result(self, permissions, grant_results):
-        print("PYTHON: on_permissions_result called.")
         """Handle the result of the permission request."""
         for permission, granted in zip(permissions, grant_results):
             if permission == Permission.NFC:
@@ -534,7 +531,6 @@ class MainApp(MDApp):
     def send_csv_bitmap_via_nfc(self, intent):
         # Step 1: Validate self.current_data before generating bitmap
         required_keys = {"Target", "Range", "Elv", "Wnd1", "Wnd2", "Lead"}
-        print(f"PYTHON: send_csv_bitmap_via_nfc called. Checking self.current_data (length: {len(getattr(self, 'current_data', []))})")
         if (
             not self.current_data
             or not isinstance(self.current_data, list)
@@ -546,7 +542,6 @@ class MainApp(MDApp):
         # 1. Convert CSV to bitmap
         output_path = self.csv_to_bitmap(self.current_data)
         if not output_path:
-            toast("Bitmap generation failed.")
             print("Failed to create bitmap.")
             return
 
@@ -560,7 +555,6 @@ class MainApp(MDApp):
             image_buffer = pack_image_column_major(img)
             width, height = img.size
         expected_size = width * height // 8
-        print(f"PYTHON: Bitmap read. Size: {width}x{height}, Buffer length: {len(image_buffer)}, Expected: {expected_size}")
         if len(image_buffer) != expected_size:
             toast("Bitmap size error. Cannot send to NFC.")
             print(f"Bitmap size error: got {len(image_buffer)}, expected {expected_size}")
@@ -569,7 +563,6 @@ class MainApp(MDApp):
         # 3. Prepare epd_init (replace with your actual values)
         epd_init = self.EPD_INIT_MAP.get(self.selected_display)
         if not epd_init:
-            toast(f"No display init data for {self.selected_display}.")
             print(f"No epd_init found for display: {self.selected_display}")
             return
         print("epd_init[0] raw string:", repr(epd_init[0]))
@@ -591,7 +584,6 @@ class MainApp(MDApp):
         # 4. Final validation before sending to Java
         # Check for all-zero (blank) image buffer
         if all(b == 0 for b in image_buffer):
-            toast("Cannot send blank image.")
             print("ERROR: Image buffer is all zeros (blank image)!")
             toast("Cannot send blank image to NFC tag.")
             return
@@ -622,7 +614,6 @@ class MainApp(MDApp):
         for i, s in enumerate(epd_init):
             epd_init_java_array[i] = String(s)
         # Create the progress listener
-        print(f"PYTHON: Creating new NfcProgressListener instance.")
         listener = NfcProgressListener(self)
         # Call the ByteBuffer method
         NfcHelper.processNfcIntentByteBufferAsync(intent, width, height, image_buffer_bb, epd_init_java_array, listener)
@@ -771,7 +762,6 @@ class MainApp(MDApp):
     def clear_table_data(self):
         """Clear the data in the table and update the UI."""
         self.current_data = []
-        print("PYTHON: self.current_data cleared.")
         if hasattr(self, "manual_data_rows"):
             self.manual_data_rows = []
         home_screen = self.root.ids.home_screen
@@ -807,7 +797,6 @@ class MainApp(MDApp):
     def on_file_selected(self, selection):
         """Handle the file or folder selected in the FileChooserListView."""
          # Clear current data and table before loading new file
-        print(f"PYTHON: on_file_selected called with selection: {selection}")
         self.current_data = []
         self.clear_table_data()
         if selection:
@@ -839,7 +828,6 @@ class MainApp(MDApp):
                 try:
                     # Read the CSV file and convert it to a dictionary
                     data = self.read_csv_to_dict(selected_path)
-                    print(f"PYTHON: Data read from file. Length: {len(data)}")
                     self.current_data = data  # Store the data for filtering or other operations
 
                     # Preprocess the data
@@ -865,7 +853,6 @@ class MainApp(MDApp):
     def read_csv_to_dict(self, file_or_path):
         """Reads a CSV file or file-like object and maps it to static column names, ignoring the headers and skipping the first 6 lines."""
         static_columns = ["Target", "Range", "Elv", "Wnd1", "Wnd2", "Lead"]  # Static column names
-        print(f"PYTHON: read_csv_to_dict called for: {file_or_path}")
         data = []
         try:
             print(f"Reading CSV: {file_or_path}")
@@ -891,7 +878,6 @@ class MainApp(MDApp):
             if close_after:
                 csv_file.close()
             print(f"CSV data read successfully: {data}")
-            print(f"PYTHON: read_csv_to_dict returning data (length: {len(data)})")
         except Exception as e:
             print(f"Error reading CSV file: {e}")
         return data
@@ -923,7 +909,6 @@ class MainApp(MDApp):
 
     def display_table(self, data):
         global show_range
-        print(f"PYTHON: display_table called with data (length: {len(data)})")
         # Check if data is empty
         if not data:
             print("No data to display.")
@@ -934,7 +919,6 @@ class MainApp(MDApp):
 
         # --- Filter out rows where all values after "Target" are "---" ---
         if data:
-            print("PYTHON: Applying '---' filtering in display_table.")
             header = data[0]
             filtered_data = [header]
             for row in data[1:]:
@@ -942,7 +926,6 @@ class MainApp(MDApp):
                 if not all(str(v).strip() == "---" for v in values_after_target):
                     filtered_data.append(row)
             data = filtered_data
-            print(f"PYTHON: Data length after '---' filtering: {len(data)}")
 
     # Check if Range is the first column in the data
         if data and list(data[0].keys())[0] == "Range":
@@ -1356,7 +1339,6 @@ class MainApp(MDApp):
     def csv_to_bitmap(self, csv_data, output_path=None):
         """Convert CSV data to a bitmap image, resize it to fit the display resolution while keeping the aspect ratio, and save it."""
         try:
-            print(f"PYTHON: csv_to_bitmap called with csv_data (length: {len(csv_data)})")
             # Set the default output path to the assets/bitmap folder
             bitmap_directory = os.path.join(os.path.dirname(__file__), "assets", "bitmap")
             if not os.path.exists(bitmap_directory):
@@ -1369,14 +1351,6 @@ class MainApp(MDApp):
             # Default resolution if no display is selected
             display_width, display_height = 240, 416
 
-            # Determine the final output size based on orientation and selected display
-            portrait_resolution = self.selected_resolution # e.g., (240, 416) for 3.7"
-            if self.selected_orientation == "Landscape":
-                final_resolution = (portrait_resolution[1], portrait_resolution[0]) # e.g., (416, 240)
-            else:
-                final_resolution = portrait_resolution # e.g., (240, 416)
-
-            output_path = output_path or os.path.join(bitmap_directory, "output.bmp")
            
             # Load the font file (ensure the font file is in the correct path)
             font_path = os.path.join(os.path.dirname(__file__), "assets", "fonts", "RobotoMono-Regular.ttf")
@@ -1386,16 +1360,6 @@ class MainApp(MDApp):
             base_width, base_height = 240, 416
             image = Image.new("RGB", (base_width, base_height), "white")
             draw = ImageDraw.Draw(image)
-
-            if not csv_data:
-                print("PYTHON: csv_to_bitmap: Input csv_data is empty.")
-                print("Bitmap: Input CSV data is empty. Generating a blank image.")
-                # `image` is already a blank white base image. We'll resize it later.
-                image = image.resize(final_resolution, Image.LANCZOS)
-                bw_image = image.convert("1")
-                bw_image.save(output_path)
-                print(f"Bitmap saved (blank due to no data): {output_path}")
-                return output_path
 
             # Add the stage name at the top
             stage_name = self.root.ids.home_screen.ids.stage_name_field.text  # Get the stage name from the text field
@@ -1410,111 +1374,94 @@ class MainApp(MDApp):
             draw.line((10, y, base_width - 10, y), fill="black", width=1)
             y += 20  # Add some spacing after the line
 
-            # 1. Preprocess data (e.g., shift columns if Target is numeric)
-            # Operates on a copy of csv_data.
-            data_after_preprocessing = self.preprocess_data(list(csv_data))
+            # --- Use the exact header and row logic as display_table ---
+            processed_data = self.preprocess_data(csv_data)
 
-            # 2. Filter out rows that are entirely "---" (excluding Target for this specific filter)
-            #    or otherwise considered non-drawable.
-            final_data_for_drawing = []
-            if data_after_preprocessing:
-                keys_to_check_for_triple_dash = ["Range", "Elv", "Wnd1", "Wnd2", "Lead"]
-                print("PYTHON: csv_to_bitmap: Applying '---' filtering to preprocessed data.")
-                for row_dict in data_after_preprocessing:
-                    values_to_check = [str(row_dict.get(k, "")).strip() for k in keys_to_check_for_triple_dash]
-                    if not all(val == "---" or val == "" for val in values_to_check):
-                        final_data_for_drawing.append(row_dict)
-            
-            if not final_data_for_drawing:
-                print("Bitmap: Data became empty after filtering. Generating blank image.")
-                print("PYTHON: csv_to_bitmap: final_data_for_drawing is empty after filtering.")
-                image = image.resize(final_resolution, Image.LANCZOS) # Resize the existing blank base
-                bw_image = image.convert("1")
-                bw_image.save(output_path)
-                print(f"Bitmap saved (blank due to no data after filtering): {output_path}")
-                return output_path
+            # Filter out rows where all values after "Target" are "---"
+            if processed_data:
+                header = processed_data[0]
+                filtered_data = [header]
+                for row in processed_data[1:]:
+                    values_after_target = [v for k, v in row.items() if k != "Target"]
+                    if not all(str(v).strip() == "---" for v in values_after_target):
+                        filtered_data.append(row)
+                processed_data = filtered_data
 
-            # 3. Determine columns to display (display_headers)
-            # Start with a base, and add conditionally. Order matters.
-            display_headers = []
-            # Check if 'Target' is present and meaningful in the data to be drawn
-            target_meaningfully_present = any(str(row.get("Target","")).strip() not in ["", "0", "---"] for row in final_data_for_drawing)
-            print(f"PYTHON: csv_to_bitmap: target_meaningfully_present: {target_meaningfully_present}")
-
-            if target_meaningfully_present:
-                display_headers.append("Target")
-            
-            # global show_range, show_2_wind_holds, show_lead are used here
+            static_headers = ["Target", "Range", "Elv", "Wnd1", "Wnd2", "Lead"]
+            headers = ["Elv", "Wnd1"]
+            target_present = any(row.get("Target") for row in processed_data)
+            if target_present:
+                headers.insert(0, "Target")
             if show_range:
-                display_headers.append("Range")
-            
-            display_headers.append("Elv")  # Elv is usually always shown
-            display_headers.append("Wnd1") # Wnd1 is usually always shown
-
+                if not target_present:
+                    headers.insert(0, "Range")
+                else:
+                    headers.insert(1, "Range")
             if show_2_wind_holds:
-                display_headers.append("Wnd2")
-            
+                headers.append("Wnd2")
             if show_lead:
-                display_headers.append("Lead")
-            
-            if not display_headers: # Fallback if all conditions somehow failed
-                display_headers = ["Elv", "Wnd1"] # Minimal default
-            print(f"PYTHON: csv_to_bitmap: Final display_headers: {display_headers}")
+                headers.append("Lead")
 
-            # 4. Calculate column widths based on `final_data_for_drawing` and `display_headers`
+            filtered_data = [
+                {header: row.get(header, "") for header in headers} for row in processed_data
+            ]
+
+            # Calculate the maximum width for each column, using the displayed header text
             column_widths = {}
-            for h_key in display_headers: # This loop and its contents should be at the same level as display_headers = []
-                display_text = "Tgt" if h_key == "Target" else "Rng" if h_key == "Range" else h_key
-                column_widths[h_key] = len(display_text)
-            for data_row in final_data_for_drawing: # This loop should also be at the same level
-                for h_key in display_headers:
-                    column_widths[h_key] = max(column_widths[h_key], len(str(data_row.get(h_key, ""))))
+            for header in headers:
+                display_header = "Tgt" if header == "Target" else "Rng" if header == "Range" else header
+                column_widths[header] = len(display_header)
+
+            for row in filtered_data:
+                for header in headers:
+                    column_widths[header] = max(column_widths[header], len(str(row.get(header, ""))))
 
             # Write headers to the image
             headers_text = " | ".join(
                 f"{('Tgt' if header == 'Target' else 'Rng' if header == 'Range' else header):<{column_widths[header]}}"
-            for header in display_headers
+                for header in headers
             )
             text_bbox = draw.textbbox((0, 0), headers_text, font=font)
             text_width = text_bbox[2] - text_bbox[0]
             x = (base_width - text_width) // 2
             draw.text((x, y), headers_text, fill="black", font=font)
-            print(f"PYTHON: csv_to_bitmap: Headers drawn: {headers_text}")
             y += 20
 
             # Write CSV data to the image
-            for data_row in final_data_for_drawing:
-                row_text = " | ".join(f"{str(data_row.get(h_key, '')):<{column_widths[h_key]}}" for h_key in display_headers)
+            for row in filtered_data:
+                row_text = " | ".join(f"{str(row.get(header, '')):<{column_widths[header]}}" for header in headers)
                 text_bbox = draw.textbbox((0, 0), row_text, font=font)
                 text_width = text_bbox[2] - text_bbox[0]
                 x = (base_width - text_width) // 2
                 draw.text((x, y), row_text, fill="black", font=font)
-                print(f"PYTHON: csv_to_bitmap: Data row drawn: {row_text}")
                 y += 20
 
             # Add the stage notes below the table data
-            stage_notes_text = self.root.ids.home_screen.ids.stage_notes_field.text.strip()
-            if stage_notes_text:
-                y += 10 # Add some spacing before the stage notes
-                draw.line((10, y, base_width - 10, y), fill="black", width=1) # Draw a line above the stage notes
-                y += 10 # Add some spacing after the line
-                
-                notes_label_text = "Stage Notes:"
-                text_bbox_notes_label = draw.textbbox((0, 0), notes_label_text, font=font)
-                x_notes_label = (base_width - (text_bbox_notes_label[2] - text_bbox_notes_label[0])) // 2
-                draw.text((x_notes_label, y), notes_label_text, fill="black", font=font)
-                y += 20 # Spacing after "Stage Notes:"
-                
-                # For actual notes, handle multi-line if necessary, though typically short
-                text_bbox_notes = draw.textbbox((0, 0), stage_notes_text, font=font)
-                x_notes = (base_width - (text_bbox_notes[2] - text_bbox_notes[0])) // 2
-                draw.text((x_notes, y), stage_notes_text, fill="black", font=font)
-                y += 20
+            stage_notes = self.root.ids.home_screen.ids.stage_notes_field.text  # Get the stage notes from the text field
+            y += 20  # Add some spacing before the stage notes
+            draw.line((10, y, base_width - 10, y), fill="black", width=1)  # Draw a line above the stage notes
+            y += 10  # Add some spacing after the line
+            text_bbox = draw.textbbox((0, 0), "Stage Notes:", font=font)  # Get the bounding box of the stage notes label
+            text_width = text_bbox[2] - text_bbox[0]  # Calculate the text width
+            x = (base_width - text_width) // 2  # Center the text horizontally
+            draw.text((x, y), "Stage Notes:", fill="black", font=font)
+            y += 30  # Add some spacing after the stage notes label
+            draw.line((10, y, base_width - 10, y), fill="black", width=1)  # Draw a horizontal line under the stage notes label
+            y += 20  # Add some spacing after the line
+            text_bbox = draw.textbbox((0, 0), stage_notes, font=font)  # Get the bounding box of the stage notes
+            text_width = text_bbox[2] - text_bbox[0]  # Calculate the text width
+            x = (base_width - text_width) // 2  # Center the text horizontally
+            draw.text((x, y), stage_notes, fill="black", font=font)
 
+            # 2. Determine the final output size based on orientation and selected display
+            portrait_resolution = self.selected_resolution  # e.g., (240, 416) for 3.7"
+            if self.selected_orientation == "Landscape":
+                final_resolution = (portrait_resolution[1], portrait_resolution[0])  # e.g., (416, 240)
+            else:
+                final_resolution = portrait_resolution  # e.g., (240, 416)
 
-            # Resize to the final resolution (determined at the start)
+            # 3. Resize to the final resolution (this will stretch/squash if needed)
             image = image.resize(final_resolution, Image.LANCZOS)
-            print(f"PYTHON: csv_to_bitmap: Image resized to {final_resolution}")
 
             # Save the resized image as a bitmap
             bw_image = image.convert("1")  # Convert to 1-bit pixels
@@ -1523,20 +1470,7 @@ class MainApp(MDApp):
             print(f"Bitmap dimensions: {bw_image.size}")
             return output_path
         except Exception as e:
-            print("PYTHON: csv_to_bitmap: Exception occurred during bitmap generation.")
             print(f"Error converting CSV to bitmap: {e}")
-            # Fallback: save a blank image on error
-            try:
-                # Ensure output_path is defined, default if not
-                output_path = output_path or os.path.join(os.path.dirname(__file__), "assets", "bitmap", "output.bmp")
-                # final_resolution should be defined from the start of the function
-                fallback_image = Image.new("RGB", final_resolution, "white")
-                bw_fallback_image = fallback_image.convert("1")
-                bw_fallback_image.save(output_path)
-                print("PYTHON: csv_to_bitmap: Saved blank fallback bitmap.")
-                print(f"Saved a blank fallback bitmap due to error: {output_path}")
-            except Exception as e_save:
-                print(f"Critical error saving fallback blank bitmap: {e_save}")
             return None
     def navigate_to_home(self):
         """Navigate back to the home screen."""
@@ -2255,62 +2189,29 @@ SwipeFileItem:
         table_container.add_widget(row_layout, index=button_index)
     def add_manual_data(self):
         try:
-            newly_added_to_current_data = [] # To track what's added in this call
             for row_fields in self.manual_data_rows:
-                current_row_data = {}
-                is_row_effectively_empty = True # Assume empty until proven otherwise
-
-                for key, field_widget in row_fields.items():
-                    value = field_widget.text.strip()
-                    current_row_data[key] = value if value else "0" # Default to "0" if blank
-                    if value and value != "0": # If there's any actual input beyond default "0"
-                        is_row_effectively_empty = False
-                
-                # A row is considered valid to add if:
-                # 1. It's not effectively empty (i.e., has some non-"0" input)
-                # OR 2. The "Target" field has a value (even if it's "0", if "0" is a valid target for display)
-                # Let's be more specific: add if Target is not empty (after defaulting to "0")
-                # OR if the row is not effectively empty.
-                
-                target_value_for_check = current_row_data.get("Target", "0") # Already "0" if blank
-
-                if not is_row_effectively_empty or (target_value_for_check != "0"): # Add if any field has data, or if Target is not "0"
-                    # Ensure all required keys for self.current_data structure are present
-                    final_entry_for_storage = {}
-                    required_keys_for_storage = {"Target", "Range", "Elv", "Wnd1", "Wnd2", "Lead"}
-                    for req_key in required_keys_for_storage:
-                        final_entry_for_storage[req_key] = current_row_data.get(req_key, "0")
-                    
-                    if not hasattr(self, "current_data"): # Initialize if first time
-                        self.current_data = []
-                    self.current_data.append(final_entry_for_storage)
-                    newly_added_to_current_data.append(final_entry_for_storage)
-                else:
-                    print("Skipping an entirely default/empty manual data row.")
-
-            if not newly_added_to_current_data and not self.current_data:
-                # This means no new data was added from manual fields, AND self.current_data was already empty.
-                print("No data to process from manual input, and no existing data.")
-                toast("No data entered. Please input data to send.")
-                # self.current_data remains []
-            elif newly_added_to_current_data: # If new data was added
-                self.display_table(self.current_data) # Display the updated table (includes old + new)
-                # Clear text from input fields only if new data was successfully processed from them
-                for row_fields in self.manual_data_rows:
-                    for field_widget in row_fields.values():
-                        field_widget.text = ""
-                print("Manual data processed. Current self.current_data:", self.current_data)
-            else:
-                # No new data added, but self.current_data might have existing data (e.g. from a loaded file)
-                # In the NFC flow, self.current_data is cleared before this, so this branch is less likely for NFC.
-                print("No new manual data added, existing self.current_data (if any) is preserved.")
-                if self.current_data: # If there's old data, re-display it
+                manual_data = {key: "0" for key in self.available_fields.keys()}
+                for key, field in row_fields.items():
+                    manual_data[key] = field.text if field.text.strip() else "0"
+                if not manual_data["Target"]:
+                    print("Target is required.")
+                    toast("Target is required.")
+                    return
+                required_keys = {"Target", "Range", "Elv", "Wnd1", "Wnd2", "Lead"}
+                for k in required_keys:
+                    if k not in manual_data:
+                        manual_data[k] = "0"
+                if not hasattr(self, "current_data") or not self.current_data:
                     self.current_data = []
-                    self.display_table(self.current_data)
-
+                self.current_data.append(manual_data)
+            self.display_table(self.current_data)
+            # Clear manual input fields after adding data
+            for row_fields in self.manual_data_rows:
+                for field in row_fields.values():
+                    field.text = ""
+            print("Manual data added and input fields cleared:", self.current_data)
         except Exception as e:
             print(f"Error adding manual data: {e}")
-            toast(f"Error in manual input: {e}")
 
     def copy_directory_from_assets(self, asset_manager, source_path, dest_path):
         """Recursively copy a directory from the assets folder to the destination."""
