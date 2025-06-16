@@ -1742,7 +1742,7 @@ class MainApp(MDApp):
                     # for tech in tech_list:
                     #     print(f" - {tech}")
 
-                    table_container = home_screen.ids.table_container
+                    table_container = self.root.ids.home_screen.ids.table_container
 
                     def perform_nfc_transfer():
                         Clock.schedule_once(lambda dt: self.show_nfc_progress_dialog("Transferring data to NFC tag..."), 0.01)
