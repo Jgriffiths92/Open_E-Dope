@@ -639,8 +639,7 @@ class MainApp(MDApp):
         ]:
             print("Calling on_new_intent from on_resume")
             self.on_new_intent(intent)
-            # Optionally clear the intent action so it doesn't get handled again
-            intent.setAction("")
+            # Action is now cleared within on_new_intent after processing
         else:
             print("No shared file/text or NFC intent to process on resume.")
 
@@ -1405,7 +1404,7 @@ class MainApp(MDApp):
                     if not all(str(v).strip() == "0" for v in row.values()):
                         filtered_data_zeros.append(row)
                 processed_data = filtered_data_zeros
-                
+
             static_headers = ["Target", "Range", "Elv", "Wnd1", "Wnd2", "Lead"]
             headers = ["Elv", "Wnd1"]
             target_present = any(row.get("Target") for row in processed_data)
@@ -1837,6 +1836,7 @@ class MainApp(MDApp):
                                         except UnicodeDecodeError:
                                             print("UTF-8 decode failed, trying latin-1...")
                                             content = content_bytes.decode("latin-1")
+                                        intent.setAction("") # Clear action after processing
                                         print(f"File contents (from InputStream):\n{content}")
                                         self.process_received_csv(content)
                                     else:
@@ -1844,6 +1844,8 @@ class MainApp(MDApp):
                                 except Exception as e:
                                     print(f"Error reading from InputStream: {e}")
                 else:
+                    # If no specific data handled, but action was SEND/VIEW, clear it.
+                    intent.setAction("") 
                     print("No valid data found in the intent.")
             except Exception as e:
                 print(f"Error handling new intent: {e}")
