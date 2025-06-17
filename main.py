@@ -1732,124 +1732,124 @@ class MainApp(MDApp):
 
     def on_new_intent(self, intent):
         print("on_new_intent called")
+        """Handle new intents, including shared data and NFC tags."""
+        if is_android() and autoclass:
+            try:
+                # Get the action from the intent
+                action = intent.getAction()
+                print(f"Intent action: {action}")
 
-        def _process_intent_on_main_thread(dt_unused):
-            """Handle new intents, including shared data and NFC tags, on the Kivy main thread."""
-            # Use the 'intent' from the outer scope
-            current_intent = intent
-            if is_android() and autoclass:
-                try:
-                    # Get the action from the intent
-                    action = current_intent.getAction()
-                    print(f"Intent action (on main thread): {action}")
+                # --- Print all extras for debugging ---
+                extras = intent.getExtras()
+                if extras:
+                    print("Intent extras:")
+                    for key in extras.keySet():
+                        value = extras.get(key)
+                        print(f"  {key}: {value}")
+                else:
+                    print("No extras in intent.")
+                # --- End debug block ---
+                EXTRA_TAG = autoclass('android.nfc.NfcAdapter').EXTRA_TAG
+               
+                tag = intent.getParcelableExtra(EXTRA_TAG)
+                if tag:
+                    print("NFC tag detected (regardless of action)!")
+                    tag = cast('android.nfc.Tag', tag)
+                    # tech_list = tag.getTechList() # Optional: log tech list if needed for debugging
+                    # print("Tag technologies detected by Android:")
+                    # for tech in tech_list:
+                    #     print(f" - {tech}")
 
-                    # --- Print all extras for debugging ---
+                    table_container = self.root.ids.home_screen.ids.table_container
+
+                    def perform_nfc_transfer():
+                        Clock.schedule_once(lambda dt: self.show_nfc_progress_dialog("Transferring data to NFC tag..."), 0.01)
+                        # Schedule the actual NFC sending slightly after to allow dialog to show
+                        Clock.schedule_once(lambda dt: self.send_csv_bitmap_via_nfc(intent), 0.05)
+
+                    if table_container.children and hasattr(self, "manual_data_rows") and self.manual_data_rows:
+                        print("Manual data input detected, adding manual data before NFC transfer.")
+                        self.add_manual_data() # Call synchronously to ensure self.current_data is updated
+                    
+                    perform_nfc_transfer()
+                    intent.setAction("") # Clear action to prevent re-handling by polling or resume
+                    return
+
+                # Fallback for specific NFC actions if EXTRA_TAG wasn't found but action indicates NFC
+                # This might be redundant if EXTRA_TAG is always present for NFC events.
+                elif action in [
+                    "android.nfc.action.TAG_DISCOVERED",
+                    "android.nfc.action.NDEF_DISCOVERED",
+                    "android.nfc.action.TECH_DISCOVERED",
+                ]:
+                    print("NFC tag detected!")
+                    # This path likely means EXTRA_TAG was null, which is unusual for these actions.
+                    # Proceeding with send_csv_bitmap_via_nfc might fail if tag cannot be extracted by Java.
+                    self.send_csv_bitmap_via_nfc(intent)
+                    intent.setAction("") # Clear action
+                    return
+
+                # Handle shared data (SEND/VIEW)
+                if action in ["android.intent.action.SEND", "android.intent.action.VIEW"]:
                     extras = intent.getExtras()
-                    if extras:
-                        print("Intent extras (on main thread):")
-                        for key in extras.keySet():
-                            value = extras.get(key)
-                            print(f"  {key}: {value}")
-                    else:
-                        print("No extras in intent (on main thread).")
-                    # --- End debug block ---
-                    EXTRA_TAG = autoclass('android.nfc.NfcAdapter').EXTRA_TAG
-                   
-                    tag = current_intent.getParcelableExtra(EXTRA_TAG)
-                    if tag:
-                        print("NFC tag detected (regardless of action)!")
-                        tag = cast('android.nfc.Tag', tag)
-                        table_container = self.root.ids.home_screen.ids.table_container
+                    if extras and extras.containsKey("android.intent.extra.TEXT"):
+                        # Handle shared text
+                        shared_text = extras.getString("android.intent.extra.TEXT")
+                        print(f"Received shared text: {shared_text}")
+                        self.process_received_text(shared_text)
+                    elif extras and extras.containsKey("android.intent.extra.STREAM"):
+                        # Handle shared file
+                        stream_uri = extras.getParcelable("android.intent.extra.STREAM")
+                        print(f"Received stream URI: {stream_uri}")
 
-                        def perform_nfc_transfer_scheduled(): # Renamed to avoid conflict if outer func is also named this
-                            # This is already on the main thread, direct calls are fine
-                            self.show_nfc_progress_dialog("Transferring data to NFC tag...")
-                            self.send_csv_bitmap_via_nfc(current_intent)
-
-                        if table_container.children and hasattr(self, "manual_data_rows") and self.manual_data_rows:
-                            print("Manual data input detected, adding manual data before NFC transfer.")
-                            self.add_manual_data()
-                        
-                        perform_nfc_transfer_scheduled()
-                        current_intent.setAction("") 
-                        return
-
-                    elif action in [
-                        "android.nfc.action.TAG_DISCOVERED",
-                        "android.nfc.action.NDEF_DISCOVERED",
-                        "android.nfc.action.TECH_DISCOVERED",
-                    ]:
-                        print("NFC tag detected by explicit action!")
-                        self.send_csv_bitmap_via_nfc(current_intent)
-                        current_intent.setAction("") 
-                        return
-
-                    # Handle shared data (SEND/VIEW)
-                    if action in ["android.intent.action.SEND", "android.intent.action.VIEW"]:
-                        if extras and extras.containsKey("android.intent.extra.TEXT"):
-                            shared_text = extras.getString("android.intent.extra.TEXT")
-                            print(f"Received shared text: {shared_text}")
-                            self.process_received_text(shared_text) # UI updates happen here
-                            current_intent.setAction("") # Clear action after processing text
-                        elif extras and extras.containsKey("android.intent.extra.STREAM"):
-                            stream_uri_parcelable = extras.getParcelable("android.intent.extra.STREAM")
-                            print(f"Received stream URI parcelable: {stream_uri_parcelable}")
-
+                        # If the stream_uri is a string path, open it directly
+                        if isinstance(stream_uri, str) and stream_uri.startswith("/"):
+                            print(f"Received file path: {stream_uri}")
+                            self.process_received_csv(stream_uri)
+                        else:
                             Uri = autoclass('android.net.Uri')
-                            actual_stream_uri = None
-                            if isinstance(stream_uri_parcelable, Uri): actual_stream_uri = stream_uri_parcelable
-                            elif isinstance(stream_uri_parcelable, str): actual_stream_uri = Uri.parse(stream_uri_parcelable)
-                            else:
-                                try: actual_stream_uri = cast('android.net.Uri', stream_uri_parcelable)
-                                except Exception as e_cast_uri: print(f"Could not cast/parse stream_uri_parcelable: {e_cast_uri}")
-
-                            if not actual_stream_uri:
-                                print("Stream URI is null after parsing/casting.")
-                                current_intent.setAction("")
-                                return
+                            try:
+                                stream_uri = cast('android.net.Uri', stream_uri)
+                            except Exception:
+                                stream_uri = Uri.parse(str(stream_uri))
 
                             content_resolver = mActivity.getContentResolver()
-                            file_path = self.resolve_uri_to_path(content_resolver, actual_stream_uri)
+                            file_path = self.resolve_uri_to_path(content_resolver, stream_uri)
 
                             if file_path:
-                                self.process_received_csv(file_path) # UI updates happen here
+                                self.process_received_csv(file_path)
                             else:
-                                # Fallback: Read directly from the InputStream
-                                input_stream = content_resolver.openInputStream(actual_stream_uri)
-                                if input_stream:
-                                    ByteArrayOutputStream = autoclass('java.io.ByteArrayOutputStream')
-                                    buffer = ByteArrayOutputStream()
-                                    byte_data = input_stream.read()
-                                    while byte_data != -1:
-                                        buffer.write(byte_data)
-                                        byte_data = input_stream.read()
-                                    input_stream.close()
-                                    content_bytes = bytes(buffer.toByteArray())
-                                   
-                                    content = ""
-                                    try: content = content_bytes.decode("utf-8")
-                                    except UnicodeDecodeError:
-                                        print("UTF-8 decode failed, trying latin-1...")
-                                        content = content_bytes.decode("latin-1")
-                                    print(f"File contents (from InputStream):\n{content[:200]}...")
-                                    self.process_received_csv(content) # UI updates happen here
-                                else:
-                                    print("InputStream is None. Cannot read the file.")
-                            current_intent.setAction("") # Clear action after processing stream
-                        else:
-                            # If action was SEND/VIEW but no TEXT or STREAM, clear action
-                            if action in ["android.intent.action.SEND", "android.intent.action.VIEW"]:
-                                current_intent.setAction("")
-                            print("No TEXT or STREAM found in SEND/VIEW intent, or no data extracted.")
-                except Exception as e_main_thread_processing:
-                    print(f"Error processing intent on main Kivy thread: {e_main_thread_processing}")
-                    toast(f"Error handling intent: {str(e_main_thread_processing)[:100]}") # Show a snippet of the error
-                    if current_intent: # Try to clear action even on error
-                        current_intent.setAction("")
-            else: # Not on Android
-                pass
-
-        Clock.schedule_once(_process_intent_on_main_thread, 0)
+                                try:
+                                    input_stream = content_resolver.openInputStream(stream_uri)
+                                    if input_stream:
+                                        ByteArrayOutputStream = autoclass('java.io.ByteArrayOutputStream')
+                                        buffer = ByteArrayOutputStream()
+                                        byte = input_stream.read()
+                                        while byte != -1:
+                                            buffer.write(byte)
+                                            byte = input_stream.read()
+                                        input_stream.close()
+                                        content_bytes = bytes(buffer.toByteArray())
+                                       
+                                        try:
+                                            content = content_bytes.decode("utf-8")
+                                        except UnicodeDecodeError:
+                                            print("UTF-8 decode failed, trying latin-1...")
+                                            content = content_bytes.decode("latin-1")
+                                        intent.setAction("") # Clear action after processing
+                                        print(f"File contents (from InputStream):\n{content}")
+                                        # Schedule the processing to ensure it runs on the Kivy main thread
+                                        Clock.schedule_once(lambda dt, c=content: self.process_received_csv(c))
+                                    else:
+                                        print("InputStream is None. Cannot read the file.")
+                                except Exception as e:
+                                    print(f"Error reading from InputStream: {e}")
+                else:
+                    # If no specific data handled, but action was SEND/VIEW, clear it.
+                    intent.setAction("") 
+                    print("No valid data found in the intent.")
+            except Exception as e:
+                print(f"Error handling new intent: {e}")
 
     def resolve_uri_to_path(self, content_resolver, uri):
         """Resolve a content URI to a file path."""
