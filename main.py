@@ -638,7 +638,7 @@ class MainApp(MDApp):
             "android.nfc.action.TECH_DISCOVERED",
         ]:
             print("Calling on_new_intent from on_resume")
-            self.on_new_intent(intent)
+            Clock.schedule_once(lambda dt: self.on_new_intent(intent), 0)
             # Action is now cleared within on_new_intent after processing
         else:
             print("No shared file/text or NFC intent to process on resume.")
