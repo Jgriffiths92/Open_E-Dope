@@ -1838,7 +1838,8 @@ class MainApp(MDApp):
                                             content = content_bytes.decode("latin-1")
                                         intent.setAction("") # Clear action after processing
                                         print(f"File contents (from InputStream):\n{content}")
-                                        self.process_received_csv(content)
+                                        # Schedule the processing to ensure it runs on the Kivy main thread
+                                        Clock.schedule_once(lambda dt, c=content: self.process_received_csv(c))
                                     else:
                                         print("InputStream is None. Cannot read the file.")
                                 except Exception as e:
