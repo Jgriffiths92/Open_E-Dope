@@ -418,14 +418,32 @@ class MainApp(MDApp):
         Clock.schedule_once(lambda dt: self.hide_nfc_progress_dialog(), 1.5)
          # Clear the data table, stage notes, and stage name after success
         Clock.schedule_once(lambda dt: self.clear_table_data())       
+        print("PYTHON DEBUG: _finish_nfc_progress completed. self.current_data should be cleared by clear_table_data().")
     def on_nfc_transfer_error(self, error_message="Transfer failed!"):
-        if hasattr(self, "nfc_progress_label"):
+        print(f"PYTHON DEBUG: on_nfc_transfer_error called with message: {error_message}")
+        dialog_updated_successfully = False
+
+        # Attempt to update the existing progress dialog if it's fully formed
+        if hasattr(self, "nfc_progress_dialog") and self.nfc_progress_dialog and \
+           hasattr(self, "nfc_progress_label") and self.nfc_progress_label:
             self.nfc_progress_label.text = error_message
-            self.nfc_progress_label.color = (1, 0, 0, 1)
-        toast(f"NFC Error: {error_message}")
-        Clock.schedule_once(lambda dt: self.hide_nfc_progress_dialog(), 2)
+            self.nfc_progress_label.color = (1, 0, 0, 1)  # Red color for error
+            dialog_updated_successfully = True
+            
+            # Also hide the progress bar itself if it exists
+            if hasattr(self, "nfc_progress_bar") and self.nfc_progress_bar:
+                self.nfc_progress_bar.opacity = 0 # Hide it to emphasize the error
+        
+        if not dialog_updated_successfully:
+            # Fallback: If the dialog or its label isn't there, show a toast
+            toast(f"NFC Error: {error_message}")
+
+        # Ensure any active progress dialog is dismissed after showing the error
+        Clock.schedule_once(lambda dt: self.hide_nfc_progress_dialog(), 2.5) # Give time to see the error
+
         self.current_data = []
         self.manual_data_rows = []
+        print("PYTHON DEBUG: on_nfc_transfer_error. self.current_data and manual_data_rows cleared.")
     def show_nfc_progress_dialog(self, message="Transferring data..."):
         # Vibrate for 500ms when the dialog opens (Android only)
         if is_android() and mActivity and autoclass:
