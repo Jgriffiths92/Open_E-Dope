@@ -349,14 +349,21 @@ if is_android():
         def onProgress(self, percent):
             # Called from Java with progress (0-100)
             print(f"NFC Progress: {percent}%")
-            # Schedule on main thread to update UI
-            from kivy.clock import Clock
-            Clock.schedule_once(lambda dt: self.app.update_nfc_progress(percent))
+            if self.app and hasattr(self.app, 'update_nfc_progress'):
+                # Schedule on main thread to update UI
+                from kivy.clock import Clock
+                Clock.schedule_once(lambda dt: self.app.update_nfc_progress(percent))
+            else:
+                print("Error: NfcProgressListener.app is None or lacks 'update_nfc_progress' method.")
 
         @java_method('(Ljava/lang/String;)V')
         def onError(self, message):
-            from kivy.clock import Clock
-            Clock.schedule_once(lambda dt: self.app.on_nfc_transfer_error(message))
+            print(f"NFC Error from Java: {message}")
+            if self.app and hasattr(self.app, 'on_nfc_transfer_error'):
+                from kivy.clock import Clock
+                Clock.schedule_once(lambda dt: self.app.on_nfc_transfer_error(message))
+            else:
+                print("Error: NfcProgressListener.app is None or lacks 'on_nfc_transfer_error' method.")
 
 
 class MainApp(MDApp):
