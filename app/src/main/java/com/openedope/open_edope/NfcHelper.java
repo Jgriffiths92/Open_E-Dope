@@ -58,7 +58,7 @@ public class NfcHelper {
         buffer.get(image_buffer);
 
         int expectedSize = width0 * height0 / 8;
-        if (image_buffer == null || epd_init == null || epd_init.length < 3) { // Expect at least 3 items now
+        if (image_buffer == null || epd_init == null || epd_init.length < 2) {
             Log.e(TAG, "Null or invalid arguments!");
             if (listener != null) {
                 Log.d(TAG, "JAVA: Calling listener.onError (Null or invalid arguments). Listener: " + listener.hashCode());
@@ -74,17 +74,10 @@ public class NfcHelper {
             }
             return;
         }
-        int numColors = 2; // Default to B&W
-        try {
-            numColors = Integer.parseInt(epd_init[2]);
-        } catch (NumberFormatException e) {
-            Log.w(TAG, "Could not parse numColors, defaulting to 2. Value was: " + epd_init[2]);
-        }
-
-        processNfcIntent(intent, width0, height0, image_buffer, epd_init, numColors, listener);
+        processNfcIntent(intent, width0, height0, image_buffer, epd_init, listener);
     }
 
-    public static void processNfcIntent(Intent intent, int width0, int height0, byte[] image_buffer, String[] epd_init, int numColors, NfcProgressListener listener) {
+    public static void processNfcIntent(Intent intent, int width0, int height0, byte[] image_buffer, String[] epd_init, NfcProgressListener listener) {
         Log.d(TAG, "JAVA: processNfcIntent CALLED. Listener: " + (listener != null ? listener.hashCode() : "null"));
         Log.d(TAG, "image_buffer length in processNfcIntent: " + image_buffer.length);
 
@@ -116,7 +109,7 @@ public class NfcHelper {
         try {
             connectToTag(nfcTech);
             setTagTimeout(nfcTech, NFC_TIMEOUT_MS);
-            executeWriteProtocol(nfcTech, width0, height0, image_buffer, epd_init, numColors, listener);
+            executeWriteProtocol(nfcTech, width0, height0, image_buffer, epd_init, listener);
         } catch (Exception e) {
             Log.e(TAG, techType + " Exception: " + e.getMessage(), e);
             if (listener != null) {
@@ -128,7 +121,7 @@ public class NfcHelper {
         }
     }
 
-    private static void executeWriteProtocol(Object nfcTech, int width0, int height0, byte[] image_buffer, String[] epd_init, int numColors, NfcProgressListener listener) throws IOException {
+    private static void executeWriteProtocol(Object nfcTech, int width0, int height0, byte[] image_buffer, String[] epd_init, NfcProgressListener listener) throws IOException {
         // Send DIY command before init
         byte[] diyCmd = hexStringToBytes("F0DB020000"); // Consider making "F0DB020000" a constant
         byte[] response = transceiveWithRetry(nfcTech, diyCmd, "DIY_CMD", listener);
@@ -174,21 +167,19 @@ public class NfcHelper {
             }
         }
 
-        // Only send R buffer for multi-color displays
-        if (numColors > 2) {
-            Log.d(TAG, "Sending R buffer (inverted)...");
-            for (int i = 0; i < numFullChunks; i++) {
-                cmd = new byte[5 + CHUNK_SIZE];
-                cmd[0] = CMD_PREFIX_F0;
-                cmd[1] = CMD_SEND_DATA_D2;
-                cmd[2] = IDX_R_BUFFER;
-                cmd[3] = (byte) i;      // Chunk index
-                cmd[4] = (byte) CHUNK_SIZE; // Chunk data length
-                for (int j = 0; j < CHUNK_SIZE; j++) {
-                    cmd[j + 5] = (byte) ~image_buffer[j + i * CHUNK_SIZE];
-                }
-                transceiveWithRetry(nfcTech, cmd, "R_CHUNK_" + i, listener);
+        // Send R buffer (inverted)
+        Log.d(TAG, "Sending R buffer (inverted)...");
+        for (int i = 0; i < numFullChunks; i++) {
+            cmd = new byte[5 + CHUNK_SIZE];
+            cmd[0] = CMD_PREFIX_F0;
+            cmd[1] = CMD_SEND_DATA_D2;
+            cmd[2] = IDX_R_BUFFER;
+            cmd[3] = (byte) i;      // Chunk index
+            cmd[4] = (byte) CHUNK_SIZE; // Chunk data length
+            for (int j = 0; j < CHUNK_SIZE; j++) {
+                cmd[j + 5] = (byte) ~image_buffer[j + i * CHUNK_SIZE];
             }
+            transceiveWithRetry(nfcTech, cmd, "R_CHUNK_" + i, listener);
         }
 
         // Handle tail data for BW buffer (if any)
