@@ -726,7 +726,7 @@ class MainApp(MDApp):
         # Request permissions on Android
         self.android_permissions_granted = False
 
-        if self.is_android():
+        if is_android():
             needed_perms = []
             if not check_permission(Permission.READ_EXTERNAL_STORAGE):
                 needed_perms.append(Permission.READ_EXTERNAL_STORAGE)
