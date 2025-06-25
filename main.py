@@ -523,24 +523,26 @@ class MainApp(MDApp):
         except Exception as e:
             print(f"Error generating bitmap: {e}")
     def on_permissions_result(self, permissions, grant_results):
-        """Handle the result of the permission request."""
-        for permission, granted in zip(permissions, grant_results):
-            if permission == Permission.NFC:
-                if granted:
-                    print("NFC permission granted.")
-                    self.initialize_nfc()
-                else:
-                    print("NFC permission denied.")
-            elif permission == Permission.READ_EXTERNAL_STORAGE:
-                if granted:
-                    print("Read external storage permission granted.")
-                else:
-                    print("Read external storage permission denied.")
-            elif permission == Permission.WRITE_EXTERNAL_STORAGE:
-                if granted:
-                    print("Write external storage permission granted.")
-                else:
-                    print("Write external storage permission denied.")
+        perms = dict(zip(permissions, grant_results))
+        storage_granted = (
+            perms.get(Permission.READ_EXTERNAL_STORAGE, False) and
+            perms.get(Permission.WRITE_EXTERNAL_STORAGE, False)
+        )
+        self.android_permissions_granted = storage_granted
+        if storage_granted:
+            print("Storage permissions granted, initializing storage directories.")
+            self.setup_storage_directories()
+        else:
+            print("Storage permissions denied. Cannot access external storage.")
+        if perms.get(Permission.NFC, False):
+            print("NFC permission granted.")
+            self.initialize_nfc()
+        else:
+            print("NFC permission denied.")
+        if perms.get(Permission.VIBRATE, False):
+            print("VIBRATE permission granted.")
+        else:
+            print("VIBRATE permission denied.")
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -722,17 +724,30 @@ class MainApp(MDApp):
         self.load_settings()
 
         # Request permissions on Android
-        if is_android():
-            request_permissions([
-                Permission.NFC,
-                Permission.READ_EXTERNAL_STORAGE,
-                Permission.WRITE_EXTERNAL_STORAGE,
-                Permission.VIBRATE,  # <-- Add this line
-            ], self.on_permissions_result)
-            if self.initialize_nfc():
-                print("NFC initialized successfully.")
-            from android import activity
-            activity.bind(on_new_intent=self.on_new_intent)
+        self.android_permissions_granted = False
+
+        if self.is_android():
+            needed_perms = []
+            if not check_permission(Permission.READ_EXTERNAL_STORAGE):
+                needed_perms.append(Permission.READ_EXTERNAL_STORAGE)
+            if not check_permission(Permission.WRITE_EXTERNAL_STORAGE):
+                needed_perms.append(Permission.WRITE_EXTERNAL_STORAGE)
+            if not check_permission(Permission.NFC):
+                needed_perms.append(Permission.NFC)
+            if not check_permission(Permission.VIBRATE):
+                needed_perms.append(Permission.VIBRATE)
+            if needed_perms:
+                request_permissions(needed_perms, self.on_permissions_result)
+            else:
+                self.android_permissions_granted = True
+                self.setup_storage_directories()
+                if self.initialize_nfc():
+                    print("NFC initialized successfully.")
+                from android import activity
+                activity.bind(on_new_intent=self.on_new_intent)
+        else:
+            self.android_permissions_granted = True
+            self.setup_storage_directories()
 
         # Dynamically set the rootpath for the FileChooserListView
         self.root = Builder.load_file("layout.kv")  # Load the root widget from the KV file
@@ -816,6 +831,9 @@ class MainApp(MDApp):
     def get_external_csv_directory(self):
         """Get or create the external CSV directory for persistent storage."""
         if is_android():
+            if not getattr(self, "android_permissions_granted", False):
+                print("External storage permissions not granted yet.")
+                return None
             from android.storage import primary_external_storage_path
             base_path = primary_external_storage_path()
             csv_dir = os.path.join(base_path, "OpenEDope", "CSV")
