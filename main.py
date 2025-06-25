@@ -41,12 +41,11 @@ Window.softinput_mode = "below_target"
 try:
     from android import mActivity
     from jnius import autoclass, cast
-    from android.permissions import request_permissions, check_permission, Permission
+    from android.permissions import request_permissions, Permission
 except ImportError:
     mActivity = None  # Handle cases where the app is not running on Android
     autoclass = None  # Handle cases where pyjnius is not available
     request_permissions = None
-    check_permission = None
     Permission = None
 try:
     from jnius import autoclass, cast
@@ -266,7 +265,7 @@ class ManageDataScreen(Screen):
 
         def confirm_delete(*args):
             app = App.get_running_app()
-            csv_dir = app.get_external_csv_directory()
+            csv_dir = app.ensure_csv_directory()
             try:
                 for item in os.listdir(csv_dir):
                     item_path = os.path.join(csv_dir, item)
@@ -274,8 +273,8 @@ class ManageDataScreen(Screen):
                         shutil.rmtree(item_path)
                     else:
                         os.remove(item_path)
-                print("All files and folders in external CSV deleted.")
-                toast("All Data Card files and folders deleted.")
+                print("All files and folders in assets/CSV deleted.")
+                toast("All Data Card  files and folders deleted.")
             except Exception as e:
                 print(f"Error deleting CSV files: {e}")
                 toast(f"Error deleting files: {e}")
@@ -283,7 +282,7 @@ class ManageDataScreen(Screen):
 
         dialog = MDDialog(
             title="Confirm Delete",
-            text="Are you sure you want to delete ALL Events and Data Cards? This cannot be undone.",
+            text="Are you sure you want to delete ALL Events and Data Cards in? This cannot be undone.",
             buttons=[
                 MDFlatButton(
                     text="CANCEL",
@@ -524,26 +523,24 @@ class MainApp(MDApp):
         except Exception as e:
             print(f"Error generating bitmap: {e}")
     def on_permissions_result(self, permissions, grant_results):
-        perms = dict(zip(permissions, grant_results))
-        storage_granted = (
-            perms.get(Permission.READ_EXTERNAL_STORAGE, False) and
-            perms.get(Permission.WRITE_EXTERNAL_STORAGE, False)
-        )
-        self.android_permissions_granted = storage_granted
-        if storage_granted:
-            print("Storage permissions granted, initializing storage directories.")
-            self.setup_storage_directories()
-        else:
-            print("Storage permissions denied. Cannot access external storage.")
-        if perms.get(Permission.NFC, False):
-            print("NFC permission granted.")
-            self.initialize_nfc()
-        else:
-            print("NFC permission denied.")
-        if perms.get(Permission.VIBRATE, False):
-            print("VIBRATE permission granted.")
-        else:
-            print("VIBRATE permission denied.")
+        """Handle the result of the permission request."""
+        for permission, granted in zip(permissions, grant_results):
+            if permission == Permission.NFC:
+                if granted:
+                    print("NFC permission granted.")
+                    self.initialize_nfc()
+                else:
+                    print("NFC permission denied.")
+            elif permission == Permission.READ_EXTERNAL_STORAGE:
+                if granted:
+                    print("Read external storage permission granted.")
+                else:
+                    print("Read external storage permission denied.")
+            elif permission == Permission.WRITE_EXTERNAL_STORAGE:
+                if granted:
+                    print("Write external storage permission granted.")
+                else:
+                    print("Write external storage permission denied.")
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -725,30 +722,17 @@ class MainApp(MDApp):
         self.load_settings()
 
         # Request permissions on Android
-        self.android_permissions_granted = False
-
         if is_android():
-            needed_perms = []
-            if not check_permission(Permission.READ_EXTERNAL_STORAGE):
-                needed_perms.append(Permission.READ_EXTERNAL_STORAGE)
-            if not check_permission(Permission.WRITE_EXTERNAL_STORAGE):
-                needed_perms.append(Permission.WRITE_EXTERNAL_STORAGE)
-            if not check_permission(Permission.NFC):
-                needed_perms.append(Permission.NFC)
-            if not check_permission(Permission.VIBRATE):
-                needed_perms.append(Permission.VIBRATE)
-            if needed_perms:
-                request_permissions(needed_perms, self.on_permissions_result)
-            else:
-                self.android_permissions_granted = True
-                self.setup_storage_directories()
-                if self.initialize_nfc():
-                    print("NFC initialized successfully.")
-                from android import activity
-                activity.bind(on_new_intent=self.on_new_intent)
-        else:
-            self.android_permissions_granted = True
-            self.setup_storage_directories()
+            request_permissions([
+                Permission.NFC,
+                Permission.READ_EXTERNAL_STORAGE,
+                Permission.WRITE_EXTERNAL_STORAGE,
+                Permission.VIBRATE,  # <-- Add this line
+            ], self.on_permissions_result)
+            if self.initialize_nfc():
+                print("NFC initialized successfully.")
+            from android import activity
+            activity.bind(on_new_intent=self.on_new_intent)
 
         # Dynamically set the rootpath for the FileChooserListView
         self.root = Builder.load_file("layout.kv")  # Load the root widget from the KV file
@@ -826,27 +810,16 @@ class MainApp(MDApp):
     show_2_wind_holds = True
         
     def ensure_csv_directory(self):
-        """Ensure the external CSV directory exists and is accessible."""
-        return self.get_external_csv_directory()
-
-    def get_external_csv_directory(self):
-        """Get or create the external CSV directory for persistent storage."""
+        """Ensure the assets/CSV directory exists and is accessible."""
         if is_android():
-            if not getattr(self, "android_permissions_granted", False):
-                print("External storage permissions not granted yet.")
-                return None
-            from android.storage import primary_external_storage_path
-            base_path = primary_external_storage_path()
-            csv_dir = os.path.join(base_path, "OpenEDope", "CSV")
-            if not os.path.exists(csv_dir):
-                os.makedirs(csv_dir)
-            return csv_dir
+            # Copy assets/CSV to internal storage on Android
+            return self.copy_assets_to_internal_storage()
         else:
-            # Use assets/CSV for Windows/desktop
-            csv_dir = os.path.join(os.path.dirname(__file__), "assets", "CSV")
-            if not os.path.exists(csv_dir):
-                os.makedirs(csv_dir)
-            return csv_dir
+            # Use the local assets/CSV folder on non-Android platforms
+            csv_directory = os.path.join(os.path.dirname(__file__), "assets", "CSV")
+            if not os.path.exists(csv_directory):
+                os.makedirs(csv_directory)
+            return csv_directory
 
     def on_file_selected(self, selection):
         """Handle the file or folder selected in the FileChooserListView."""
@@ -1273,10 +1246,15 @@ class MainApp(MDApp):
                 if not all(str(v).strip() == "---" for v in values_after_target):
                     filtered_data.append(row)
             self.current_data = filtered_data
-            # Use external storage for CSVs
-            csv_folder_path = self.get_external_csv_directory()
-            if csv_folder_path:
+            # Determine the private storage path
+            storage_path = self.get_private_storage_path()
+            if storage_path:
                 try:
+                    # Ensure the CSV folder exists
+                    csv_folder_path = os.path.join(storage_path, "CSV")
+                    if not os.path.exists(csv_folder_path):
+                        os.makedirs(csv_folder_path)
+
                     # Construct the file name and path
                     file_name = f"{self.root.ids.home_screen.ids.stage_name_field.text}.csv"
                     if new_event_name:
@@ -1327,7 +1305,7 @@ class MainApp(MDApp):
                 except Exception as e:
                     print(f"Error saving data to CSV: {e}")
             else:
-                print("External CSV directory is not available.")
+                print("Private storage path is not available.")
         else:
             print("No data available to save.")
 
@@ -1764,10 +1742,7 @@ class MainApp(MDApp):
         else:
             print("NFC functionality is only available on Android.")
             return False
-    def setup_storage_directories(self):
-        """Create/access external storage directories after permissions are granted."""
-        self.ensure_csv_directory()
-        # Add any other storage setup here if needed
+
     def enable_nfc_foreground_dispatch(self):
         """Enable NFC foreground dispatch to handle NFC intents."""
         if is_android() and autoclass:
@@ -2078,13 +2053,13 @@ class MainApp(MDApp):
     def delete_file_or_folder(self, path):
         """Delete the selected file or folder and refresh the file list."""
         try:
-            base_dir = os.path.abspath(self.get_external_csv_directory())
+            base_dir = os.path.abspath(self.get_private_storage_path())
             abs_path = os.path.abspath(path)
             saved_cards_screen = self.root.ids.screen_manager.get_screen("saved_cards")
 
-            # If deleting a folder or a non-csv file, always go to external CSV first
+            # If deleting a folder or a non-csv file, always go to assets/CSV first
             if not abs_path.lower().endswith(".csv"):
-                csv_root = self.get_external_csv_directory()
+                csv_root = self.ensure_csv_directory()
                 self.populate_swipe_file_list()
 
             if os.path.exists(abs_path):
@@ -2114,10 +2089,10 @@ class MainApp(MDApp):
         swipe_file_list.clear_widgets()
 
         if target_dir is None:
-            target_dir = self.get_external_csv_directory()
+            target_dir = self.ensure_csv_directory()
 
         # Add parent directory entry if not at root
-        root_dir = self.get_external_csv_directory()
+        root_dir = self.ensure_csv_directory()
         if os.path.abspath(target_dir) != os.path.abspath(root_dir):
             parent_dir = os.path.abspath(os.path.join(target_dir, ".."))
             item = Builder.load_string(f'''
