@@ -41,11 +41,12 @@ Window.softinput_mode = "below_target"
 try:
     from android import mActivity
     from jnius import autoclass, cast
-    from android.permissions import request_permissions, Permission
+    from android.permissions import request_permissions, check_permission, Permission
 except ImportError:
     mActivity = None  # Handle cases where the app is not running on Android
     autoclass = None  # Handle cases where pyjnius is not available
     request_permissions = None
+    check_permission = None
     Permission = None
 try:
     from jnius import autoclass, cast
