@@ -13,7 +13,7 @@ package.domain = com.openedope
 source.dir = .
 
 # (str) Main source file
-source.main = Main.py
+source.main = main.py
 
 # (list) Source files to include (let empty to include all the files)
 source.include_exts = py,png,jpg,jpeg,kv,atlas,ttf,xml,json,html,css,js,txt,md,toml,csv,bmp,java

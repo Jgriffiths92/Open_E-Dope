@@ -2202,23 +2202,48 @@ SwipeFileItem:
         table_container.add_widget(main_layout)
 
     def add_data_row(self, table_container):
-        """Add a new row of data fields directly underneath the existing rows."""
-        # Create a layout for the new row
+        """Add a new row of data fields directly underneath the existing rows, with Tab/Next navigation."""
         row_layout = BoxLayout(orientation="horizontal", spacing="10dp", size_hint=(1, None))
         row_layout.height = dp(50)  # Adjust height for a single row of text fields
 
-        # Add text fields for manual data input based on display options
         row_fields = {}
-        for field_name, field_options in self.available_fields.items():
-            if field_options["show"]:  # Only add fields that are enabled
+        # Get the list of visible fields in order
+        visible_fields = [k for k, v in self.available_fields.items() if v["show"]]
+        text_fields = []
 
-                text_field = MDTextField(
-                    hint_text=field_options["hint_text"],
-                    multiline=False,
-                    size_hint_x=0.15
-                )
-                row_fields[field_name] = text_field
-                row_layout.add_widget(text_field)
+        # Create all text fields first so we can set up navigation
+        for field_name in visible_fields:
+            field_options = self.available_fields[field_name]
+            text_field = MDTextField(
+                hint_text=field_options["hint_text"],
+                multiline=False,
+                size_hint_x=0.15,
+                input_type="text",
+            )
+            row_fields[field_name] = text_field
+            text_fields.append(text_field)
+            row_layout.add_widget(text_field)
+
+        # Set up Tab/Next/Enter navigation
+        for i, tf in enumerate(text_fields):
+            def make_on_text_validate(idx):
+                def _on_text_validate(instance):
+                    # Focus next field if not last
+                    if idx + 1 < len(text_fields):
+                        text_fields[idx + 1].focus = True
+                return _on_text_validate
+            tf.on_text_validate = make_on_text_validate(i)
+
+            # Also handle hardware Tab key (desktop) and Android "Next"/Enter
+            def make_keyboard_on_key_down(idx):
+                def _on_key_down(instance, keyboard, keycode, text, modifiers):
+                    if keycode in (9, 40, 66):  # Tab or Enter/Next
+                        if idx + 1 < len(text_fields):
+                            text_fields[idx + 1].focus = True
+                            return True
+                    return False
+                return _on_key_down
+            tf.keyboard_on_key_down = make_keyboard_on_key_down(i)
 
         # Store the row fields for later use
         if not hasattr(self, "manual_data_rows"):
@@ -2226,42 +2251,25 @@ SwipeFileItem:
         self.manual_data_rows.append(row_fields)
 
         # Find the correct index to insert the new row
-        # The new row should be added above the button layouts
         button_index = 0
         for i, child in enumerate(reversed(table_container.children)):
             if isinstance(child, BoxLayout) and any(
-                    isinstance(widget, MDRaisedButton) or isinstance(widget, MDFlatButton) for widget in
-                    child.children):
+                    isinstance(widget, MDRaisedButton) or isinstance(widget, MDFlatButton) for widget in child.children):
                 button_index = len(table_container.children) - i
                 break
 
-        # Add the new row at the calculated index
         table_container.add_widget(row_layout, index=button_index)
-    def add_manual_data(self):
-        try:
-            for row_fields in self.manual_data_rows:
-                manual_data = {key: "0" for key in self.available_fields.keys()}
-                for key, field in row_fields.items():
-                    manual_data[key] = field.text if field.text.strip() else "0"
-                if not manual_data["Target"]:
-                    print("Target is required.")
-                    toast("Target is required.")
-                    return
-                required_keys = {"Target", "Range", "Elv", "Wnd1", "Wnd2", "Lead"}
-                for k in required_keys:
-                    if k not in manual_data:
-                        manual_data[k] = "0"
-                if not hasattr(self, "current_data") or not self.current_data:
-                    self.current_data = []
-                self.current_data.append(manual_data)
-            self.display_table(self.current_data)
-            # Clear manual input fields after adding data
-            for row_fields in self.manual_data_rows:
-                for field in row_fields.values():
-                    field.text = ""
-            print("Manual data added and input fields cleared:", self.current_data)
-        except Exception as e:
-            print(f"Error adding manual data: {e}")
+
+    def delete_last_row(self, table_container):
+        """Delete the last row of manual data input fields."""
+        if hasattr(self, "manual_data_rows") and self.manual_data_rows:
+            # Remove the last row from the stored manual data
+            self.manual_data_rows.pop()
+            # Redraw the manual data input fields
+            self.show_manual_data_input()
+            print("Last manual data row deleted.")
+        else:
+            print("No manual data rows to delete.")
 
     def copy_directory_from_assets(self, asset_manager, source_path, dest_path):
         """Recursively copy a directory from the assets folder to the destination."""
