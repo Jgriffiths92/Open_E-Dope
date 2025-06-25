@@ -1764,7 +1764,10 @@ class MainApp(MDApp):
         else:
             print("NFC functionality is only available on Android.")
             return False
-
+    def setup_storage_directories(self):
+        """Create/access external storage directories after permissions are granted."""
+        self.ensure_csv_directory()
+        # Add any other storage setup here if needed
     def enable_nfc_foreground_dispatch(self):
         """Enable NFC foreground dispatch to handle NFC intents."""
         if is_android() and autoclass:
