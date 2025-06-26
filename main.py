@@ -648,6 +648,49 @@ class MainApp(MDApp):
     def on_pause(self):
         print("on_pause CALLED")
         return True  # Returning True allows the app to be paused
+# ...inside your MainApp class...
+
+    def on_start(self):
+        # Bind global key handler for Tab/Enter navigation
+        from kivy.core.window import Window
+        Window.bind(on_key_down=self.global_key_handler)
+
+    def global_key_handler(self, window, key, scancode, codepoint, modifiers):
+        # Only act if HomeScreen is current
+        if self.root.ids.screen_manager.current != "home":
+            return False
+        # Only act if a text field is focused
+        focused = [w for w in self.get_all_homepage_fields() if getattr(w, 'focus', False)]
+        if not focused:
+            return False
+        idx = self.get_all_homepage_fields().index(focused[0])
+        all_fields = self.get_all_homepage_fields()
+        # Tab or Enter
+        if key in (9, 13):
+            if idx + 1 < len(all_fields):
+                all_fields[idx + 1].focus = True
+                return True
+        return False
+
+    def get_all_homepage_fields(self):
+        # Collect all homepage input fields in navigation order
+        home_screen = self.root.ids.home_screen
+        input_ids = [
+            "stage_name_field",
+            # Add more static fields here if needed, BEFORE manual data
+        ]
+        all_fields = []
+        for field_id in input_ids:
+            if hasattr(home_screen.ids, field_id):
+                all_fields.append(home_screen.ids[field_id])
+        # Insert manual data fields after stage name
+        if hasattr(self, "manual_data_fields"):
+            all_fields.extend(self.manual_data_fields)
+        # Add stage notes last
+        if hasattr(home_screen.ids, "stage_notes_field"):
+            all_fields.append(home_screen.ids.stage_notes_field)
+        return all_fields
+
 
     def on_resume(self):
         print("on_resume CALLED")
@@ -791,6 +834,7 @@ class MainApp(MDApp):
         self.current_data = []
         if hasattr(self, "manual_data_rows"):
             self.manual_data_rows = []
+        self.manual_data_fields = []  # <-- Add this line
         home_screen = self.root.ids.home_screen
         table_container = home_screen.ids.table_container
         table_container.clear_widgets()
@@ -2136,8 +2180,8 @@ SwipeFileItem:
 
     def show_manual_data_input(self):
         """Display manual data input fields in the CSV data table location based on filtered display options."""
+        self.manual_data_fields = []  # <-- Add this line
         home_screen = self.root.ids.home_screen
-       
         table_container = home_screen.ids.table_container
 
         # Clear any existing widgets in the table container
@@ -2202,22 +2246,21 @@ SwipeFileItem:
         table_container.add_widget(main_layout)
 
     def add_data_row(self, table_container):
-        """Add a new row of data fields directly underneath the existing rows."""
-        # Create a layout for the new row
+        """Add a new row of data fields directly underneath the existing rows, with Next/Tab navigation."""
         row_layout = BoxLayout(orientation="horizontal", spacing="10dp", size_hint=(1, None))
         row_layout.height = dp(50)  # Adjust height for a single row of text fields
 
-        # Add text fields for manual data input based on display options
         row_fields = {}
+        manual_fields = []
         for field_name, field_options in self.available_fields.items():
-            if field_options["show"]:  # Only add fields that are enabled
-
+            if field_options["show"]:
                 text_field = MDTextField(
                     hint_text=field_options["hint_text"],
                     multiline=False,
                     size_hint_x=0.15
                 )
                 row_fields[field_name] = text_field
+                manual_fields.append(text_field)
                 row_layout.add_widget(text_field)
 
         # Store the row fields for later use
@@ -2225,43 +2268,96 @@ SwipeFileItem:
             self.manual_data_rows = []
         self.manual_data_rows.append(row_fields)
 
-        # Find the correct index to insert the new row
-        # The new row should be added above the button layouts
+        # Store all manual fields in a flat list for navigation
+        if not hasattr(self, "manual_data_fields"):
+            self.manual_data_fields = []
+        self.manual_data_fields.extend(manual_fields)
+
+        # Find the correct index to insert the new row (above the button layouts)
         button_index = 0
         for i, child in enumerate(reversed(table_container.children)):
             if isinstance(child, BoxLayout) and any(
-                    isinstance(widget, MDRaisedButton) or isinstance(widget, MDFlatButton) for widget in
-                    child.children):
+                isinstance(widget, MDRaisedButton) or isinstance(widget, MDFlatButton) for widget in child.children):
                 button_index = len(table_container.children) - i
                 break
 
-        # Add the new row at the calculated index
         table_container.add_widget(row_layout, index=button_index)
-    def add_manual_data(self):
-        try:
-            for row_fields in self.manual_data_rows:
-                manual_data = {key: "0" for key in self.available_fields.keys()}
-                for key, field in row_fields.items():
-                    manual_data[key] = field.text if field.text.strip() else "0"
-                if not manual_data["Target"]:
-                    print("Target is required.")
-                    toast("Target is required.")
-                    return
-                required_keys = {"Target", "Range", "Elv", "Wnd1", "Wnd2", "Lead"}
-                for k in required_keys:
-                    if k not in manual_data:
-                        manual_data[k] = "0"
-                if not hasattr(self, "current_data") or not self.current_data:
-                    self.current_data = []
-                self.current_data.append(manual_data)
-            self.display_table(self.current_data)
-            # Clear manual input fields after adding data
-            for row_fields in self.manual_data_rows:
-                for field in row_fields.values():
-                    field.text = ""
-            print("Manual data added and input fields cleared:", self.current_data)
-        except Exception as e:
-            print(f"Error adding manual data: {e}")
+
+        # Rebuild navigation for all homepage fields
+        self.enable_next_navigation_on_homepage()
+
+    def delete_last_row(self, table_container):
+        """Delete the last row of data fields if there is more than one row and update navigation."""
+        if len(table_container.children) <= 1:
+            return  # Don't remove the last remaining row
+
+        # Find the last added row (excluding button layouts)
+        for child in reversed(table_container.children):
+            if isinstance(child, BoxLayout) and not any(
+                isinstance(widget, MDRaisedButton) or isinstance(widget, MDFlatButton) for widget in child.children):
+                # Remove the MDTextFields in this row from manual_data_fields
+                if hasattr(self, "manual_data_fields"):
+                    for widget in child.children:
+                        if isinstance(widget, MDTextField) and widget in self.manual_data_fields:
+                            self.manual_data_fields.remove(widget)
+                table_container.remove_widget(child)
+                break
+
+        # Also remove the last row_fields from manual_data_rows if present
+        if hasattr(self, "manual_data_rows") and self.manual_data_rows:
+            self.manual_data_rows.pop()
+
+        # Rebuild navigation for all homepage fields
+        self.enable_next_navigation_on_homepage()
+
+    def enable_next_navigation_on_homepage(self):
+        """Enable Next/Tab navigation for all MDTextField inputs on the homepage, including manual rows."""
+        home_screen = self.root.ids.home_screen
+
+        # List all static input fields in the order you want navigation
+        input_ids = [
+            "stage_name_field",
+            # Add more static fields here if needed, BEFORE manual data
+        ]
+
+        all_fields = []
+        for field_id in input_ids:
+            if hasattr(home_screen.ids, field_id):
+                all_fields.append(home_screen.ids[field_id])
+
+        # Insert manual data fields after stage name
+        if hasattr(self, "manual_data_fields"):
+            all_fields.extend(self.manual_data_fields)
+        # Add stage notes last
+        if hasattr(home_screen.ids, "stage_notes_field"):
+            all_fields.append(home_screen.ids.stage_notes_field)
+
+        # Set up navigation
+        for i, tf in enumerate(all_fields):
+            def make_on_text_validate(idx):
+                def _on_text_validate(instance):
+                    if idx + 1 < len(all_fields):
+                        all_fields[idx + 1].focus = True
+                return _on_text_validate
+            tf.on_text_validate = make_on_text_validate(i)
+
+            def make_keyboard_on_key_down(idx):
+                def _on_key_down(instance, *args):
+                    # args: (keyboard, keycode, text, [modifiers])
+                    # Accept both 4 and 5 arguments for compatibility
+                    if len(args) >= 3:
+                        keycode = args[1]
+                        if isinstance(keycode, (tuple, list)):
+                            key_val = keycode[0]
+                        else:
+                            key_val = keycode
+                        if key_val in (9, 40, 66):  # 9=Tab, 40/66=Enter/Next
+                            if idx + 1 < len(all_fields):
+                                all_fields[idx + 1].focus = True
+                                return True
+                    return False
+                return _on_key_down
+            tf.keyboard_on_key_down = make_keyboard_on_key_down(i)
 
     def copy_directory_from_assets(self, asset_manager, source_path, dest_path):
         """Recursively copy a directory from the assets folder to the destination."""
@@ -2517,9 +2613,6 @@ for i in range(0, len(s), 40):
     print(f"{i:03d}: {s[i:i+40]}")
 
 def pack_image_column_major(img):
-    """Convert a 1bpp PIL image to column-major, 8-pixels-per-byte format."""
-    width, height = img.size
-    pixels = img.load()
     packed = bytearray()
     for x in range(width-1, -1, -1):  # right-to-left to match demo
         for y_block in range(0, height, 8):
