@@ -99,15 +99,20 @@ MDNavigationLayout:
                     height: self.minimum_height
 
             # Action buttons always at the bottom
-            BoxLayout:
+            AnchorLayout:
+                anchor_x: "center"
+                anchor_y: "bottom"
                 size_hint_y: None
                 height: dp(50)
-                MDRaisedButton:
-                    text: "ADD ROW"
-                    on_release: app.add_data_row(data_input_rows)
-                MDRaisedButton:
-                    text: "DELETE ROW"
-                    on_release: app.delete_last_row(data_input_rows)
+                BoxLayout:
+                    size_hint_y: None
+                    height: dp(50)
+                    MDRaisedButton:
+                        text: "ADD ROW"
+                        on_release: app.add_data_row(data_input_rows)
+                    MDRaisedButton:
+                        text: "DELETE ROW"
+                        on_release: app.delete_last_row(data_input_rows)
 
         BoxLayout:
             orientation: "vertical"
