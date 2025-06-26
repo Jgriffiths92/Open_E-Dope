@@ -669,8 +669,8 @@ class MainApp(MDApp):
         if key in (9, 13):
             if idx + 1 < len(all_fields):
                 all_fields[idx + 1].focus = True
-                return True
-        return False
+                return True  # Only block Tab/Enter
+        return False  # Allow all other keys (including Backspace)
 
     def get_all_homepage_fields(self):
         # Collect all homepage input fields in navigation order
@@ -2314,7 +2314,6 @@ SwipeFileItem:
         """Enable Next/Tab navigation for all MDTextField inputs on the homepage, including manual rows."""
         home_screen = self.root.ids.home_screen
 
-        # List all static input fields in the order you want navigation
         input_ids = [
             "stage_name_field",
             # Add more static fields here if needed, BEFORE manual data
@@ -2325,14 +2324,11 @@ SwipeFileItem:
             if hasattr(home_screen.ids, field_id):
                 all_fields.append(home_screen.ids[field_id])
 
-        # Insert manual data fields after stage name
         if hasattr(self, "manual_data_fields"):
             all_fields.extend(self.manual_data_fields)
-        # Add stage notes last
         if hasattr(home_screen.ids, "stage_notes_field"):
             all_fields.append(home_screen.ids.stage_notes_field)
 
-        # Set up navigation
         for i, tf in enumerate(all_fields):
             def make_on_text_validate(idx):
                 def _on_text_validate(instance):
@@ -2341,24 +2337,29 @@ SwipeFileItem:
                 return _on_text_validate
             tf.on_text_validate = make_on_text_validate(i)
 
-            def make_keyboard_on_key_down(idx):
+            # Save the original handler
+            orig_handler = getattr(tf, "_orig_keyboard_on_key_down", None)
+            if orig_handler is None:
+                tf._orig_keyboard_on_key_down = tf.keyboard_on_key_down
+
+            def make_keyboard_on_key_down(idx, orig_handler):
                 def _on_key_down(instance, *args):
                     # args: (keyboard, keycode, text, [modifiers])
-                    # Accept both 4 and 5 arguments for compatibility
                     if len(args) >= 3:
                         keycode = args[1]
                         if isinstance(keycode, (tuple, list)):
                             key_val = keycode[0]
                         else:
                             key_val = keycode
-                        if key_val in (9, 40, 66):  # 9=Tab, 40/66=Enter/Next
+                        if key_val in (9, 40, 66):  # Tab, Enter, Next
                             if idx + 1 < len(all_fields):
                                 all_fields[idx + 1].focus = True
                                 return True
-                    return False
+                    # For all other keys, call the original handler
+                    return orig_handler(instance, *args)
                 return _on_key_down
-            tf.keyboard_on_key_down = make_keyboard_on_key_down(i)
-
+            tf.keyboard_on_key_down = make_keyboard_on_key_down(i, tf._orig_keyboard_on_key_down)
+    
     def copy_directory_from_assets(self, asset_manager, source_path, dest_path):
         """Recursively copy a directory from the assets folder to the destination."""
         try:
