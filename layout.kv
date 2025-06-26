@@ -89,6 +89,26 @@ MDNavigationLayout:
             orientation: "vertical"
             size_hint: 1, 1
 
+            # Data input area (can be a ScrollView if many rows)
+            ScrollView:
+                id: data_input_scroll
+                BoxLayout:
+                    id: data_input_rows
+                    orientation: "vertical"
+                    size_hint_y: None
+                    height: self.minimum_height
+
+            # Action buttons always at the bottom
+            BoxLayout:
+                size_hint_y: None
+                height: dp(50)
+                MDRaisedButton:
+                    text: "ADD ROW"
+                    on_release: app.add_data_row(data_input_rows)
+                MDRaisedButton:
+                    text: "DELETE ROW"
+                    on_release: app.delete_last_row(data_input_rows)
+
         BoxLayout:
             orientation: "vertical"
             size_hint: 1, None
@@ -310,4 +330,3 @@ MDNavigationLayout:
     halign: "right"
     valign: "middle"
     text_size: self.size
-    
