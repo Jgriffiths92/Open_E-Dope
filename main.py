@@ -167,7 +167,7 @@ class SavedCardsScreen(Screen):
         except Exception as e:
             print(f"Error refreshing file and folder list: {e}")
 
-    def sort_filechooser(self, sort_by="name", reverse=False):
+    def sort_filechooser(self, sort_by="date", reverse=False):
         try:
             filechooser = self.ids.filechooser
             filechooser.sort_type = sort_by
@@ -192,8 +192,6 @@ class SavedCardsScreen(Screen):
             width_mult=3,
         )
         self.sort_menu.open()
-
-
 class ManageDataScreen(Screen):
     delete_option_label = StringProperty("Delete Folders After")  # Default text
     def on_enter(self):
@@ -556,7 +554,8 @@ class MainApp(MDApp):
         self.selected_orientation = "Portrait"  # Default orientation
         self.selected_save_folder = None  # Store the selected folder for saving CSV files
         self.detected_tag = None  # Initialize the detected_tag attribute
-
+        self.sort_type = "date"   # Default sort type
+        self.sort_order = "asc"   # Default sort order
         self.available_fields = {
             "Target": {"hint_text": "Target", "show": True},
             "Range": {"hint_text": "Range", "show": True},
@@ -863,11 +862,6 @@ class MainApp(MDApp):
             print(f"Error clearing stage name or notes: {e}")
         print("Data table cleared.")
         self.show_manual_data_input()  # Show manual data input fields again
-
-    global show_lead, show_range, show_2_wind_holds
-    show_lead = False
-    show_range = False
-    show_2_wind_holds = True
         
     def ensure_csv_directory(self):
         """Ensure the assets/CSV directory exists and is accessible."""
@@ -1131,30 +1125,45 @@ class MainApp(MDApp):
     def menu_callback(self, option):
         global show_lead, show_range, show_2_wind_holds
 
+        # Track if we changed a setting
+        changed = False
+
         # Handle the selected option
         if option == "Hide Lead":
             show_lead = False
+            changed = True
         elif option == "Show Lead":
             show_lead = True
+            changed = True
         if option == "Hide Range":
             show_range = False
+            changed = True
         elif option == "Show Range":
             show_range = True
+            changed = True
         if option == "Show 1 Wind Hold":
             show_2_wind_holds = False
+            changed = True
         elif option == "Show 2 Wind Holds":
             show_2_wind_holds = True
+            changed = True
         elif option == "Settings":
             # Navigate to the settings screen
             self.root.ids.screen_manager.current = "settings"
             # Close the dots menu
             if hasattr(self, "menu") and self.menu:
                 self.menu.dismiss()
+            # Do NOT save settings here
+            changed = False
 
         # --- PATCH: Update available_fields visibility based on menu options ---
         self.available_fields["Lead"]["show"] = show_lead
         self.available_fields["Range"]["show"] = show_range
         self.available_fields["Wnd2"]["show"] = show_2_wind_holds
+
+        # Save settings if any menu option except "Settings" was selected
+        if changed:
+            self.save_settings()
 
         # Regenerate the manual data input fields if they are visible
         home_screen = self.root.ids.home_screen
@@ -1166,24 +1175,6 @@ class MainApp(MDApp):
         if hasattr(self, "current_data"):  # Check if data is already loaded
             filtered_data = self.filter_table_data(self.current_data)
             self.display_table(filtered_data)
-
-    def filter_table_data(self, data):
-        """Filters the table data based on the show_lead and show_2_wind_holds flags."""
-        filtered_data = []
-        for row in data:
-            filtered_row = {}
-            # Add columns in the static order
-            filtered_row["Target"] = row.get("Target", "")
-            if show_range:
-                filtered_row["Range"] = row.get("Range", "")
-            filtered_row["Elv"] = row.get("Elv", "")
-            filtered_row["Wnd1"] = row.get("Wnd1", "")
-            if show_2_wind_holds:
-                filtered_row["Wnd2"] = row.get("Wnd2", "")
-            if show_lead:
-                filtered_row["Lead"] = row.get("Lead", "")
-            filtered_data.append(filtered_row)
-        return filtered_data
 
     def on_fab_press(self):
         """Handle the floating action button press."""
@@ -1405,7 +1396,12 @@ class MainApp(MDApp):
             show_lead = settings.getboolean("show_lead", True)
             show_range = settings.getboolean("show_range", True)
             show_2_wind_holds = settings.getboolean("show_2_wind_holds", True)
-            # ... load other settings ...
+            # --- FIX: Actually load sort_type and sort_order from settings.ini ---
+            self.sort_type = settings.get("sort_type", "date")
+            self.sort_order = settings.get("sort_order", "asc")
+        else:
+            self.sort_type = "date"
+            self.sort_order = "asc"
         # Update available_fields visibility after loading settings
         self.available_fields["Lead"]["show"] = show_lead
         self.available_fields["Range"]["show"] = show_range
@@ -1711,7 +1707,7 @@ class MainApp(MDApp):
             private_storage_path = os.path.join(os.path.dirname(__file__), "private_storage")
             if not os.path.exists(private_storage_path):
                 os.makedirs(private_storage_path)
-            print(f"Private storage path (non-Android): {private_storage_path}")
+            print(f"Private storage path (non-Android): { private_storage_path}")
         return private_storage_path
 
     def save_to_external_storage(self, file_name, content):
@@ -2219,13 +2215,21 @@ SwipeFileItem:
         scroll.add_widget(rows_layout)
 
         # --- Button bar (inside scrollview, scrolls with rows) ---
+        from kivy.uix.anchorlayout import AnchorLayout
+
+        anchor = AnchorLayout(
+            anchor_x="center",
+            size_hint_y=None,
+            height=dp(50),
+        )
+
         add_row_layout = BoxLayout(
             orientation="horizontal",
             spacing="10dp",
-            size_hint_y=None,
+            size_hint=(None, None),
             height=dp(50),
-            pos_hint={"center_x": 0.5}
         )
+
         add_row_layout.add_widget(
             MDRaisedButton(
                 text="ADD ROW",
@@ -2243,7 +2247,9 @@ SwipeFileItem:
                 on_release=lambda x: self.delete_last_row(self.manual_rows_layout)
             )
         )
-        rows_layout.add_widget(add_row_layout)  # <-- Add button bar as last child of rows_layout
+
+        anchor.add_widget(add_row_layout)
+        rows_layout.add_widget(anchor)  # <-- Add the anchor layout as last child of rows_layout
 
         # Add scrollview (with rows and buttons) to main layout
         main_layout.add_widget(scroll)
