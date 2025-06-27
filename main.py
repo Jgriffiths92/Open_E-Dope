@@ -2207,35 +2207,44 @@ SwipeFileItem:
         self.manual_data_fields = []
         home_screen = self.root.ids.home_screen
         table_container = home_screen.ids.table_container
+
+        # Clear any existing widgets in the table container
         table_container.clear_widgets()
 
-        # Main vertical layout
-        main_layout = BoxLayout(orientation="vertical", spacing="10dp")
+        # Create a vertical layout to hold the rows and buttons
+        main_layout = BoxLayout(orientation="vertical", spacing="10dp", size_hint=(1, None))
+        main_layout.bind(minimum_height=main_layout.setter("height"))
 
-        # --- Scrollable data rows and button bar together ---
-        scroll = ScrollView(size_hint=(1, 1))
-        self.manual_scrollview = scroll  # <-- Add this line
-        rows_layout = BoxLayout(orientation="vertical", size_hint_y=None)
+        # Create a BoxLayout to hold only the data rows
+        rows_layout = BoxLayout(orientation="vertical", size_hint=(1, None))
         rows_layout.bind(minimum_height=rows_layout.setter("height"))
+
+        # Store for later use
         self.manual_rows_layout = rows_layout
+
+        # Define the available fields and their display options
+        available_fields = {
+            "Target": {"hint_text": "Target", "show": True},
+            "Range": {"hint_text": "Range", "show": show_range},
+            "Elv": {"hint_text": "Elevation", "show": True},
+            "Wnd1": {"hint_text": "Wind 1", "show": True},
+            "Wnd2": {"hint_text": "Wind 2", "show": show_2_wind_holds},
+            "Lead": {"hint_text": "Lead", "show": show_lead},
+        }
+        self.available_fields = available_fields
+
+        # Add the first row of input fields
         self.add_data_row(rows_layout)
-        scroll.add_widget(rows_layout)
 
-        # --- Button bar (inside scrollview, scrolls with rows) ---
-        from kivy.uix.anchorlayout import AnchorLayout
-
-        anchor = AnchorLayout(
-            anchor_x="center",
-            size_hint_y=None,
-            height=dp(50),
-        )
-
+        # Create a layout for the "ADD ROW" and "DELETE ROW" buttons
         add_row_layout = BoxLayout(
             orientation="horizontal",
             spacing="10dp",
-            size_hint=(None, None),
+            size_hint=(None, None),  # Not stretching horizontally
             height=dp(50),
         )
+        add_row_layout.width = dp(260)  # 2 buttons * 120dp + 1 spacing * 10dp
+        add_row_layout.pos_hint = {"center_x": 0.5}  # Center horizontally
 
         add_row_layout.add_widget(
             MDRaisedButton(
@@ -2255,13 +2264,25 @@ SwipeFileItem:
             )
         )
 
-        anchor.add_widget(add_row_layout)
-        rows_layout.add_widget(anchor)  # <-- Add the anchor layout as last child of rows_layout
+        # Create a layout for the "CANCEL" and "ADD" buttons
+        action_buttons_layout = BoxLayout(orientation="horizontal", spacing="10dp", size_hint=(1, None), height=dp(50))
 
-        # Add scrollview (with rows and buttons) to main layout
-        main_layout.add_widget(scroll)
+        # Add the button layouts to the main layout
+        main_layout.add_widget(rows_layout)
 
-        table_container.add_widget(main_layout)
+        # Add a spacer for extra padding above the buttons
+        from kivy.uix.widget import Widget
+        main_layout.add_widget(Widget(size_hint_y=None, height=dp(16)))  # 16dp space
+
+        main_layout.add_widget(add_row_layout)
+
+        # Wrap the main layout with a ScrollView
+        scroll = ScrollView(size_hint=(1, 1))
+        scroll.add_widget(main_layout)
+        table_container.add_widget(scroll)
+
+        # Store the reference to the scroll view
+        self.manual_scrollview = scroll
 
     def add_data_row(self, rows_layout):
         """Add a new row of data fields directly underneath the existing rows, with Next/Tab navigation."""
@@ -2300,9 +2321,16 @@ SwipeFileItem:
                 break
 
         rows_layout.add_widget(row_layout, index=button_index)
+        # --- Focus the first input in the new row ---
+        if manual_fields:
+            Clock.schedule_once(lambda dt: setattr(manual_fields[0], "focus", True), 0)
 
-        # Rebuild navigation for all homepage fields
+            # Rebuild navigation for all homepage fields
         self.enable_next_navigation_on_homepage()
+
+        # Scroll to bottom after next frame
+        if hasattr(self, "manual_scrollview"):
+            Clock.schedule_once(lambda dt: setattr(self.manual_scrollview, "scroll_y", 0), 0)
 
     def delete_last_row(self, rows_layout=None):
         if rows_layout is None:
