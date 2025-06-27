@@ -35,6 +35,7 @@ from kivymd.toast import toast
 from kivy.properties import StringProperty
 from kivy.uix.scrollview import ScrollView
 from kivy.uix.anchorlayout import AnchorLayout
+from kivy.uix.widget import Widget
 
 
 # Ensure the soft keyboard pushes the target widget above it
@@ -1842,7 +1843,6 @@ class MainApp(MDApp):
 
                     if table_container.children and hasattr(self, "manual_data_rows") and self.manual_data_rows:
                         print("Manual data input detected, adding manual data before NFC transfer.")
-                        self.add_manual_data() # Call synchronously to ensure self.current_data is updated
                     
                     perform_nfc_transfer()
                     intent.setAction("") # Clear action to prevent re-handling by polling or resume
@@ -2184,23 +2184,17 @@ SwipeFileItem:
         self.manual_data_fields = []
         home_screen = self.root.ids.home_screen
         table_container = home_screen.ids.table_container
-
-        # Clear any existing widgets in the table container
         table_container.clear_widgets()
 
-        # Create a vertical layout to hold the rows and buttons
-        main_layout = BoxLayout(orientation="vertical", spacing="10dp", size_hint=(1, None))
-        main_layout.bind(minimum_height=main_layout.setter("height"))
+        # Main vertical layout
+        main_layout = BoxLayout(orientation="vertical", spacing="10dp")
 
-        # Create a BoxLayout to hold only the data rows
-        rows_layout = BoxLayout(orientation="vertical", size_hint=(1, None))
+        # --- Scrollable data rows ---
+        scroll = ScrollView(size_hint=(1, 1))
+        rows_layout = BoxLayout(orientation="vertical", size_hint_y=None)
         rows_layout.bind(minimum_height=rows_layout.setter("height"))
-
-        # Store for later use
         self.manual_rows_layout = rows_layout
-
-        # Define the available fields and their display options
-        available_fields = {
+        self.available_fields = {
             "Target": {"hint_text": "Target", "show": True},
             "Range": {"hint_text": "Range", "show": show_range},
             "Elv": {"hint_text": "Elevation", "show": True},
@@ -2208,21 +2202,19 @@ SwipeFileItem:
             "Wnd2": {"hint_text": "Wind 2", "show": show_2_wind_holds},
             "Lead": {"hint_text": "Lead", "show": show_lead},
         }
-        self.available_fields = available_fields
-
-        # Add the first row of input fields
         self.add_data_row(rows_layout)
+        scroll.add_widget(rows_layout)
+        main_layout.add_widget(scroll)
 
-        # Create a layout for the "ADD ROW" and "DELETE ROW" buttons
+        # --- Button bar (always visible) ---
         add_row_layout = BoxLayout(
             orientation="horizontal",
             spacing="10dp",
-            size_hint=(None, None),  # Not stretching horizontally
+            size_hint=(None, None),
             height=dp(50),
+            width=dp(260),
+            pos_hint={"center_x": 0.5}
         )
-        add_row_layout.width = dp(260)  # 2 buttons * 120dp + 1 spacing * 10dp
-        add_row_layout.pos_hint = {"center_x": 0.5}  # Center horizontally
-
         add_row_layout.add_widget(
             MDRaisedButton(
                 text="ADD ROW",
@@ -2240,27 +2232,9 @@ SwipeFileItem:
                 on_release=lambda x: self.delete_last_row(self.manual_rows_layout)
             )
         )
-
-        # Create a layout for the "CANCEL" and "ADD" buttons
-        action_buttons_layout = BoxLayout(orientation="horizontal", spacing="10dp", size_hint=(1, None), height=dp(50))
-
-        # Add the button layouts to the main layout
-        main_layout.add_widget(rows_layout)
-
-        # Add a spacer for extra padding above the buttons
-        from kivy.uix.widget import Widget
-        main_layout.add_widget(Widget(size_hint_y=None, height=dp(16)))  # 16dp space
-
         main_layout.add_widget(add_row_layout)
 
-        # Wrap main_layout in an AnchorLayout to center it vertically
-        anchor = AnchorLayout(anchor_x='center', anchor_y='center')
-        anchor.add_widget(main_layout)
-
-        # Then put the AnchorLayout in the ScrollView
-        scroll = ScrollView(size_hint=(1, 1))
-        scroll.add_widget(anchor)
-        table_container.add_widget(scroll)
+        table_container.add_widget(main_layout)
 
     def add_data_row(self, rows_layout):
         """Add a new row of data fields directly underneath the existing rows, with Next/Tab navigation."""
@@ -2386,7 +2360,31 @@ SwipeFileItem:
                     return orig_handler(instance, *args)
                 return _on_key_down
             tf.keyboard_on_key_down = make_keyboard_on_key_down(i, tf._orig_keyboard_on_key_down)
-    
+    def add_manual_data(self):
+        try:
+            for row_fields in self.manual_data_rows:
+                manual_data = {key: "0" for key in self.available_fields.keys()}
+                for key, field in row_fields.items():
+                    manual_data[key] = field.text if field.text.strip() else "0"
+                if not manual_data["Target"]:
+                    print("Target is required.")
+                    toast("Target is required.")
+                    return
+                required_keys = {"Target", "Range", "Elv", "Wnd1", "Wnd2", "Lead"}
+                for k in required_keys:
+                    if k not in manual_data:
+                        manual_data[k] = "0"
+                if not hasattr(self, "current_data") or not self.current_data:
+                    self.current_data = []
+                self.current_data.append(manual_data)
+            self.display_table(self.current_data)
+            # Clear manual input fields after adding data
+            for row_fields in self.manual_data_rows:
+                for field in row_fields.values():
+                    field.text = ""
+            print("Manual data added and input fields cleared:", self.current_data)
+        except Exception as e:
+            print(f"Error adding manual data: {e}")
     def copy_directory_from_assets(self, asset_manager, source_path, dest_path):
         """Recursively copy a directory from the assets folder to the destination."""
         try:
