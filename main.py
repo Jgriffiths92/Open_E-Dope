@@ -36,7 +36,7 @@ from kivy.properties import StringProperty
 
 
 # Ensure the soft keyboard pushes the target widget above it
-Window.softinput_mode = "below_target"
+Window.softinput_mode = "resize"
 
 try:
     from android import mActivity
@@ -2244,8 +2244,13 @@ SwipeFileItem:
         action_buttons_layout = BoxLayout(orientation="horizontal", spacing="10dp", size_hint=(1, None), height=dp(50))
 
         # Add the button layouts to the main layout
+        main_layout.add_widget(rows_layout)
+
+        # Add a spacer for extra padding above the buttons
+        from kivy.uix.widget import Widget
+        main_layout.add_widget(Widget(size_hint_y=None, height=dp(16)))  # 16dp space
+
         main_layout.add_widget(add_row_layout)
-        main_layout.add_widget(action_buttons_layout)
 
         # Add the main layout to the table container
         table_container.add_widget(main_layout)
