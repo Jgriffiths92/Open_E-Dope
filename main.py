@@ -650,8 +650,13 @@ class MainApp(MDApp):
         NfcHelper.processNfcIntentByteBufferAsync(intent, width, height, image_buffer_bb, epd_init_java_array, listener)
     def on_pause(self):
         print("on_pause CALLED")
-        return True  # Returning True allows the app to be paused
-# ...inside your MainApp class...
+        if is_android() and autoclass and hasattr(self, "nfc_adapter"):
+            try:
+                self.nfc_adapter.disableForegroundDispatch(mActivity)
+                print("NFC foreground dispatch disabled.")
+            except Exception as e:
+                print(f"Error disabling NFC foreground dispatch: {e}")
+        return True
 
     def on_start(self):
         # Bind global key handler for Tab/Enter navigation
@@ -1829,10 +1834,10 @@ class MainApp(MDApp):
                 if tag:
                     print("NFC tag detected (regardless of action)!")
                     tag = cast('android.nfc.Tag', tag)
-                    # tech_list = tag.getTechList() # Optional: log tech list if needed for debugging
-                    # print("Tag technologies detected by Android:")
-                    # for tech in tech_list:
-                    #     print(f" - {tech}")
+                    tech_list = tag.getTechList() # Optional: log tech list if needed for debugging
+                    print("Tag technologies detected by Android:")
+                    for tech in tech_list:
+                        print(f" - {tech}")
 
                     table_container = self.root.ids.home_screen.ids.table_container
 
@@ -2367,17 +2372,28 @@ SwipeFileItem:
                 manual_data = {key: "0" for key in self.available_fields.keys()}
                 for key, field in row_fields.items():
                     manual_data[key] = field.text if field.text.strip() else "0"
+
+                # Only add if at least one field is non-empty (not all zeros)
+                if all(str(v).strip() == "0" for v in manual_data.values()):
+                    continue
+
                 if not manual_data["Target"]:
                     print("Target is required.")
                     toast("Target is required.")
                     return
+
                 required_keys = {"Target", "Range", "Elv", "Wnd1", "Wnd2", "Lead"}
                 for k in required_keys:
                     if k not in manual_data:
                         manual_data[k] = "0"
+
                 if not hasattr(self, "current_data") or not self.current_data:
                     self.current_data = []
-                self.current_data.append(manual_data)
+
+                # Avoid duplicates
+                if manual_data not in self.current_data:
+                    self.current_data.append(manual_data)
+
             self.display_table(self.current_data)
             # Clear manual input fields after adding data
             for row_fields in self.manual_data_rows:
