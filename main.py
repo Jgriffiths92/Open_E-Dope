@@ -557,6 +557,15 @@ class MainApp(MDApp):
         self.selected_save_folder = None  # Store the selected folder for saving CSV files
         self.detected_tag = None  # Initialize the detected_tag attribute
 
+        self.available_fields = {
+            "Target": {"hint_text": "Target", "show": True},
+            "Range": {"hint_text": "Range", "show": True},
+            "Elv": {"hint_text": "Elv", "show": True},
+            "Wnd1": {"hint_text": "Wnd1", "show": True},
+            "Wnd2": {"hint_text": "Wnd2", "show": True},
+            "Lead": {"hint_text": "Lead", "show": True},
+        }
+        self.load_settings()
     dialog = None  # Store the dialog instance
 
     def send_csv_bitmap_via_nfc(self, intent):
@@ -1138,10 +1147,14 @@ class MainApp(MDApp):
         elif option == "Settings":
             # Navigate to the settings screen
             self.root.ids.screen_manager.current = "settings"
-
             # Close the dots menu
             if hasattr(self, "menu") and self.menu:
                 self.menu.dismiss()
+
+        # --- PATCH: Update available_fields visibility based on menu options ---
+        self.available_fields["Lead"]["show"] = show_lead
+        self.available_fields["Range"]["show"] = show_range
+        self.available_fields["Wnd2"]["show"] = show_2_wind_holds
 
         # Regenerate the manual data input fields if they are visible
         home_screen = self.root.ids.home_screen
@@ -1386,43 +1399,17 @@ class MainApp(MDApp):
 
     def load_settings(self):
         global show_lead, show_range, show_2_wind_holds
-        try:
+        if os.path.exists(self.config_file):
             self.config_parser.read(self.config_file)
-            if self.config_parser.has_option("Settings", "display_model"):
-                self.selected_display = self.config_parser.get("Settings", "display_model")
-            if self.config_parser.has_option("Settings", "orientation"):
-                self.selected_orientation = self.config_parser.get("Settings", "orientation")
-            # Load show/hide preferences
-            if self.config_parser.has_option("Settings", "show_lead"):
-                show_lead = self.config_parser.getboolean("Settings", "show_lead")
-            if self.config_parser.has_option("Settings", "show_range"):
-                show_range = self.config_parser.getboolean("Settings", "show_range")
-            if self.config_parser.has_option("Settings", "show_2_wind_holds"):
-                show_2_wind_holds = self.config_parser.getboolean("Settings", "show_2_wind_holds")
-            # Set native_resolution and selected_resolution based on loaded display/orientation
-            display_resolutions = {
-                "Good Display 3.7-inch": (240, 416),
-                "Good Display 4.2-inch": (300, 400),
-                "Good Display 2.9-inch": (128, 296),
-            }
-            self.native_resolution = display_resolutions.get(self.selected_display, (240, 416))
-            self.selected_resolution = self.native_resolution  # Always portrait
-            print(f"Loaded settings: display_model={self.selected_display}, orientation={self.selected_orientation}, ...")
-            print(f"Loaded native_resolution: {self.native_resolution}, selected_resolution: {self.selected_resolution}")
-        except Exception as e:
-            print(f"Error loading settings: {e}")
-        self.delete_folders_after = self.config_parser.get("Settings", "delete_folders_after", fallback="never")
-        labels = {
-            "week": "After 1 week",
-            "month": "After 1 month",
-            "year": "After 1 year",
-            "never": "Never",
-        }
-        self.delete_option_label = labels.get(self.delete_folders_after, "Delete Folders After")
-        # Load sort settings
-        self.sort_type = self.config_parser.get("Settings", "sort_type", fallback="date")
-        self.sort_order = self.config_parser.get("Settings", "sort_order", fallback="asc")
-        print(f"Loaded sort_type: {self.sort_type}, sort_order: {self.sort_order}")
+            settings = self.config_parser["Settings"]
+            show_lead = settings.getboolean("show_lead", True)
+            show_range = settings.getboolean("show_range", True)
+            show_2_wind_holds = settings.getboolean("show_2_wind_holds", True)
+            # ... load other settings ...
+        # Update available_fields visibility after loading settings
+        self.available_fields["Lead"]["show"] = show_lead
+        self.available_fields["Range"]["show"] = show_range
+        self.available_fields["Wnd2"]["show"] = show_2_wind_holds
 
     def csv_to_bitmap(self, csv_data, output_path=None):
         """Convert CSV data to a bitmap image, resize it to fit the display resolution while keeping the aspect ratio, and save it."""
@@ -1725,7 +1712,7 @@ class MainApp(MDApp):
             if not os.path.exists(private_storage_path):
                 os.makedirs(private_storage_path)
             print(f"Private storage path (non-Android): {private_storage_path}")
-            return private_storage_path
+        return private_storage_path
 
     def save_to_external_storage(self, file_name, content):
         """Save a file to the external storage directory or assets/CSV."""
@@ -1864,6 +1851,33 @@ class MainApp(MDApp):
                     print("NFC tag detected!")
                     # This path likely means EXTRA_TAG was null, which is unusual for these actions.
                     # Proceeding with send_csv_bitmap_via_nfc might fail if tag cannot be extracted by Java.
+                    self.send_csv_bitmap_via_nfc(intent)
+                    intent.setAction("") # Clear action
+                    return
+
+                # Handle shared data (SEND/VIEW)
+                if action in ["android.intent.action.SEND", "android.intent.action.VIEW"]:
+                    extras = intent.getExtras()
+                    if extras and extras.containsKey("android.intent.extra.TEXT"):
+                        # Handle shared text
+                        shared_text = extras.getString("android.intent.extra.TEXT")
+                        print(f"Received shared text: {shared_text}")
+                        self.process_received_text(shared_text)
+                    elif extras and extras.containsKey("android.intent.extra.STREAM"):
+                        # Handle shared file
+                        stream_uri = extras.getParcelable("android.intent.extra.STREAM")
+                        print(f"Received stream URI: {stream_uri}")
+
+                        # If the stream_uri is a string path, open it directly
+                        if isinstance(stream_uri, str) and stream_uri.startswith("/"):
+                            print(f"Received file path: {stream_uri}")
+                            self.process_received_csv(stream_uri)
+                        else:
+                            Uri = autoclass('android.net.Uri')
+                            try:
+                                stream_uri = cast('android.net.Uri', stream_uri)
+                            except Exception:
+                                pass
                     self.send_csv_bitmap_via_nfc(intent)
                     intent.setAction("") # Clear action
                     return
@@ -2195,30 +2209,21 @@ SwipeFileItem:
         # Main vertical layout
         main_layout = BoxLayout(orientation="vertical", spacing="10dp")
 
-        # --- Scrollable data rows ---
+        # --- Scrollable data rows and button bar together ---
         scroll = ScrollView(size_hint=(1, 1))
+        self.manual_scrollview = scroll  # <-- Add this line
         rows_layout = BoxLayout(orientation="vertical", size_hint_y=None)
         rows_layout.bind(minimum_height=rows_layout.setter("height"))
         self.manual_rows_layout = rows_layout
-        self.available_fields = {
-            "Target": {"hint_text": "Target", "show": True},
-            "Range": {"hint_text": "Range", "show": show_range},
-            "Elv": {"hint_text": "Elevation", "show": True},
-            "Wnd1": {"hint_text": "Wind 1", "show": True},
-            "Wnd2": {"hint_text": "Wind 2", "show": show_2_wind_holds},
-            "Lead": {"hint_text": "Lead", "show": show_lead},
-        }
         self.add_data_row(rows_layout)
         scroll.add_widget(rows_layout)
-        main_layout.add_widget(scroll)
 
-        # --- Button bar (always visible) ---
+        # --- Button bar (inside scrollview, scrolls with rows) ---
         add_row_layout = BoxLayout(
             orientation="horizontal",
             spacing="10dp",
-            size_hint=(None, None),
+            size_hint_y=None,
             height=dp(50),
-            width=dp(260),
             pos_hint={"center_x": 0.5}
         )
         add_row_layout.add_widget(
@@ -2238,7 +2243,10 @@ SwipeFileItem:
                 on_release=lambda x: self.delete_last_row(self.manual_rows_layout)
             )
         )
-        main_layout.add_widget(add_row_layout)
+        rows_layout.add_widget(add_row_layout)  # <-- Add button bar as last child of rows_layout
+
+        # Add scrollview (with rows and buttons) to main layout
+        main_layout.add_widget(scroll)
 
         table_container.add_widget(main_layout)
 
@@ -2587,10 +2595,6 @@ def handle_received_file(intent):
                 print("No EXTRA_STREAM found in the intent.")
         except Exception as e:
             print(f"Error handling received file: {e}")
-    else:
-        print("This functionality is only available on Android.")
-
-
 def start_foreground_service(self):
     """Start a foreground service with a persistent notification."""
     if is_android():
