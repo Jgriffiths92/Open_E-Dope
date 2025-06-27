@@ -2211,46 +2211,45 @@ SwipeFileItem:
         # Clear any existing widgets in the table container
         table_container.clear_widgets()
 
-        # Create a vertical layout to hold the rows and buttons
-        main_layout = BoxLayout(orientation="vertical", spacing="10dp", size_hint=(1, None))
-        main_layout.bind(minimum_height=main_layout.setter("height"))
+        # --- Create a BoxLayout to hold everything vertically ---
+        main_layout = BoxLayout(orientation="vertical", spacing="10dp")
 
-        # Create a BoxLayout to hold only the data rows
-        rows_layout = BoxLayout(orientation="vertical", size_hint=(1, None))
+        # --- Create a BoxLayout to hold only the data rows (inside a ScrollView) ---
+        rows_layout = BoxLayout(orientation="vertical", size_hint_y=None)
         rows_layout.bind(minimum_height=rows_layout.setter("height"))
-
-        # Store for later use
         self.manual_rows_layout = rows_layout
-
-        # Define the available fields and their display options
-        available_fields = {
-            "Target": {"hint_text": "Target", "show": True},
-            "Range": {"hint_text": "Range", "show": show_range},
-            "Elv": {"hint_text": "Elevation", "show": True},
-            "Wnd1": {"hint_text": "Wind 1", "show": True},
-            "Wnd2": {"hint_text": "Wind 2", "show": show_2_wind_holds},
-            "Lead": {"hint_text": "Lead", "show": show_lead},
-        }
-        self.available_fields = available_fields
 
         # Add the first row of input fields
         self.add_data_row(rows_layout)
 
-        # Create a layout for the "ADD ROW" and "DELETE ROW" buttons
-        add_row_layout = BoxLayout(
-            orientation="horizontal",
-            spacing="10dp",
-            size_hint=(None, None),  # Not stretching horizontally
+        # --- ScrollView for data rows ---
+        scroll = ScrollView(size_hint=(1, 1))
+        scroll.add_widget(rows_layout)
+        self.manual_scrollview = scroll
+
+        anchor = AnchorLayout(
+            anchor_x="center",
+            size_hint_y=None,
             height=dp(50),
         )
-        add_row_layout.width = dp(260)  # 2 buttons * 120dp + 1 spacing * 10dp
-        add_row_layout.pos_hint = {"center_x": 0.5}  # Center horizontally
+
+        button_width = dp(120)
+        button_spacing = dp(10)
+        total_width = button_width * 2 + button_spacing
+
+        add_row_layout = BoxLayout(
+            orientation="horizontal",
+            spacing=button_spacing,
+            size_hint=(None, None),
+            width=total_width,
+            height=dp(50),
+        )
 
         add_row_layout.add_widget(
             MDRaisedButton(
                 text="ADD ROW",
                 size_hint=(None, None),
-                size=(dp(120), dp(40)),
+                size=(button_width, dp(40)),
                 on_release=lambda x: self.add_data_row(self.manual_rows_layout)
             )
         )
@@ -2258,28 +2257,20 @@ SwipeFileItem:
             MDRaisedButton(
                 text="DELETE ROW",
                 size_hint=(None, None),
-                size=(dp(120), dp(40)),
+                size=(button_width, dp(40)),
                 md_bg_color=(1, 0, 0, 1),
                 on_release=lambda x: self.delete_last_row(self.manual_rows_layout)
             )
         )
 
-        # Create a layout for the "CANCEL" and "ADD" buttons
-        action_buttons_layout = BoxLayout(orientation="horizontal", spacing="10dp", size_hint=(1, None), height=dp(50))
+        anchor.add_widget(add_row_layout)
 
-        # Add the button layouts to the main layout
-        main_layout.add_widget(rows_layout)
+        # --- Add widgets to main_layout ---
+        main_layout.add_widget(scroll)
+        main_layout.add_widget(anchor)
 
-        # Add a spacer for extra padding above the buttons
-        from kivy.uix.widget import Widget
-        main_layout.add_widget(Widget(size_hint_y=None, height=dp(16)))  # 16dp space
-
-        main_layout.add_widget(add_row_layout)
-
-        # Wrap the main layout with a ScrollView
-        scroll = ScrollView(size_hint=(1, 1))
-        scroll.add_widget(main_layout)
-        table_container.add_widget(scroll)
+        # --- Add main_layout to the table_container ---
+        table_container.add_widget(main_layout)
 
         # Store the reference to the scroll view
         self.manual_scrollview = scroll
