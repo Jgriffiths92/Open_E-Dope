@@ -1843,7 +1843,8 @@ class MainApp(MDApp):
 
                     if table_container.children and hasattr(self, "manual_data_rows") and self.manual_data_rows:
                         print("Manual data input detected, adding manual data before NFC transfer.")
-                    
+                        self.add_manual_data()  # <-- FIX: Actually add manual data
+
                     perform_nfc_transfer()
                     intent.setAction("") # Clear action to prevent re-handling by polling or resume
                     return
@@ -2639,6 +2640,8 @@ for i in range(0, len(s), 40):
     print(f"{i:03d}: {s[i:i+40]}")
 
 def pack_image_column_major(img):
+    pixels = img.load()
+    width, height = img.size  # <-- Add this line
     packed = bytearray()
     for x in range(width-1, -1, -1):  # right-to-left to match demo
         for y_block in range(0, height, 8):
