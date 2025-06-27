@@ -36,7 +36,7 @@ from kivy.properties import StringProperty
 
 
 # Ensure the soft keyboard pushes the target widget above it
-Window.softinput_mode = "resize"
+Window.softinput_mode = "below_target"
 
 try:
     from android import mActivity
