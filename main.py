@@ -181,10 +181,17 @@ class SavedCardsScreen(Screen):
     def open_sort_menu(self, caller):
         from kivymd.uix.menu import MDDropdownMenu
         app = App.get_running_app()
+
+        def set_and_save_sort(sort_by):
+            app.sort_type = sort_by
+            app.save_settings()
+            reverse = app.sort_order == "desc"
+            app.populate_swipe_file_list(sort_by=app.sort_type, reverse=reverse)
+
         menu_items = [
-            {"text": "Name", "on_release": lambda x="name": app.populate_swipe_file_list(sort_by="name")},
-            {"text": "Date", "on_release": lambda x="date": app.populate_swipe_file_list(sort_by="date")},
-            {"text": "Type", "on_release": lambda x="type": app.populate_swipe_file_list(sort_by="type")},
+            {"text": "Name", "on_release": lambda: set_and_save_sort("name")},
+            {"text": "Date", "on_release": lambda: set_and_save_sort("date")},
+            {"text": "Type", "on_release": lambda: set_and_save_sort("type")},
         ]
         self.sort_menu = MDDropdownMenu(
             caller=caller,
