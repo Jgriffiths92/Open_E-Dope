@@ -33,6 +33,7 @@ from kivy.lang import Builder
 from kivy.app import App
 from kivymd.toast import toast
 from kivy.properties import StringProperty
+from kivy.uix.scrollview import ScrollView
 
 
 # Ensure the soft keyboard pushes the target widget above it
@@ -2251,8 +2252,10 @@ SwipeFileItem:
 
         main_layout.add_widget(add_row_layout)
 
-        # Add the main layout to the table container
-        table_container.add_widget(main_layout)
+        # Wrap the main layout with a ScrollView
+        scroll = ScrollView(size_hint=(1, 1))
+        scroll.add_widget(main_layout)
+        table_container.add_widget(scroll)
 
     def add_data_row(self, rows_layout):
         """Add a new row of data fields directly underneath the existing rows, with Next/Tab navigation."""
