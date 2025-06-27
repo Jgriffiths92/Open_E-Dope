@@ -34,6 +34,7 @@ from kivy.app import App
 from kivymd.toast import toast
 from kivy.properties import StringProperty
 from kivy.uix.scrollview import ScrollView
+from kivy.uix.anchorlayout import AnchorLayout
 
 
 # Ensure the soft keyboard pushes the target widget above it
@@ -2252,9 +2253,13 @@ SwipeFileItem:
 
         main_layout.add_widget(add_row_layout)
 
-        # Wrap the main layout with a ScrollView
+        # Wrap main_layout in an AnchorLayout to center it vertically
+        anchor = AnchorLayout(anchor_x='center', anchor_y='center')
+        anchor.add_widget(main_layout)
+
+        # Then put the AnchorLayout in the ScrollView
         scroll = ScrollView(size_hint=(1, 1))
-        scroll.add_widget(main_layout)
+        scroll.add_widget(anchor)
         table_container.add_widget(scroll)
 
     def add_data_row(self, rows_layout):
