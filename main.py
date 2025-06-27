@@ -736,7 +736,6 @@ class MainApp(MDApp):
             "week": 7 * 24 * 3600,
             "month": 30 * 24 * 3600,
             "year": 365 * 24 * 3600,
-            "never": None,
         }
         option = getattr(self, "delete_folders_after", "never").lower()
         threshold = thresholds.get(option)
@@ -2180,32 +2179,38 @@ SwipeFileItem:
 
     def show_manual_data_input(self):
         """Display manual data input fields in the CSV data table location based on filtered display options."""
-        self.manual_data_fields = []  # <-- Add this line
+        self.manual_data_fields = []
         home_screen = self.root.ids.home_screen
         table_container = home_screen.ids.table_container
 
         # Clear any existing widgets in the table container
         table_container.clear_widgets()
 
-               # Create a vertical layout to hold the rows and buttons
+        # Create a vertical layout to hold the rows and buttons
         main_layout = BoxLayout(orientation="vertical", spacing="10dp", size_hint=(1, None))
-        main_layout.bind(minimum_height=main_layout.setter("height"))  # Adjust height dynamically
+        main_layout.bind(minimum_height=main_layout.setter("height"))
+
+        # Create a BoxLayout to hold only the data rows
+        rows_layout = BoxLayout(orientation="vertical", size_hint=(1, None))
+        rows_layout.bind(minimum_height=rows_layout.setter("height"))
+        main_layout.add_widget(rows_layout)
+
+        # Store for later use
+        self.manual_rows_layout = rows_layout
 
         # Define the available fields and their display options
         available_fields = {
-            "Target": {"hint_text": "Target", "show": True},  # Always show Target
-            "Range": {"hint_text": "Range", "show": show_range},  # Controlled by show_range
-            "Elv": {"hint_text": "Elevation", "show": True},  # Always show Elevation
-            "Wnd1": {"hint_text": "Wind 1", "show": True},  # Always show Wind 1
-            "Wnd2": {"hint_text": "Wind 2", "show": show_2_wind_holds},  # Controlled by show_2_wind_holds
-            "Lead": {"hint_text": "Lead", "show": show_lead},  # Controlled by show_lead
+            "Target": {"hint_text": "Target", "show": True},
+            "Range": {"hint_text": "Range", "show": show_range},
+            "Elv": {"hint_text": "Elevation", "show": True},
+            "Wnd1": {"hint_text": "Wind 1", "show": True},
+            "Wnd2": {"hint_text": "Wind 2", "show": show_2_wind_holds},
+            "Lead": {"hint_text": "Lead", "show": show_lead},
         }
-
-        # Store the available fields for later use
         self.available_fields = available_fields
 
         # Add the first row of input fields
-        self.add_data_row(main_layout)
+        self.add_data_row(rows_layout)
 
         # Create a layout for the "ADD ROW" and "DELETE ROW" buttons
         add_row_layout = BoxLayout(
@@ -2222,7 +2227,7 @@ SwipeFileItem:
                 text="ADD ROW",
                 size_hint=(None, None),
                 size=(dp(120), dp(40)),
-                on_release=lambda x: self.add_data_row(main_layout)
+                on_release=lambda x: self.add_data_row(self.manual_rows_layout)
             )
         )
         add_row_layout.add_widget(
@@ -2231,7 +2236,7 @@ SwipeFileItem:
                 size_hint=(None, None),
                 size=(dp(120), dp(40)),
                 md_bg_color=(1, 0, 0, 1),
-                on_release=lambda x: self.delete_last_row(main_layout)
+                on_release=lambda x: self.delete_last_row(self.manual_rows_layout)
             )
         )
 
@@ -2245,7 +2250,7 @@ SwipeFileItem:
         # Add the main layout to the table container
         table_container.add_widget(main_layout)
 
-    def add_data_row(self, table_container):
+    def add_data_row(self, rows_layout):
         """Add a new row of data fields directly underneath the existing rows, with Next/Tab navigation."""
         row_layout = BoxLayout(orientation="horizontal", spacing="10dp", size_hint=(1, None))
         row_layout.height = dp(50)  # Adjust height for a single row of text fields
@@ -2275,33 +2280,43 @@ SwipeFileItem:
 
         # Find the correct index to insert the new row (above the button layouts)
         button_index = 0
-        for i, child in enumerate(reversed(table_container.children)):
+        for i, child in enumerate(reversed(rows_layout.children)):
             if isinstance(child, BoxLayout) and any(
                 isinstance(widget, MDRaisedButton) or isinstance(widget, MDFlatButton) for widget in child.children):
-                button_index = len(table_container.children) - i
+                button_index = len(rows_layout.children) - i
                 break
 
-        table_container.add_widget(row_layout, index=button_index)
+        rows_layout.add_widget(row_layout, index=button_index)
 
         # Rebuild navigation for all homepage fields
         self.enable_next_navigation_on_homepage()
 
-    def delete_last_row(self, table_container):
-        """Delete the last row of data fields if there is more than one row and update navigation."""
-        if len(table_container.children) <= 1:
-            return  # Don't remove the last remaining row
+    def delete_last_row(self, rows_layout=None):
+        if rows_layout is None:
+            rows_layout = self.manual_rows_layout
+        # Count only BoxLayouts that are data rows
+        data_rows = [
+            child for child in rows_layout.children
+            if isinstance(child, BoxLayout)
+        ]
+        if len(data_rows) <= 1:
+            # Only 1 row left: clear all text fields in that row
+            last_row = data_rows[0]
+            for widget in last_row.children:
+                if isinstance(widget, MDTextField):
+                    widget.text = ""
+            # Also clear the corresponding manual_data_rows entry if you want
+            if hasattr(self, "manual_data_rows") and self.manual_data_rows:
+                self.manual_data_rows[0] = {k: v for k, v in self.manual_data_rows[0].items()}
+            return  # Do not remove the last remaining data row
 
-        # Find the last added row (excluding button layouts)
-        for child in reversed(table_container.children):
-            if isinstance(child, BoxLayout) and not any(
-                isinstance(widget, MDRaisedButton) or isinstance(widget, MDFlatButton) for widget in child.children):
-                # Remove the MDTextFields in this row from manual_data_fields
-                if hasattr(self, "manual_data_fields"):
-                    for widget in child.children:
-                        if isinstance(widget, MDTextField) and widget in self.manual_data_fields:
-                            self.manual_data_fields.remove(widget)
-                table_container.remove_widget(child)
-                break
+        # Remove the last row
+        last_row = data_rows[0]  # children are in reverse order
+        if hasattr(self, "manual_data_fields"):
+            for widget in last_row.children:
+                if isinstance(widget, MDTextField) and widget in self.manual_data_fields:
+                    self.manual_data_fields.remove(widget)
+        rows_layout.remove_widget(last_row)
 
         # Also remove the last row_fields from manual_data_rows if present
         if hasattr(self, "manual_data_rows") and self.manual_data_rows:
@@ -2481,7 +2496,7 @@ SwipeFileItem:
         """Hide the NFC button if running on Android."""
         if is_android():
             try:
-                # Assuming the NFC button has an ID like 'nfc_button'
+                 # Assuming the NFC button has an ID like 'nfc_button'
                 nfc_button = self.root.ids.home_screen.ids.nfc_button
                 nfc_button.opacity = 0  # Make the button invisible
                 nfc_button.disabled = True  # Disable the button
