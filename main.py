@@ -2193,7 +2193,6 @@ SwipeFileItem:
         # Create a BoxLayout to hold only the data rows
         rows_layout = BoxLayout(orientation="vertical", size_hint=(1, None))
         rows_layout.bind(minimum_height=rows_layout.setter("height"))
-        main_layout.add_widget(rows_layout)
 
         # Store for later use
         self.manual_rows_layout = rows_layout
