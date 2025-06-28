@@ -37,7 +37,6 @@ from kivy.uix.scrollview import ScrollView
 from kivy.uix.anchorlayout import AnchorLayout
 from kivy.uix.widget import Widget
 from kivy.uix.relativelayout import RelativeLayout
-from kivy.core.window import Window
 
 
 # Global configuration variables
@@ -46,7 +45,8 @@ show_range = False  # Default to not showing the Range field
 show_2_wind_holds = True # Default to showing the two wind holds
 
 # Ensure the soft keyboard pushes the target widget above it
-Window.softinput_mode = ""
+Window.softinput_mode = "below_target"
+
 
 try:
     from android import mActivity
@@ -389,32 +389,21 @@ class MainApp(MDApp):
         "Good Display 3.7-inch": [
             "F0DB00005EA006512000F001A0A4010CA502000AA40108A502000AA4010CA502000AA40108A502000AA4010CA502000AA40108A502000AA4010CA502000AA40103A102001FA10104A40103A3021013A20112A502000AA40103A20102A40103A20207A5", # Main Init
             "F0DA000003F05120", # Screen Cut
-            "2" # Number of colors (e.g., 2 for BW, 3 for BWR)
+            "3" # Number of colors (e.g., 2 for BW, 3 for BWR)
         ],
         # Good Display 4.2-inch (SSD1680, 400x300)
         "Good Display 4.2-inch": [
             "F0DB000063A00603300190012CA4010CA502000AA40108A502000AA4010CA502000AA40102A10112A40102A104012B0101A1021101A103440031A105452B010000A1023C01A1021880A1024E00A1034F2B01A3022426A20222F7A20120A40102A2021001A502000A", # Main Init
             "F0DA000003F00330", # Screen Cut
-            "2" # Number of colors (e.g., 2 for BW, 3 for BWR)
+            "3" # Number of colors
         ],
         # Good Display 2.9-inch (SSD1680, 296x128)
         "Good Display 2.9-inch": [
             "F0DB000067A006012000800128A4010CA502000AA40108A502000AA4010CA502000AA40102A10112A40102A10401270101A1021101A10344000FA1054527010000A1023C05A103210080A1021880A1024E00A1034F2701A30124A3022426A20222F7A20120A40102A2021001A502000A", # Main Init
             "F0DA000003F00120", # Screen Cut
-            "2" # Number of colors (e.g., 2 for BW, 3 for BWR)
+            "3" # Number of colors
         ],
     }
-    def adjust_layout(self, window, height):
-        """
-        Adjusts the layout when the soft keyboard is shown or hidden.
-        This implementation adds bottom padding to the home screen
-        to push all content up, ensuring the focused input is visible.
-        """
-        if self.root.ids.screen_manager.current == "home":
-            home_screen = self.root.ids.home_screen
-            # Add padding to the bottom of the entire screen
-            home_screen.padding = [0, 0, 0, height]
-
     def get_basename(self, path):
         import os
         return os.path.basename(path)
@@ -570,7 +559,6 @@ class MainApp(MDApp):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        Window.bind(on_keyboard_height=self.adjust_layout)
         self.config_parser = ConfigParser()  # Initialize ConfigParser
         private_storage_path = self.get_private_storage_path()
         self.config_file = os.path.join(private_storage_path, "settings.ini")  # Path to the settings file
@@ -696,22 +684,6 @@ class MainApp(MDApp):
         # Bind global key handler for Tab/Enter navigation
         from kivy.core.window import Window
         Window.bind(on_key_down=self.global_key_handler)
-    def focus_and_scroll(self, text_field):
-        """Scroll to focused text field when keyboard appears"""
-        def scroll_to_widget(dt):
-            if hasattr(self, 'manual_scrollview'):
-                # Calculate relative position and scroll
-                self.manual_scrollview.scroll_to(text_field)
-
-        Clock.schedule_once(scroll_to_widget, 0.1)
-
-    def on_keyboard_height(self, window, height):
-        """Adjust ScrollView when keyboard appears"""
-        if hasattr(self, 'manual_scrollview'):
-            if height > 0:  # Keyboard visible
-                self.manual_scrollview.size_hint = (1, 0.7)  # Reduce height
-            else:  # Keyboard hidden
-                self.manual_scrollview.size_hint = (1, 0.9)  # Restore height
 
     def global_key_handler(self, window, key, scancode, codepoint, modifiers):
         # Only act if HomeScreen is current
@@ -838,7 +810,6 @@ class MainApp(MDApp):
         self.root = Builder.load_file("layout.kv")  # Load the root widget from the KV file
         saved_cards_screen = self.root.ids.screen_manager.get_screen("saved_cards")
         csv_directory = self.ensure_csv_directory()
-        
 
         # Handle the intent if the app was opened via an intent
         if is_android():
@@ -2283,7 +2254,7 @@ SwipeFileItem:
         self.manual_rows_layout = rows_layout
 
         # Add the first row of input fields
-        self.add_data_row(rows_layout, focus_new_row=False)
+        self.add_data_row(rows_layout, focus_row=False)
 
         # Create ScrollView with appropriate size hint
         scroll = ScrollView(size_hint_y=0.8)  # Take up 80% of the remaining space
@@ -2326,7 +2297,8 @@ SwipeFileItem:
 
         # Add the root layout to the table container
         table_container.add_widget(root_layout)
-    def add_data_row(self, rows_layout, focus_new_row=True):
+
+    def add_data_row(self, rows_layout, focus_row=True):
         """Add a new row of data fields directly underneath the existing rows, with Next/Tab navigation."""
         row_layout = BoxLayout(orientation="horizontal", spacing="10dp", size_hint=(1, None))
         row_layout.height = dp(50)  # Adjust height for a single row of text fields
@@ -2363,10 +2335,11 @@ SwipeFileItem:
                 break
 
         rows_layout.add_widget(row_layout, index=button_index)
-        # --- Focus the first input in the new row if requested ---
-        if focus_new_row and manual_fields:
+        # --- Focus the first input in the new row ---
+        if manual_fields and focus_row:
             Clock.schedule_once(lambda dt: setattr(manual_fields[0], "focus", True), 0)
 
+            # Rebuild navigation for all homepage fields
         self.enable_next_navigation_on_homepage()
 
         # Scroll to bottom after next frame
