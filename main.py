@@ -45,7 +45,7 @@ show_range = False  # Default to not showing the Range field
 show_2_wind_holds = True # Default to showing the two wind holds
 
 # Ensure the soft keyboard pushes the target widget above it
-Window.softinput_mode = "pan"
+Window.softinput_mode = "scale"
 
 try:
     from android import mActivity
