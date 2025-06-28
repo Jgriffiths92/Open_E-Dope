@@ -38,6 +38,14 @@ from kivy.uix.anchorlayout import AnchorLayout
 from kivy.uix.widget import Widget
 
 
+# Global configuration variables
+show_lead = False # Default to not showing the Lead field
+show_range = False  # Default to not showing the Range field
+show_2_wind_holds = True # Default to showing the two wind holds
+
+# Ensure the soft keyboard pushes the target widget above it
+Window.softinput_mode = "resize"
+
 # Ensure the soft keyboard pushes the target widget above it
 Window.softinput_mode = "resize"
 
@@ -565,11 +573,11 @@ class MainApp(MDApp):
         self.sort_order = "asc"   # Default sort order
         self.available_fields = {
             "Target": {"hint_text": "Target", "show": True},
-            "Range": {"hint_text": "Range", "show": True},
+            "Range": {"hint_text": "Range", "show": False},
             "Elv": {"hint_text": "Elv", "show": True},
             "Wnd1": {"hint_text": "Wnd1", "show": True},
             "Wnd2": {"hint_text": "Wnd2", "show": True},
-            "Lead": {"hint_text": "Lead", "show": True},
+            "Lead": {"hint_text": "Lead", "show": False},
         }
         self.load_settings()
     dialog = None  # Store the dialog instance
@@ -1403,7 +1411,8 @@ class MainApp(MDApp):
             show_lead = settings.getboolean("show_lead", True)
             show_range = settings.getboolean("show_range", True)
             show_2_wind_holds = settings.getboolean("show_2_wind_holds", True)
-            # --- FIX: Actually load sort_type and sort_order from settings.ini ---
+            self.selected_display = settings.get("display_model", "Good Display 3.7-inch")
+            self.selected_orientation = settings.get("orientation", "portrait")
             self.sort_type = settings.get("sort_type", "date")
             self.sort_order = settings.get("sort_order", "asc")
         else:
