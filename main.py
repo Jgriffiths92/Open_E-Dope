@@ -558,8 +558,8 @@ class MainApp(MDApp):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.config_parser = ConfigParser()  # Initialize ConfigParser
-        self.current_data = []
-        private_storage_path = self.get_private_storage_path()
+        self.current_data = [] # Initialize current_data to store CSV data
+        private_storage_path = self.get_private_storage_path() # Get the private storage path
         self.config_file = os.path.join(private_storage_path, "settings.ini")  # Path to the settings file
         self.standalone_mode_enabled = False  # Default to standalone mode being disabled
         self.selected_display = "Good Display 3.7-inch"  # Default selected display
@@ -576,7 +576,7 @@ class MainApp(MDApp):
             "Wnd1": {"hint_text": "Wnd1", "show": True},
             "Wnd2": {"hint_text": "Wnd2", "show": True},
             "Lead": {"hint_text": "Lead", "show": False},
-        }
+        }  # Default fields with their visibility
         self.load_settings()
     dialog = None  # Store the dialog instance
 
@@ -588,6 +588,7 @@ class MainApp(MDApp):
             or not isinstance(self.current_data, list)
             or not all(isinstance(row, dict) and required_keys.issubset(row.keys()) for row in self.current_data)
         ):
+            print("Current data:", self.current_data)
             toast("Data is incomplete or malformed. Please reload or re-enter.")
             return
 
