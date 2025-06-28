@@ -2527,8 +2527,6 @@ SwipeFileItem:
             with open(dest_file, "r", encoding="utf-8") as file:
                 print(file.read())
 
-
-    
 def start_foreground_service(self):
     """Start a foreground service with a persistent notification."""
     if is_android():
