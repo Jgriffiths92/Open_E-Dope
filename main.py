@@ -1190,6 +1190,32 @@ class MainApp(MDApp):
         if hasattr(self, "current_data"):  # Check if data is already loaded
             filtered_data = self.filter_table_data(self.current_data)
             self.display_table(filtered_data)
+    def filter_table_data(self, data):
+        """Filter table data based on current display settings."""
+        if not data:
+            return data
+
+        filtered_data = []
+        for row in data:
+            filtered_row = {}
+            # Keep Target if present
+            if "Target" in row:
+                filtered_row["Target"] = row["Target"]
+            # Add Range if enabled
+            if show_range:
+                filtered_row["Range"] = row.get("Range", "")
+            # Always show Elv and Wnd1
+            filtered_row["Elv"] = row.get("Elv", "")
+            filtered_row["Wnd1"] = row.get("Wnd1", "")
+            # Add Wnd2 if enabled
+            if show_2_wind_holds:
+                filtered_row["Wnd2"] = row.get("Wnd2", "")
+            # Add Lead if enabled
+            if show_lead:
+                filtered_row["Lead"] = row.get("Lead", "")
+            filtered_data.append(filtered_row)
+
+        return filtered_data
 
     def on_fab_press(self):
         """Handle the floating action button press."""
