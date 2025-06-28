@@ -1812,11 +1812,9 @@ class MainApp(MDApp):
         """Handle new intents, including shared data and NFC tags."""
         if is_android() and autoclass:
             try:
-                # Get the action from the intent
                 action = intent.getAction()
                 print(f"Intent action: {action}")
 
-                # --- Print all extras for debugging ---
                 extras = intent.getExtras()
                 if extras:
                     print("Intent extras:")
@@ -1825,125 +1823,89 @@ class MainApp(MDApp):
                         print(f"  {key}: {value}")
                 else:
                     print("No extras in intent.")
-                # --- End debug block ---
-                
+
                 EXTRA_TAG = autoclass('android.nfc.NfcAdapter').EXTRA_TAG
                 tag = intent.getParcelableExtra(EXTRA_TAG)
-                
                 if tag:
                     print("NFC tag detected (regardless of action)!")
                     tag = cast('android.nfc.Tag', tag)
-                    tech_list = tag.getTechList() # Optional: log tech list if needed for debugging
-                    print("Tag technologies detected by Android:")
-                    for tech in tech_list:
-                        print(f" - {tech}")
-
                     table_container = self.root.ids.home_screen.ids.table_container
 
                     def perform_nfc_transfer():
                         Clock.schedule_once(lambda dt: self.show_nfc_progress_dialog("Transferring data to NFC tag..."), 0.01)
-                        # Schedule the actual NFC sending slightly after to allow dialog to show
                         Clock.schedule_once(lambda dt: self.send_csv_bitmap_via_nfc(intent), 0.05)
 
                     if table_container.children and hasattr(self, "manual_data_rows") and self.manual_data_rows:
                         print("Manual data input detected, adding manual data before NFC transfer.")
-                        self.add_manual_data()  # Actually add manual data
-
+                        self.add_manual_data()
                     perform_nfc_transfer()
-                    intent.setAction("") # Clear action to prevent re-handling by polling or resume
+                    intent.setAction("")
                     return
 
-                # Fallback for specific NFC actions if EXTRA_TAG wasn't found but action indicates NFC
                 elif action in [
                     "android.nfc.action.TAG_DISCOVERED",
                     "android.nfc.action.NDEF_DISCOVERED",
                     "android.nfc.action.TECH_DISCOVERED",
                 ]:
                     print("NFC tag detected!")
-                    # This path likely means EXTRA_TAG was null, which is unusual for these actions.
-                    # Proceeding with send_csv_bitmap_via_nfc might fail if tag cannot be extracted by Java.
                     self.send_csv_bitmap_via_nfc(intent)
-                    intent.setAction("") # Clear action
+                    intent.setAction("")
                     return
 
                 # Handle shared data (SEND/VIEW)
-                elif action in ["android.intent.action.SEND", "android.intent.action.VIEW"]:
+                if action in ["android.intent.action.SEND", "android.intent.action.VIEW"]:
                     extras = intent.getExtras()
-                    handled = False
-                    
                     if extras and extras.containsKey("android.intent.extra.TEXT"):
-                        # Handle shared text
                         shared_text = extras.getString("android.intent.extra.TEXT")
                         print(f"Received shared text: {shared_text}")
-                        self.process_received_text(shared_text)
-                        handled = True
-                        
+                        self.process_received_csv(shared_text)
                     elif extras and extras.containsKey("android.intent.extra.STREAM"):
-                        # Handle shared file
                         stream_uri = extras.getParcelable("android.intent.extra.STREAM")
                         print(f"Received stream URI: {stream_uri}")
 
-                        # If the stream_uri is a string path, open it directly
                         if isinstance(stream_uri, str) and stream_uri.startswith("/"):
                             print(f"Received file path: {stream_uri}")
                             self.process_received_csv(stream_uri)
-                            handled = True
                         else:
                             Uri = autoclass('android.net.Uri')
                             try:
                                 stream_uri = cast('android.net.Uri', stream_uri)
                             except Exception:
+                                stream_uri = Uri.parse(str(stream_uri))
+
+                            content_resolver = mActivity.getContentResolver()
+                            file_path = self.resolve_uri_to_path(content_resolver, stream_uri)
+
+                            if file_path:
+                                self.process_received_csv(file_path)
+                            else:
                                 try:
-                                    stream_uri = Uri.parse(str(stream_uri))
-                                except Exception as e:
-                                    print(f"Error parsing URI: {e}")
-                                    stream_uri = None
-
-                            if stream_uri:
-                                content_resolver = mActivity.getContentResolver()
-                                file_path = self.resolve_uri_to_path(content_resolver, stream_uri)
-
-                                if file_path:
-                                    self.process_received_csv(file_path)
-                                    handled = True
-                                else:
-                                    try:
-                                        input_stream = content_resolver.openInputStream(stream_uri)
-                                        if input_stream:
-                                            ByteArrayOutputStream = autoclass('java.io.ByteArrayOutputStream')
-                                            buffer = ByteArrayOutputStream()
+                                    input_stream = content_resolver.openInputStream(stream_uri)
+                                    if input_stream:
+                                        ByteArrayOutputStream = autoclass('java.io.ByteArrayOutputStream')
+                                        buffer = ByteArrayOutputStream()
+                                        byte = input_stream.read()
+                                        while byte != -1:
+                                            buffer.write(byte)
                                             byte = input_stream.read()
-                                            while byte != -1:
-                                                buffer.write(byte)
-                                                byte = input_stream.read()
-                                            input_stream.close()
-                                            content_bytes = bytes(buffer.toByteArray())
-                                           
-                                            try:
-                                                content = content_bytes.decode("utf-8")
-                                            except UnicodeDecodeError:
-                                                print("UTF-8 decode failed, trying latin-1...")
-                                                content = content_bytes.decode("latin-1")
-                                            
-                                            print(f"File contents (from InputStream):\n{content}")
-                                            # Schedule the processing to ensure it runs on the Kivy main thread
-                                            Clock.schedule_once(lambda dt, c=content: self.process_received_csv(c))
-                                            handled = True
-                                        else:
-                                            print("InputStream is None. Cannot read the file.")
-                                    except Exception as e:
-                                        print(f"Error reading from InputStream: {e}")
-                    
-                    if not handled:
-                        print("No valid data found in the intent.")
-                    
-                    intent.setAction("") # Clear action after processing
-                    return
-                
+                                        input_stream.close()
+                                        content_bytes = bytes(buffer.toByteArray())
+                                        try:
+                                            content = content_bytes.decode("utf-8")
+                                        except UnicodeDecodeError:
+                                            print("UTF-8 decode failed, trying latin-1...")
+                                            content = content_bytes.decode("latin-1")
+                                        intent.setAction("")
+                                        print(f"File contents (from InputStream):\n{content}")
+                                        # Schedule the processing to ensure it runs on the Kivy main thread
+                                        Clock.schedule_once(lambda dt, c=content: self.process_received_csv(c))
+                                    else:
+                                        print("InputStream is None. Cannot read the file.")
+                                except Exception as e:
+                                    print(f"Error reading from InputStream: {e}")
                 else:
-                    print(f"Unhandled intent action: {action}")
-                    intent.setAction("") # Clear action
-                    
+                    intent.setAction("")
+                    print("No valid data found in the intent.")
             except Exception as e:
                 print(f"Error handling new intent: {e}")
 
@@ -2506,7 +2468,7 @@ SwipeFileItem:
                             if input_stream:
                                 content = input_stream.read().decode("utf-8")
                                 print(f"File contents (from InputStream):\n{content}")
-                                self.process_received_text(content)
+                                self.process_received_csv(content)
                             else:
                                 print("InputStream is None. Cannot read the file.")
                         except Exception as e:
@@ -2566,37 +2528,7 @@ SwipeFileItem:
                 print(file.read())
 
 
-def handle_received_file(intent):
-    """Handle a file received via Intent.EXTRA_STREAM."""
-    if is_android() and autoclass:
-        try:
-            # Import necessary Android classes
-            Uri = autoclass('android.net.Uri')
-            Intent = autoclass('android.content.Intent')
-            ContentResolver = autoclass('android.content.ContentResolver')
-
-            # Check if the intent contains EXTRA_STREAM
-            if intent.hasExtra(Intent.EXTRA_STREAM):
-                # Get the Parcelable URI
-                stream_uri = intent.getParcelableExtra(Intent.EXTRA_STREAM)
-                print(f"Received Parcelable URI: {stream_uri}")
-
-                # Cast the Parcelable to a Uri
-                if not isinstance(stream_uri, Uri):
-                    stream_uri = Uri.parse(str(stream_uri))  # Ensure it's a Uri object
-
-                # Resolve the URI to a file path or read from InputStream
-                content_resolver = mActivity.getContentResolver()
-                # Note: We can't create a MainApp instance here, so this function may not work properly
-                # It would be better to move this logic into the MainApp class
-                print(f"URI received: {stream_uri}")
-
-            else:
-                print("No EXTRA_STREAM found in the intent.")
-        except Exception as e:
-            print(f"Error handling received file: {e}")
-    else:
-        print("Not running on Android or autoclass not available.")
+    
 def start_foreground_service(self):
     """Start a foreground service with a persistent notification."""
     if is_android():
@@ -2613,83 +2545,17 @@ def start_foreground_service(self):
     else:
         print("Foreground service is only available on Android.")
 
-
-def process_received_file(self, file_path):
-    """Process the received file."""
-    try:
-        print(f"Processing received file: {file_path}")
-        if file_path.endswith(".csv"):
-            # Read and process the CSV file
-            with open(file_path, "r", encoding="utf-8") as csv_file:
-                data = self.read_csv_to_dict(csv_file)
-                self.current_data = data
-                self.display_table(data)
-                print("CSV file processed successfully.")
-        else:
-            print("Unsupported file type.")
-    except Exception as e:
-        print(f"Error processing received file: {e}")
-
-    def process_received_text(self, text_data):
-        """Process the received text data."""
-        try:
-            # Split the data into lines
-            lines = text_data.strip().split("\n")
-            # Extract the headers from the second line (after the metadata)
-            headers = lines[1].split(",")
-            # Parse the rows into dictionaries
-            data = []
-            for line in lines[2:]:  # Skip the first two lines (metadata and headers)
-                row = line.split(",")
-                data.append({headers[i]: row[i] for i in range(len(headers))})
-
-            # Store the data for filtering or other operations
-            self.current_data = data
-
-            # Display the data in the table
-            self.display_table(data)
-            print("Text data processed and displayed successfully.")
-        except Exception as e:
-            print(f"Error processing text data: {e}")
-
-
-def handle_received_file(intent):
-    """Handle a file received via Intent.EXTRA_STREAM."""
-    if is_android() and autoclass:
-        try:
-            # Import necessary Android classes
-            Uri = autoclass('android.net.Uri')
-            Intent = autoclass('android.content.Intent')
-            ContentResolver = autoclass('android.content.ContentResolver')
-
-            # Check if the intent contains EXTRA_STREAM
-            if intent.hasExtra(Intent.EXTRA_STREAM):
-                # Get the Parcelable URI
-                stream_uri = intent.getParcelableExtra(Intent.EXTRA_STREAM)
-                print(f"Received Parcelable URI: {stream_uri}")
-
-                # Cast the Parcelable to a Uri
-                if not isinstance(stream_uri, Uri):
-                    stream_uri = Uri.parse(str(stream_uri))  # Ensure it's a Uri object
-
-                # Resolve the URI to a file path or read from InputStream
-                content_resolver = mActivity.getContentResolver()
-                # Note: We can't create a MainApp instance here, so this function may not work properly
-                # It would be better to move this logic into the MainApp class
-                print(f"URI received: {stream_uri}")
-
-            else:
-                print("No EXTRA_STREAM found in the intent.")
-        except Exception as e:
-            print(f"Error handling received file: {e}")
-    else:
-        print("Not running on Android or autoclass not available.")
-
+s = MainApp.EPD_INIT_MAP["Good Display 3.7-inch"][0]
+print("Length:", len(s))
+for i, c in enumerate(s):
+    if not c.isalnum():
+        print(f"Non-alphanumeric at {i}: {repr(c)}")
+for i in range(0, len(s), 40):
+    print(f"{i:03d}: {s[i:i+40]}")
 
 def pack_image_column_major(img):
-    """Pack image data in column-major order for EPD display."""
     pixels = img.load()
-    width, height = img.size
+    width, height = img.size  # <-- Add this line
     packed = bytearray()
     for x in range(width-1, -1, -1):  # right-to-left to match demo
         for y_block in range(0, height, 8):
@@ -2703,24 +2569,6 @@ def pack_image_column_major(img):
                     byte |= (1 << (7 - bit))
             packed.append(byte)
     return bytes(packed)
-
-
-def start_foreground_service():
-    """Start a foreground service with a persistent notification."""
-    if is_android():
-        try:
-            # Create a persistent notification
-            notification.notify(
-                title="Open E-Dope Service",
-                message="The app is running in the background.",
-                timeout=10  # Notification timeout in seconds
-            )
-            print("Foreground service started with a persistent notification.")
-        except Exception as e:
-            print(f"Error starting foreground service: {e}")
-    else:
-        print("Foreground service is only available on Android.")
-
 
 if __name__ == "__main__":
     MainApp().run()
