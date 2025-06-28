@@ -685,6 +685,22 @@ class MainApp(MDApp):
         # Bind global key handler for Tab/Enter navigation
         from kivy.core.window import Window
         Window.bind(on_key_down=self.global_key_handler)
+    def focus_and_scroll(self, text_field):
+        """Scroll to focused text field when keyboard appears"""
+        def scroll_to_widget(dt):
+            if hasattr(self, 'manual_scrollview'):
+                # Calculate relative position and scroll
+                self.manual_scrollview.scroll_to(text_field)
+
+        Clock.schedule_once(scroll_to_widget, 0.1)
+
+    def on_keyboard_height(self, window, height):
+        """Adjust ScrollView when keyboard appears"""
+        if hasattr(self, 'manual_scrollview'):
+            if height > 0:  # Keyboard visible
+                self.manual_scrollview.size_hint = (1, 0.7)  # Reduce height
+            else:  # Keyboard hidden
+                self.manual_scrollview.size_hint = (1, 0.9)  # Restore height
 
     def global_key_handler(self, window, key, scancode, codepoint, modifiers):
         # Only act if HomeScreen is current
