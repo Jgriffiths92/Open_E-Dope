@@ -2246,10 +2246,10 @@ SwipeFileItem:
         # Clear any existing widgets in the table container
         table_container.clear_widgets()
 
-        # --- Create a BoxLayout to hold everything vertically ---
-        main_layout = BoxLayout(orientation="vertical", spacing="10dp")
+        # Create a root BoxLayout with fixed size for buttons
+        root_layout = BoxLayout(orientation='vertical')
 
-        # --- Create a BoxLayout to hold only the data rows (inside a ScrollView) ---
+        # Create a BoxLayout to hold only the data rows (inside a ScrollView)
         rows_layout = BoxLayout(orientation="vertical", size_hint_y=None)
         rows_layout.bind(minimum_height=rows_layout.setter("height"))
         self.manual_rows_layout = rows_layout
@@ -2257,58 +2257,47 @@ SwipeFileItem:
         # Add the first row of input fields
         self.add_data_row(rows_layout)
 
-        # --- ScrollView for data rows ---
-        scroll = ScrollView(size_hint=(1, 1))
+        # Create ScrollView with appropriate size hint
+        scroll = ScrollView(size_hint=(1, 0.9))  # Take 90% of the available height
         scroll.add_widget(rows_layout)
         self.manual_scrollview = scroll
 
-        anchor = AnchorLayout(
-            anchor_x="center",
-            size_hint_y=None,
-            height=dp(50),
-        )
+        # Add the ScrollView to the root layout
+        root_layout.add_widget(scroll)
 
-        button_width = dp(120)
-        button_spacing = dp(10)
-        total_width = button_width * 2 + button_spacing
-
-        add_row_layout = BoxLayout(
+        # Create the buttons layout with fixed height
+        buttons_layout = BoxLayout(
             orientation="horizontal",
-            spacing=button_spacing,
-            size_hint=(None, None),
-            width=total_width,
-            height=dp(50),
+            spacing=dp(10),
+            size_hint_y=None,
+            height=dp(50),  # Fixed height for buttons
+            padding=[dp(10), dp(5)],  # Add some padding
         )
 
-        add_row_layout.add_widget(
-            MDRaisedButton(
-                text="ADD ROW",
-                size_hint=(None, None),
-                size=(button_width, dp(40)),
-                on_release=lambda x: self.add_data_row(self.manual_rows_layout)
-            )
-        )
-        add_row_layout.add_widget(
-            MDRaisedButton(
-                text="DELETE ROW",
-                size_hint=(None, None),
-                size=(button_width, dp(40)),
-                md_bg_color=(1, 0, 0, 1),
-                on_release=lambda x: self.delete_last_row(self.manual_rows_layout)
-            )
+        # Add buttons
+        add_button = MDRaisedButton(
+            text="ADD ROW",
+            size_hint=(0.5, None),
+            height=dp(40),
+            on_release=lambda x: self.add_data_row(self.manual_rows_layout)
         )
 
-        anchor.add_widget(add_row_layout)
+        delete_button = MDRaisedButton(
+            text="DELETE ROW",
+            size_hint=(0.5, None),
+            height=dp(40),
+            md_bg_color=(1, 0, 0, 1),
+            on_release=lambda x: self.delete_last_row(self.manual_rows_layout)
+        )
 
-        # --- Add widgets to main_layout ---
-        main_layout.add_widget(scroll)
-        main_layout.add_widget(anchor)
+        buttons_layout.add_widget(add_button)
+        buttons_layout.add_widget(delete_button)
 
-        # --- Add main_layout to the table_container ---
-        table_container.add_widget(main_layout)
+        # Add buttons layout to root layout with fixed height
+        root_layout.add_widget(buttons_layout)
 
-        # Store the reference to the scroll view
-        self.manual_scrollview = scroll
+        # Add the root layout to the table container
+        table_container.add_widget(root_layout)
 
     def add_data_row(self, rows_layout):
         """Add a new row of data fields directly underneath the existing rows, with Next/Tab navigation."""
