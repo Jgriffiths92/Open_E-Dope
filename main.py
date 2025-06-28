@@ -1829,6 +1829,10 @@ class MainApp(MDApp):
                 if tag:
                     print("NFC tag detected (regardless of action)!")
                     tag = cast('android.nfc.Tag', tag)
+                    tech_list = tag.getTechList() # Optional: log tech list if needed for debuggingAdd commentMore actions
+                    print("Tag technologies detected by Android:")
+                    for tech in tech_list:
+                        print(f" - {tech}")
                     table_container = self.root.ids.home_screen.ids.table_container
 
                     def perform_nfc_transfer():
