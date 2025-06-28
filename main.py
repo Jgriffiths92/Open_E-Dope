@@ -36,6 +36,7 @@ from kivy.properties import StringProperty
 from kivy.uix.scrollview import ScrollView
 from kivy.uix.anchorlayout import AnchorLayout
 from kivy.uix.widget import Widget
+from kivy.uix.relativelayout import RelativeLayout
 
 
 # Global configuration variables
@@ -2262,11 +2263,11 @@ SwipeFileItem:
         # Clear any existing widgets in the table container
         table_container.clear_widgets()
 
-        # Create a root BoxLayout with fixed size for buttons
-        root_layout = BoxLayout(orientation='vertical')
+        # Create a root RelativeLayout
+        root_layout = RelativeLayout()
 
         # Create a BoxLayout to hold only the data rows (inside a ScrollView)
-        rows_layout = BoxLayout(orientation="vertical", size_hint_y=None)
+        rows_layout = BoxLayout(orientation="vertical", size_hint_y=1, padding=(dp(20), 0, dp(20), dp(30)))  # Take up 80% of the remaining space and add padding at the bottom
         rows_layout.bind(minimum_height=rows_layout.setter("height"))
         self.manual_rows_layout = rows_layout
 
@@ -2274,47 +2275,46 @@ SwipeFileItem:
         self.add_data_row(rows_layout)
 
         # Create ScrollView with appropriate size hint
-        scroll = ScrollView(size_hint=(1, 0.9))  # Take 90% of the available height
+        scroll = ScrollView(size_hint_y=0.8)  # Take up 80% of the remaining space
         scroll.add_widget(rows_layout)
         self.manual_scrollview = scroll
-
-        # Add the ScrollView to the root layout
-        root_layout.add_widget(scroll)
 
         # Create the buttons layout with fixed height
         buttons_layout = BoxLayout(
             orientation="horizontal",
+            padding=(dp(20), 0, dp(10), 0), # Add padding to the buttons layout
             spacing=dp(10),
             size_hint_y=None,
-            height=dp(50),  # Fixed height for buttons
-            padding=[dp(10), dp(5)],  # Add some padding
+            height=dp(20),  # Fixed height for buttons
+            pos_hint={"bottom": 1}  # Position buttons at the bottom
         )
 
         # Add buttons
         add_button = MDRaisedButton(
             text="ADD ROW",
+            on_release=lambda x: self.add_data_row(rows_layout),
             size_hint=(0.5, None),
-            height=dp(40),
-            on_release=lambda x: self.add_data_row(self.manual_rows_layout)
         )
-
         delete_button = MDRaisedButton(
             text="DELETE ROW",
+            on_release=lambda x: self.delete_last_row(rows_layout),
+            md_bg_color=(1, 0, 0, 1),  # Red background for delete button
             size_hint=(0.5, None),
-            height=dp(40),
-            md_bg_color=(1, 0, 0, 1),
-            on_release=lambda x: self.delete_last_row(self.manual_rows_layout)
         )
 
         buttons_layout.add_widget(add_button)
         buttons_layout.add_widget(delete_button)
 
-        # Add buttons layout to root layout with fixed height
-        root_layout.add_widget(buttons_layout)
+        # Create a BoxLayout to hold the ScrollView and buttons layout
+        main_layout = BoxLayout(orientation="vertical", size_hint_y=1, padding=(0, 0, 0, dp(20)))  # Add padding at the bottom
+        main_layout.add_widget(scroll)
+        main_layout.add_widget(buttons_layout)
+
+        # Add the main layout to the root layout
+        root_layout.add_widget(main_layout)
 
         # Add the root layout to the table container
         table_container.add_widget(root_layout)
-
     def add_data_row(self, rows_layout):
         """Add a new row of data fields directly underneath the existing rows, with Next/Tab navigation."""
         row_layout = BoxLayout(orientation="horizontal", spacing="10dp", size_hint=(1, None))
