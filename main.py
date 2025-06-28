@@ -558,6 +558,7 @@ class MainApp(MDApp):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.config_parser = ConfigParser()  # Initialize ConfigParser
+        self.current_data = []
         private_storage_path = self.get_private_storage_path()
         self.config_file = os.path.join(private_storage_path, "settings.ini")  # Path to the settings file
         self.standalone_mode_enabled = False  # Default to standalone mode being disabled
