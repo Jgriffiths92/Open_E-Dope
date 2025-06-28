@@ -2369,10 +2369,6 @@ SwipeFileItem:
 
         self.enable_next_navigation_on_homepage()
 
-        # Scroll to bottom after next frame
-        if hasattr(self, "manual_scrollview"):
-            Clock.schedule_once(lambda dt: setattr(self.manual_scrollview, "scroll_y", 0), 0)
-
     def delete_last_row(self, rows_layout=None):
         if rows_layout is None:
             rows_layout = self.manual_rows_layout
