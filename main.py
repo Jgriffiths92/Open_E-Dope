@@ -36,7 +36,6 @@ from kivy.properties import StringProperty
 from kivy.uix.scrollview import ScrollView
 from kivy.uix.anchorlayout import AnchorLayout
 from kivy.uix.widget import Widget
-from kivy.uix.relativelayout import RelativeLayout
 
 
 # Global configuration variables
@@ -46,7 +45,6 @@ show_2_wind_holds = True # Default to showing the two wind holds
 
 # Ensure the soft keyboard pushes the target widget above it
 Window.softinput_mode = "below_target"
-
 
 try:
     from android import mActivity
@@ -568,7 +566,6 @@ class MainApp(MDApp):
         self.selected_orientation = "Portrait"  # Default orientation
         self.selected_save_folder = None  # Store the selected folder for saving CSV files
         self.detected_tag = None  # Initialize the detected_tag attribute
-        self.manual_main_layout = None  # Reference to the manual input layout
         self.sort_type = "date"   # Default sort type
         self.sort_order = "asc"   # Default sort order
         self.available_fields = {
@@ -745,41 +742,6 @@ class MainApp(MDApp):
         else:
             print("No shared file/text or NFC intent to process on resume.")
 
-    def _on_keyboard_height_change(self, window, height):
-        """Programmatically adjust bottom padding when the keyboard is shown/hidden."""
-        # Check if the manual input layout is currently visible
-        if self.manual_main_layout and self.manual_main_layout.parent:
-            original_bottom_padding = dp(20)
-            if height > 0:
-                # Keyboard is open, set bottom padding to the keyboard's height
-                self.manual_main_layout.padding = [
-                    self.manual_main_layout.padding[0],  # left
-                    self.manual_main_layout.padding[1],  # top
-                    self.manual_main_layout.padding[2],  # right
-                    height,  # bottom
-                ]
-                # Scroll the currently focused widget into view
-                focused_widget = self._find_focused_widget()
-                if focused_widget and hasattr(self, "manual_scrollview"):
-                    Clock.schedule_once(
-                        lambda dt: self.manual_scrollview.scroll_to(focused_widget), 0.1
-                    )
-            else:
-                # Keyboard is closed, restore the original padding
-                self.manual_main_layout.padding = [
-                    self.manual_main_layout.padding[0],
-                    self.manual_main_layout.padding[1],
-                    self.manual_main_layout.padding[2],
-                    original_bottom_padding,
-                ]
-
-    def _find_focused_widget(self):
-        """Helper function to find the currently focused widget in the app."""
-        for widget in self.root.walk():
-            if hasattr(widget, "focus") and widget.focus:
-                return widget
-        return None
-
     def request_bal_exemption(self):
         if is_android() and autoclass:
             try:
@@ -825,9 +787,6 @@ class MainApp(MDApp):
         """Build the app's UI and initialize settings."""
         # Set the theme to Light
         self.theme_cls.theme_style = "Light"
-
-        # Bind to keyboard height changes to programmatically adjust padding
-        Window.bind(keyboard_height=self._on_keyboard_height_change)
 
         # Load saved settings
         self.load_settings()
@@ -1228,32 +1187,6 @@ class MainApp(MDApp):
         if hasattr(self, "current_data"):  # Check if data is already loaded
             filtered_data = self.filter_table_data(self.current_data)
             self.display_table(filtered_data)
-    def filter_table_data(self, data):
-        """Filter table data based on current display settings."""
-        if not data:
-            return data
-
-        filtered_data = []
-        for row in data:
-            filtered_row = {}
-            # Keep Target if present
-            if "Target" in row:
-                filtered_row["Target"] = row["Target"]
-            # Add Range if enabled
-            if show_range:
-                filtered_row["Range"] = row.get("Range", "")
-            # Always show Elv and Wnd1
-            filtered_row["Elv"] = row.get("Elv", "")
-            filtered_row["Wnd1"] = row.get("Wnd1", "")
-            # Add Wnd2 if enabled
-            if show_2_wind_holds:
-                filtered_row["Wnd2"] = row.get("Wnd2", "")
-            # Add Lead if enabled
-            if show_lead:
-                filtered_row["Lead"] = row.get("Lead", "")
-            filtered_data.append(filtered_row)
-
-        return filtered_data
 
     def on_fab_press(self):
         """Handle the floating action button press."""
@@ -2047,7 +1980,7 @@ class MainApp(MDApp):
                     cursor.moveToFirst()
                     file_path = cursor.getString(column_index)
                     cursor.close()
-                    return None
+                    return file_path
             else:
                 print(f"Unsupported URI scheme: {scheme}")
                 return None
@@ -2284,8 +2217,6 @@ SwipeFileItem:
         # Clear any existing widgets in the table container
         table_container.clear_widgets()
 
-        # Create a root RelativeLayout
-        root_layout = RelativeLayout()
 
         # Create a BoxLayout to hold only the data rows (inside a ScrollView)
         rows_layout = BoxLayout(orientation="vertical", size_hint_y=1, padding=(dp(20), 0, dp(20), dp(30)))  # Take up 80% of the remaining space and add padding at the bottom
@@ -2332,11 +2263,8 @@ SwipeFileItem:
         main_layout.add_widget(scroll)
         main_layout.add_widget(buttons_layout)
 
-        # Add the main layout to the root layout
-        root_layout.add_widget(main_layout)
-
-        # Add the root layout to the table container
-        table_container.add_widget(root_layout)
+        # Add the main layout to the table container
+        table_container.add_widget(main_layout)
 
     def add_data_row(self, rows_layout, focus_row=True):
         """Add a new row of data fields directly underneath the existing rows, with Next/Tab navigation."""
@@ -2377,7 +2305,7 @@ SwipeFileItem:
         rows_layout.add_widget(row_layout, index=button_index)
         # --- Focus the first input in the new row ---
         if manual_fields and focus_row:
-            Clock.schedule_once(lambda dt: setattr(manual_fields[0], "focus", True), 0)
+            Clock.schedule_once(lambda dt: setattr(manual_fields[0], "focus", True), 0.1)
 
             # Rebuild navigation for all homepage fields
         self.enable_next_navigation_on_homepage()
