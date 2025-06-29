@@ -415,6 +415,19 @@ class MainApp(MDApp):
         else:
             print("Failed to generate bitmap.")
 
+    def on_start(self):
+        Window.bind(on_keyboard_height=self.on_keyboard_height)
+
+    def on_keyboard_height(self, window, height):
+        # height is in pixels; convert to dp if needed
+        if hasattr(self, "keyboard_spacer"):
+            if height > 0:
+                # Keyboard is open, set spacer height (e.g., 60dp or a fraction of keyboard height)
+                self.keyboard_spacer.height = min(height, dp(120))  # Cap at 120dp if keyboard is huge
+            else:
+                # Keyboard is closed, remove spacer
+                self.keyboard_spacer.height = 0
+
     def update_nfc_progress(self, percent):
         if hasattr(self, "nfc_progress_bar") and self.nfc_progress_bar:
             # If percent is 100, delay the update by 3 seconds
@@ -679,9 +692,7 @@ class MainApp(MDApp):
         return True
 
     def on_start(self):
-        # Bind global key handler for Tab/Enter navigation
-        from kivy.core.window import Window
-        Window.bind(on_key_down=self.global_key_handler)
+        Window.bind(on_keyboard_height=self.on_keyboard_height)
 
     def global_key_handler(self, window, key, scancode, codepoint, modifiers):
         # Only act if HomeScreen is current
@@ -2225,7 +2236,9 @@ SwipeFileItem:
 
         # --- ADD THIS SPACER WIDGET FOR EXTRA SPACE ABOVE THE KEYBOARD ---
         from kivy.uix.widget import Widget
-        main_layout.add_widget(Widget(size_hint_y=None, height=dp(60)))  # Adjust dp(60) as needed
+        # Create a dynamic spacer widget and store a reference
+        self.keyboard_spacer = Widget(size_hint_y=None, height=0)
+        main_layout.add_widget(self.keyboard_spacer)
 
         # Add the main layout to the table container
         table_container.add_widget(main_layout)
@@ -2243,10 +2256,6 @@ SwipeFileItem:
                     hint_text=field_options["hint_text"],
                     multiline=False,
                     size_hint_x=0.15
-                )
-                # Bind focus event to scroll to bottom when focused
-                text_field.bind(
-                    on_focus=lambda instance, value: self.scroll_manual_input_to_buttons() if value else None
                 )
                 row_fields[field_name] = text_field
                 manual_fields.append(text_field)
@@ -2280,11 +2289,6 @@ SwipeFileItem:
 
         # Scroll to bottom after next frame
         if hasattr(self, "manual_scrollview"):
-            Clock.schedule_once(lambda dt: setattr(self.manual_scrollview, "scroll_y", 0), 0)
-    def scroll_manual_input_to_buttons(self):
-        """Scroll the manual data input ScrollView so the button row is visible."""
-        if hasattr(self, "manual_scrollview") and self.manual_scrollview:
-            # Scroll to bottom (0 = bottom, 1 = top)
             Clock.schedule_once(lambda dt: setattr(self.manual_scrollview, "scroll_y", 0), 0)
     def delete_last_row(self, rows_layout=None):
         if rows_layout is None:
