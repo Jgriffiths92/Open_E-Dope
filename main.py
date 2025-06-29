@@ -2235,7 +2235,6 @@ SwipeFileItem:
         main_layout.add_widget(buttons_layout)
 
         # --- ADD THIS SPACER WIDGET FOR EXTRA SPACE ABOVE THE KEYBOARD ---
-        from kivy.uix.widget import Widget
         # Create a dynamic spacer widget and store a reference
         self.keyboard_spacer = Widget(size_hint_y=None, height=0)
         main_layout.add_widget(self.keyboard_spacer)
