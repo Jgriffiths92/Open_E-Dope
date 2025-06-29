@@ -2223,6 +2223,10 @@ SwipeFileItem:
         main_layout.add_widget(scroll)
         main_layout.add_widget(buttons_layout)
 
+        # --- ADD THIS SPACER WIDGET FOR EXTRA SPACE ABOVE THE KEYBOARD ---
+        from kivy.uix.widget import Widget
+        main_layout.add_widget(Widget(size_hint_y=None, height=dp(60)))  # Adjust dp(60) as needed
+
         # Add the main layout to the table container
         table_container.add_widget(main_layout)
 
