@@ -67,6 +67,8 @@ MDNavigationLayout:
 <HomeScreen>:
     MDBoxLayout:
         orientation: "vertical"
+        size_hint: 1, 1
+
         MDTopAppBar:
             title: "Home"
             left_action_items: [["menu", lambda x: app.root.ids.drawer.set_state("open")]]

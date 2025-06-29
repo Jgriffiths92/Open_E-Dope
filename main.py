@@ -1,6 +1,6 @@
 from kivy.core.window import Window
 # Ensure the soft keyboard pushes the target widget above it
-Window.softinput_mode = "below_target"
+Window.softinput_mode = "resize"
 import csv
 import itertools
 import time

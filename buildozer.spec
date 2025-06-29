@@ -102,7 +102,7 @@ android.permissions = INTERNET, WRITE_EXTERNAL_STORAGE, READ_EXTERNAL_STORAGE, F
 # (list) features (adds uses-feature -tags to manifest)
 #android.features = android.hardware.nfc:required
 # (str) Android application meta-data to set (key=value format)
-android.manifest.application_meta = android:windowSoftInputMode=adjustResize
+android.windowSoftInputMode = adjustResize
 # (int) Target Android API, should be as high as possible.
 android.api = 31
 
