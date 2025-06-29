@@ -1,6 +1,6 @@
 from kivy.core.window import Window
 # Ensure the soft keyboard pushes the target widget above it
-Window.softinput_mode = "resize"
+Window.softinput_mode = "below_target"
 import csv
 import itertools
 import time
@@ -2238,6 +2238,10 @@ SwipeFileItem:
                     multiline=False,
                     size_hint_x=0.15
                 )
+                # Bind focus event to scroll to bottom when focused
+                text_field.bind(
+                    on_focus=lambda instance, value: self.scroll_manual_input_to_buttons() if value else None
+                )
                 row_fields[field_name] = text_field
                 manual_fields.append(text_field)
                 row_layout.add_widget(text_field)
@@ -2271,7 +2275,11 @@ SwipeFileItem:
         # Scroll to bottom after next frame
         if hasattr(self, "manual_scrollview"):
             Clock.schedule_once(lambda dt: setattr(self.manual_scrollview, "scroll_y", 0), 0)
-
+    def scroll_manual_input_to_buttons(self):
+        """Scroll the manual data input ScrollView so the button row is visible."""
+        if hasattr(self, "manual_scrollview") and self.manual_scrollview:
+            # Scroll to bottom (0 = bottom, 1 = top)
+            Clock.schedule_once(lambda dt: setattr(self.manual_scrollview, "scroll_y", 0), 0)
     def delete_last_row(self, rows_layout=None):
         if rows_layout is None:
             rows_layout = self.manual_rows_layout
@@ -2304,7 +2312,7 @@ SwipeFileItem:
             self.manual_data_rows.pop()
 
         # Rebuild navigation for all homepage fields
-        self.enable_next_navigation_on_homepage()
+        self.enable_next_navigation_on_homepage
 
     def enable_next_navigation_on_homepage(self):
         """Enable Next/Tab navigation for all MDTextField inputs on the homepage, including manual rows."""
