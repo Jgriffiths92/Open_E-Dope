@@ -8,7 +8,11 @@ from kivy.lang import Builder
 from kivy.uix.screenmanager import ScreenManager, Screen
 from kivymd.app import MDApp
 from kivymd.uix.datatables import MDDataTable
-from kivy.metrics import dp
+from kivy.metrics import dp, Metrics
+
+def px_to_dp(px):
+    return px / Metrics.density if Metrics.density else px
+
 from plyer import filechooser
 from kivy.uix.label import Label
 from kivymd.uix.menu import MDDropdownMenu
@@ -419,11 +423,11 @@ class MainApp(MDApp):
         Window.bind(on_keyboard_height=self.on_keyboard_height)
 
     def on_keyboard_height(self, window, height):
-        # height is in pixels; convert to dp if needed
+        # height is in pixels; convert to dp for Kivy layouts
         if hasattr(self, "keyboard_spacer"):
             if height > 0:
-                # Keyboard is open, set spacer height (e.g., 60dp or a fraction of keyboard height)
-                self.keyboard_spacer.height = min(height, dp(120))  # Cap at 120dp if keyboard is huge
+                spacer_height = min(px_to_dp(height), dp(120))  # Cap at 120dp if keyboard is huge
+                self.keyboard_spacer.height = spacer_height
             else:
                 # Keyboard is closed, remove spacer
                 self.keyboard_spacer.height = 0
