@@ -1,3 +1,6 @@
+from kivy.core.window import Window
+# Ensure the soft keyboard pushes the target widget above it
+Window.softinput_mode = "resize"
 import csv
 import itertools
 import time
@@ -20,7 +23,6 @@ from PIL import Image, ImageDraw, ImageFont
 import platform
 from kivy.config import ConfigParser
 from configparser import ConfigParser
-from kivy.core.window import Window
 import shutil
 from plyer import notification
 from kivy.clock import Clock
@@ -36,15 +38,12 @@ from kivy.properties import StringProperty
 from kivy.uix.scrollview import ScrollView
 from kivy.uix.anchorlayout import AnchorLayout
 from kivy.uix.widget import Widget
-from kivy.core.window import Window
+
 
 # Global configuration variables
 show_lead = False # Default to not showing the Lead field
 show_range = False  # Default to not showing the Range field
 show_2_wind_holds = True # Default to showing the two wind holds
-
-# Ensure the soft keyboard pushes the target widget above it
-Window.softinput_mode = "resize"
 
 try:
     from android import mActivity
