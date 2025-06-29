@@ -30,7 +30,6 @@ from kivy.uix.filechooser import FileChooserListView
 import shutil
 from kivymd.uix.dialog import MDDialog
 from circularprogressbar import CircularProgressBar
-from kivy.uix.boxlayout import BoxLayout
 from kivy.lang import Builder
 from kivy.app import App
 from kivymd.toast import toast
