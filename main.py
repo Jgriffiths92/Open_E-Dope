@@ -2177,7 +2177,9 @@ SwipeFileItem:
 
 
         # Create a BoxLayout to hold only the data rows (inside a ScrollView)
-        rows_layout = BoxLayout(orientation="vertical", size_hint_y=1, padding=(dp(20), 0, dp(20), dp(30)))  # Take up 80% of the remaining space and add padding at the bottom
+        rows_layout = BoxLayout(
+                        orientation="vertical", 
+                        size_hint_y=1, padding=(dp(20), 0, dp(20), dp(20)))  # Take up 80% of the remaining space and add padding at the bottom
         rows_layout.bind(minimum_height=rows_layout.setter("height"))
         self.manual_rows_layout = rows_layout
 
