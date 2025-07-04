@@ -724,24 +724,8 @@ class MainApp(MDApp):
     def on_resume(self):
         print("on_resume CALLED")
         self.enable_nfc_foreground_dispatch()
-        PythonActivity = autoclass('org.kivy.android.PythonActivity')
-        intent = PythonActivity.mActivity.getIntent()
-        action = intent.getAction()
-        print(f"Checking for new intent on resume... Action: {action}")
-
-        # Check for SEND, VIEW, or any NFC action
-        if action in [
-            "android.intent.action.SEND",
-            "android.intent.action.VIEW",
-            "android.nfc.action.TAG_DISCOVERED",
-            "android.nfc.action.NDEF_DISCOVERED",
-            "android.nfc.action.TECH_DISCOVERED",
-        ]:
-            print("Calling on_new_intent from on_resume")
-            Clock.schedule_once(lambda dt: self.on_new_intent(intent), 0)
-            # Action is now cleared within on_new_intent after processing
-        else:
-            print("No shared file/text or NFC intent to process on resume.")
+        # Do NOT process the intent here.
+        print("NFC foreground dispatch re-enabled on resume.")
 
     def request_bal_exemption(self):
         if is_android() and autoclass:
