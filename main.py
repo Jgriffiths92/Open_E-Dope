@@ -451,7 +451,8 @@ class MainApp(MDApp):
 
         # Ensure any active progress dialog is dismissed after showing the error
         Clock.schedule_once(lambda dt: self.hide_nfc_progress_dialog(), 2.5) # Give time to see the error
-
+        self.image_buffer = None
+        self.nfc_transfer_in_progress = False
         self.current_data = []
         self.manual_data_rows = []
         print("PYTHON DEBUG: on_nfc_transfer_error. self.current_data and manual_data_rows cleared.")
@@ -576,6 +577,8 @@ class MainApp(MDApp):
     dialog = None  # Store the dialog instance
 
     def send_csv_bitmap_via_nfc(self, intent):
+        self.image_buffer = None
+        self.nfc_transfer_in_progress = False
         # Step 1: Validate self.current_data before generating bitmap
         required_keys = {"Target", "Range", "Elv", "Wnd1", "Wnd2", "Lead"}
         if (
@@ -585,6 +588,7 @@ class MainApp(MDApp):
         ):
             print("Current data:", self.current_data)
             toast("Data is incomplete or malformed. Please reload or re-enter.")
+            self.nfc_progress_dialog.dismiss()
             return
 
         # 1. Convert CSV to bitmap
@@ -2516,6 +2520,8 @@ SwipeFileItem:
             self.nfc_progress_label.text = "Transfer successful!"
             self.nfc_progress_label.color = (0, 0.6, 0, 1)
         Clock.schedule_once(lambda dt: self.hide_nfc_progress_dialog(), 2.5)
+        self.image_buffer = None
+        self.nfc_transfer_in_progress = False
         Clock.schedule_once(lambda dt: self.clear_table_data())  # This will clear the table and show manual data input
         
 
