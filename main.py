@@ -798,7 +798,7 @@ class MainApp(MDApp):
                 Permission.NFC,
                 Permission.READ_EXTERNAL_STORAGE,
                 Permission.WRITE_EXTERNAL_STORAGE,
-                Permission.VIBRATE,  # <-- Add this line
+                Permission.VIBRATE,
             ], self.on_permissions_result)
             if self.initialize_nfc():
                 print("NFC initialized successfully.")
@@ -815,25 +815,10 @@ class MainApp(MDApp):
             try:
                 PythonActivity = autoclass('org.kivy.android.PythonActivity')
                 intent = PythonActivity.mActivity.getIntent()
-                print(f"Scheduling on_new_intent for action: {intent.getAction()}")  # <-- Add this line
+                print(f"Scheduling on_new_intent for action: {intent.getAction()}")
                 Clock.schedule_once(lambda dt: self.on_new_intent(intent), 0)
             except Exception as e:
                 print(f"Error handling startup intent: {e}")
-            def poll_intent(dt):
-                PythonActivity = autoclass('org.kivy.android.PythonActivity')
-                intent = PythonActivity.mActivity.getIntent()
-                action = intent.getAction()
-                if action in [
-                    "android.nfc.action.TAG_DISCOVERED",
-                    "android.nfc.action.NDEF_DISCOVERED",
-                    "android.nfc.action.TECH_DISCOVERED",
-                ]:
-                    print(f"Polling: found NFC intent action: {action}")
-                    self.on_new_intent(intent)
-                    intent.setAction("")  # Clear so it doesn't get handled again
-        
-            # Poll every second for new NFC intents
-            Clock.schedule_interval(poll_intent, 1)
         
         # Initialize the dropdown menus
         self.display_menu = None
