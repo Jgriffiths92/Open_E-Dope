@@ -385,19 +385,19 @@ class MainApp(MDApp):
         "Good Display 3.7-inch": [
             "F0DB00005EA006512000F001A0A4010CA502000AA40108A502000AA4010CA502000AA40108A502000AA4010CA502000AA40108A502000AA4010CA502000AA40103A102001FA10104A40103A3021013A20112A502000AA40103A20102A40103A20207A5", # Main Init
             "F0DA000003F05120", # Screen Cut
-            "2" # Number of colors (e.g., 2 for BW, 3 for BWR)
+            "3" # Number of colors (e.g., 2 for BW, 3 for BWR)
         ],
         # Good Display 4.2-inch (SSD1680, 400x300)
         "Good Display 4.2-inch": [
             "F0DB000063A00603300190012CA4010CA502000AA40108A502000AA4010CA502000AA40102A10112A40102A104012B0101A1021101A103440031A105452B010000A1023C01A1021880A1024E00A1034F2B01A3022426A20222F7A20120A40102A2021001A502000A", # Main Init
             "F0DA000003F00330", # Screen Cut
-            "2" # Number of colors
+            "3" # Number of colors
         ],
         # Good Display 2.9-inch (SSD1680, 296x128)
         "Good Display 2.9-inch": [
             "F0DB000067A006012000800128A4010CA502000AA40108A502000AA4010CA502000AA40102A10112A40102A10401270101A1021101A10344000FA1054527010000A1023C05A103210080A1021880A1024E00A1034F2701A30124A3022426A20222F7A20120A40102A2021001A502000A", # Main Init
             "F0DA000003F00120", # Screen Cut
-            "2" # Number of colors
+            "3" # Number of colors
         ],
     }
     def get_basename(self, path):
@@ -414,16 +414,6 @@ class MainApp(MDApp):
             print(f"Bitmap generated and saved to: {output_path}")
         else:
             print("Failed to generate bitmap.")
-
-    def start_foreground_service(self):
-        """Start a foreground service with a persistent notification."""
-        if is_android():
-            try:
-                print("Foreground service started with a persistent notification.")
-            except Exception as e:
-                print(f"Error starting foreground service: {e}")
-        else:
-            print("Foreground service is only available on Android.")
 
     def update_nfc_progress(self, percent):
         if hasattr(self, "nfc_progress_bar") and self.nfc_progress_bar:
@@ -469,10 +459,6 @@ class MainApp(MDApp):
         self.manual_data_rows = []
         print("PYTHON DEBUG: on_nfc_transfer_error. self.current_data and manual_data_rows cleared.")
     def show_nfc_progress_dialog(self, message="Transferring data..."):
-        self.start_foreground_service()
-        self.nfc_progress_dialog = None
-        self.nfc_progress_bar = None
-        self.nfc_progress_label = None 
         # Vibrate for 500ms when the dialog opens (Android only)
         if is_android() and mActivity and autoclass:
             try:
@@ -602,9 +588,7 @@ class MainApp(MDApp):
         ):
             print("Current data:", self.current_data)
             toast("Data is incomplete or malformed. Please reload or re-enter.")
-            self.hide_nfc_progress_dialog()
             return
-        
 
         # 1. Convert CSV to bitmap
         output_path = self.csv_to_bitmap(self.current_data)
@@ -682,11 +666,7 @@ class MainApp(MDApp):
             epd_init_java_array[i] = String(s)
         # Create the progress listener
         listener = NfcProgressListener(self)
-        # --- PATCH: Force RW for 4.2-inch 2-color ---
-        if self.selected_display == "Good Display 4.2-inch" and int(epd_init[2]) == 2:
-            num_colors = 3  # Force sending both BW and RW for 4.2-inch 2-color
-        else:
-            num_colors = int(epd_init[2]) if len(epd_init) > 2 else 2
+        # Call the ByteBuffer method
         NfcHelper.processNfcIntentByteBufferAsync(intent, width, height, image_buffer_bb, epd_init_java_array, listener)
     def on_pause(self):
         print("on_pause CALLED")
@@ -748,26 +728,17 @@ class MainApp(MDApp):
         action = intent.getAction()
         print(f"Checking for new intent on resume... Action: {action}")
 
-        # Only process if action is NFC and tag is present
+        # Check for SEND, VIEW, or any NFC action
         if action in [
+            "android.intent.action.SEND",
+            "android.intent.action.VIEW",
             "android.nfc.action.TAG_DISCOVERED",
             "android.nfc.action.NDEF_DISCOVERED",
             "android.nfc.action.TECH_DISCOVERED",
         ]:
-            EXTRA_TAG = autoclass('android.nfc.NfcAdapter').EXTRA_TAG
-            tag = intent.getParcelableExtra(EXTRA_TAG)
-            print(f"on_resume: Tag present: {tag is not None}")
-            if tag:
-                print("Calling on_new_intent from on_resume")
-                Clock.schedule_once(lambda dt: self.on_new_intent(intent), 0)
-            else:
-                print("NFC action present but no tag found in intent on resume.")
-        elif action in [
-            "android.intent.action.SEND",
-            "android.intent.action.VIEW",
-        ]:
-            print("Calling on_new_intent from on_resume for SEND/VIEW")
+            print("Calling on_new_intent from on_resume")
             Clock.schedule_once(lambda dt: self.on_new_intent(intent), 0)
+            # Action is now cleared within on_new_intent after processing
         else:
             print("No shared file/text or NFC intent to process on resume.")
 
@@ -1853,11 +1824,10 @@ class MainApp(MDApp):
 
                 EXTRA_TAG = autoclass('android.nfc.NfcAdapter').EXTRA_TAG
                 tag = intent.getParcelableExtra(EXTRA_TAG)
-                print(f"Tag present: {tag is not None}")
                 if tag:
                     print("NFC tag detected (regardless of action)!")
                     tag = cast('android.nfc.Tag', tag)
-                    tech_list = tag.getTechList() # log tech list if needed for debuggingAdd commentMore actions
+                    tech_list = tag.getTechList() # Optional: log tech list if needed for debuggingAdd commentMore actions
                     print("Tag technologies detected by Android:")
                     for tech in tech_list:
                         print(f" - {tech}")
@@ -2572,6 +2542,22 @@ SwipeFileItem:
             print(f"Verifying file: {dest_file}")
             with open(dest_file, "r", encoding="utf-8") as file:
                 print(file.read())
+
+def start_foreground_service(self):
+    """Start a foreground service with a persistent notification."""
+    if is_android():
+        try:
+            # Create a persistent notification
+            notification.notify(
+                title="Open E-Dope Service",
+                message="The app is running in the background.",
+                timeout=10  # Notification timeout in seconds
+            )
+            print("Foreground service started with a persistent notification.")
+        except Exception as e:
+            print(f"Error starting foreground service: {e}")
+    else:
+        print("Foreground service is only available on Android.")
 
 s = MainApp.EPD_INIT_MAP["Good Display 3.7-inch"][0]
 print("Length:", len(s))
