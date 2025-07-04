@@ -415,6 +415,21 @@ class MainApp(MDApp):
         else:
             print("Failed to generate bitmap.")
 
+    def start_foreground_service(self):
+        """Start a foreground service with a persistent notification."""
+        if is_android():
+            try:
+                notification.notify(
+                    title="Open E-Dope Service",
+                    message="The app is running in the background.",
+                    timeout=10
+                )
+                print("Foreground service started with a persistent notification.")
+            except Exception as e:
+                print(f"Error starting foreground service: {e}")
+        else:
+            print("Foreground service is only available on Android.")
+
     def update_nfc_progress(self, percent):
         if hasattr(self, "nfc_progress_bar") and self.nfc_progress_bar:
             # If percent is 100, delay the update by 3 seconds
@@ -459,6 +474,9 @@ class MainApp(MDApp):
         self.manual_data_rows = []
         print("PYTHON DEBUG: on_nfc_transfer_error. self.current_data and manual_data_rows cleared.")
     def show_nfc_progress_dialog(self, message="Transferring data..."):
+        self.nfc_progress_dialog = None
+        self.nfc_progress_bar = None
+        self.nfc_progress_label = None 
         # Vibrate for 500ms when the dialog opens (Android only)
         if is_android() and mActivity and autoclass:
             try:
@@ -588,7 +606,9 @@ class MainApp(MDApp):
         ):
             print("Current data:", self.current_data)
             toast("Data is incomplete or malformed. Please reload or re-enter.")
+            self.hide_nfc_progress_dialog()
             return
+        
 
         # 1. Convert CSV to bitmap
         output_path = self.csv_to_bitmap(self.current_data)
@@ -2542,22 +2562,6 @@ SwipeFileItem:
             print(f"Verifying file: {dest_file}")
             with open(dest_file, "r", encoding="utf-8") as file:
                 print(file.read())
-
-def start_foreground_service(self):
-    """Start a foreground service with a persistent notification."""
-    if is_android():
-        try:
-            # Create a persistent notification
-            notification.notify(
-                title="Open E-Dope Service",
-                message="The app is running in the background.",
-                timeout=10  # Notification timeout in seconds
-            )
-            print("Foreground service started with a persistent notification.")
-        except Exception as e:
-            print(f"Error starting foreground service: {e}")
-    else:
-        print("Foreground service is only available on Android.")
 
 s = MainApp.EPD_INIT_MAP["Good Display 3.7-inch"][0]
 print("Length:", len(s))
