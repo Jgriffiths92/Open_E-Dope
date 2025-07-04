@@ -1739,7 +1739,7 @@ class MainApp(MDApp):
                 intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP)
                 print(f"Intent flags: {intent.getFlags()}")  # Log the intent flags
                 self.pending_intent = PendingIntent.getActivity(
-                    mActivity, 0, intent, PendingIntent.FLAG_IMMUTABLE
+                    mActivity, 0, intent, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT
                 )
                 print(f"PendingIntent created: {self.pending_intent}")
 
@@ -1778,6 +1778,7 @@ class MainApp(MDApp):
     def on_new_intent(self, intent):
         print("on_new_intent called")
         """Handle new intents, including shared data and NFC tags."""
+        print(f"Intent: {intent}")
         if is_android() and autoclass:
             try:
                 action = intent.getAction()
