@@ -77,7 +77,7 @@ public class NfcHelper {
         processNfcIntent(intent, width0, height0, image_buffer, epd_init, listener);
     }
 
-    public static void processNfcIntent(Intent intent, int width0, int height0, byte[] image_buffer, String[] epd_init, NfcProgressListener listener) {
+    public static void processNfcIntent(Intent intent, int width0, int height0, byte[] image_buffer, String[] epd_init, NfcProgressListener listener, int numColors) {
         Log.d(TAG, "JAVA: processNfcIntent CALLED. Listener: " + (listener != null ? listener.hashCode() : "null"));
         Log.d(TAG, "image_buffer length in processNfcIntent: " + image_buffer.length);
 
@@ -109,7 +109,7 @@ public class NfcHelper {
         try {
             connectToTag(nfcTech);
             setTagTimeout(nfcTech, NFC_TIMEOUT_MS);
-            executeWriteProtocol(nfcTech, width0, height0, image_buffer, epd_init, listener);
+            executeWriteProtocol(nfcTech, width0, height0, image_buffer, epd_init, listener, numColors); // Pass numColors
         } catch (Exception e) {
             Log.e(TAG, techType + " Exception: " + e.getMessage(), e);
             if (listener != null) {
@@ -121,7 +121,13 @@ public class NfcHelper {
         }
     }
 
-    private static void executeWriteProtocol(Object nfcTech, int width0, int height0, byte[] image_buffer, String[] epd_init, NfcProgressListener listener) throws IOException {
+    // Overload for backward compatibility (default to 2 colors)
+    public static void processNfcIntent(Intent intent, int width0, int height0, byte[] image_buffer, String[] epd_init, NfcProgressListener listener) {
+        // Default to 2 colors if not specified
+        processNfcIntent(intent, width0, height0, image_buffer, epd_init, listener, 2);
+    }
+
+    private static void executeWriteProtocol(Object nfcTech, int width0, int height0, byte[] image_buffer, String[] epd_init, NfcProgressListener listener, int numColors) throws IOException {
         // Send DIY command before init
         byte[] diyCmd = hexStringToBytes("F0DB020000"); // Consider making "F0DB020000" a constant
         byte[] response = transceiveWithRetry(nfcTech, diyCmd, "DIY_CMD", listener);
@@ -167,19 +173,39 @@ public class NfcHelper {
             }
         }
 
-        // Send R buffer (inverted)
-        Log.d(TAG, "Sending R buffer (inverted)...");
-        for (int i = 0; i < numFullChunks; i++) {
-            cmd = new byte[5 + CHUNK_SIZE];
-            cmd[0] = CMD_PREFIX_F0;
-            cmd[1] = CMD_SEND_DATA_D2;
-            cmd[2] = IDX_R_BUFFER;
-            cmd[3] = (byte) i;      // Chunk index
-            cmd[4] = (byte) CHUNK_SIZE; // Chunk data length
-            for (int j = 0; j < CHUNK_SIZE; j++) {
-                cmd[j + 5] = (byte) ~image_buffer[j + i * CHUNK_SIZE];
+        // Only send R buffer if numColors > 2
+        if (numColors > 2) {
+            Log.d(TAG, "Sending R buffer (inverted)...");
+            for (int i = 0; i < numFullChunks; i++) {
+                cmd = new byte[5 + CHUNK_SIZE];
+                cmd[0] = CMD_PREFIX_F0;
+                cmd[1] = CMD_SEND_DATA_D2;
+                cmd[2] = IDX_R_BUFFER;
+                cmd[3] = (byte) i;      // Chunk index
+                cmd[4] = (byte) CHUNK_SIZE; // Chunk data length
+                for (int j = 0; j < CHUNK_SIZE; j++) {
+                    cmd[j + 5] = (byte) ~image_buffer[j + i * CHUNK_SIZE];
+                }
+                transceiveWithRetry(nfcTech, cmd, "R_CHUNK_" + i, listener);
             }
-            transceiveWithRetry(nfcTech, cmd, "R_CHUNK_" + i, listener);
+            // Optionally send R buffer tail if needed
+            int tailBytes = totalDataBytes % CHUNK_SIZE;
+            if (tailBytes != 0) {
+                Log.d(TAG, "Sending R tail (" + tailBytes + " bytes)...");
+                cmd = new byte[5 + CHUNK_SIZE];
+                cmd[0] = CMD_PREFIX_F0;
+                cmd[1] = CMD_SEND_DATA_D2;
+                cmd[2] = IDX_R_BUFFER;
+                cmd[3] = (byte) numFullChunks; // Index of the tail chunk
+                cmd[4] = (byte) CHUNK_SIZE;
+                for (int j = 0; j < tailBytes; j++) {
+                    cmd[j + 5] = (byte) ~image_buffer[numFullChunks * CHUNK_SIZE + j];
+                }
+                for (int j = tailBytes; j < CHUNK_SIZE; j++) {
+                    cmd[j + 5] = 0;
+                }
+                transceiveWithRetry(nfcTech, cmd, "R_TAIL", listener);
+            }
         }
 
         // Handle tail data for BW buffer (if any)

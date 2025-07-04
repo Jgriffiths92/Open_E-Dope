@@ -385,19 +385,19 @@ class MainApp(MDApp):
         "Good Display 3.7-inch": [
             "F0DB00005EA006512000F001A0A4010CA502000AA40108A502000AA4010CA502000AA40108A502000AA4010CA502000AA40108A502000AA4010CA502000AA40103A102001FA10104A40103A3021013A20112A502000AA40103A20102A40103A20207A5", # Main Init
             "F0DA000003F05120", # Screen Cut
-            "3" # Number of colors (e.g., 2 for BW, 3 for BWR)
+            "2" # Number of colors (e.g., 2 for BW, 3 for BWR)
         ],
         # Good Display 4.2-inch (SSD1680, 400x300)
         "Good Display 4.2-inch": [
             "F0DB000063A00603300190012CA4010CA502000AA40108A502000AA4010CA502000AA40102A10112A40102A104012B0101A1021101A103440031A105452B010000A1023C01A1021880A1024E00A1034F2B01A3022426A20222F7A20120A40102A2021001A502000A", # Main Init
             "F0DA000003F00330", # Screen Cut
-            "3" # Number of colors
+            "2" # Number of colors
         ],
         # Good Display 2.9-inch (SSD1680, 296x128)
         "Good Display 2.9-inch": [
             "F0DB000067A006012000800128A4010CA502000AA40108A502000AA4010CA502000AA40102A10112A40102A10401270101A1021101A10344000FA1054527010000A1023C05A103210080A1021880A1024E00A1034F2701A30124A3022426A20222F7A20120A40102A2021001A502000A", # Main Init
             "F0DA000003F00120", # Screen Cut
-            "3" # Number of colors
+            "2" # Number of colors
         ],
     }
     def get_basename(self, path):
@@ -474,6 +474,7 @@ class MainApp(MDApp):
         self.manual_data_rows = []
         print("PYTHON DEBUG: on_nfc_transfer_error. self.current_data and manual_data_rows cleared.")
     def show_nfc_progress_dialog(self, message="Transferring data..."):
+        self.start_foreground_service()
         self.nfc_progress_dialog = None
         self.nfc_progress_bar = None
         self.nfc_progress_label = None 
@@ -686,8 +687,10 @@ class MainApp(MDApp):
             epd_init_java_array[i] = String(s)
         # Create the progress listener
         listener = NfcProgressListener(self)
-        # Call the ByteBuffer method
-        NfcHelper.processNfcIntentByteBufferAsync(intent, width, height, image_buffer_bb, epd_init_java_array, listener)
+        # Get number of colors from epd_init[2]
+        num_colors = int(epd_init[2]) if len(epd_init) > 2 else 2
+        # Call the ByteBuffer method with num_colors
+        NfcHelper.processNfcIntentByteBufferAsync(intent, width, height, image_buffer_bb, epd_init_java_array, listener, num_colors)
     def on_pause(self):
         print("on_pause CALLED")
         if is_android() and autoclass and hasattr(self, "nfc_adapter"):
