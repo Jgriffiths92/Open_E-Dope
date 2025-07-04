@@ -123,8 +123,16 @@ public class NfcHelper {
 
     // Overload for backward compatibility (default to 2 colors)
     public static void processNfcIntent(Intent intent, int width0, int height0, byte[] image_buffer, String[] epd_init, NfcProgressListener listener) {
-        // Default to 2 colors if not specified
-        processNfcIntent(intent, width0, height0, image_buffer, epd_init, listener, 2);
+        // Parse numColors from epd_init[2]
+        int numColors = 2;
+        if (epd_init != null && epd_init.length > 2) {
+            try {
+                numColors = Integer.parseInt(epd_init[2]);
+            } catch (Exception e) {
+                numColors = 2;
+            }
+        }
+        processNfcIntent(intent, width0, height0, image_buffer, epd_init, listener, numColors);
     }
 
     private static void executeWriteProtocol(Object nfcTech, int width0, int height0, byte[] image_buffer, String[] epd_init, NfcProgressListener listener, int numColors) throws IOException {

@@ -687,7 +687,7 @@ class MainApp(MDApp):
             num_colors = 3  # Force sending both BW and RW for 4.2-inch 2-color
         else:
             num_colors = int(epd_init[2]) if len(epd_init) > 2 else 2
-        NfcHelper.processNfcIntentByteBufferAsync(intent, width, height, image_buffer_bb, epd_init_java_array, listener, num_colors)
+        NfcHelper.processNfcIntentByteBufferAsync(intent, width, height, image_buffer_bb, epd_init_java_array, listener)
     def on_pause(self):
         print("on_pause CALLED")
         if is_android() and autoclass and hasattr(self, "nfc_adapter"):
