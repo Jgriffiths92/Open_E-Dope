@@ -419,11 +419,6 @@ class MainApp(MDApp):
         """Start a foreground service with a persistent notification."""
         if is_android():
             try:
-                notification.notify(
-                    title="Open E-Dope Service",
-                    message="The app is running in the background.",
-                    timeout=10
-                )
                 print("Foreground service started with a persistent notification.")
             except Exception as e:
                 print(f"Error starting foreground service: {e}")
@@ -687,9 +682,11 @@ class MainApp(MDApp):
             epd_init_java_array[i] = String(s)
         # Create the progress listener
         listener = NfcProgressListener(self)
-        # Get number of colors from epd_init[2]
-        num_colors = int(epd_init[2]) if len(epd_init) > 2 else 2
-        # Call the ByteBuffer method with num_colors
+        # --- PATCH: Force RW for 4.2-inch 2-color ---
+        if self.selected_display == "Good Display 4.2-inch" and int(epd_init[2]) == 2:
+            num_colors = 3  # Force sending both BW and RW for 4.2-inch 2-color
+        else:
+            num_colors = int(epd_init[2]) if len(epd_init) > 2 else 2
         NfcHelper.processNfcIntentByteBufferAsync(intent, width, height, image_buffer_bb, epd_init_java_array, listener, num_colors)
     def on_pause(self):
         print("on_pause CALLED")
