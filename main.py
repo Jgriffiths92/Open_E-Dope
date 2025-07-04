@@ -751,17 +751,26 @@ class MainApp(MDApp):
         action = intent.getAction()
         print(f"Checking for new intent on resume... Action: {action}")
 
-        # Check for SEND, VIEW, or any NFC action
+        # Only process if action is NFC and tag is present
         if action in [
-            "android.intent.action.SEND",
-            "android.intent.action.VIEW",
             "android.nfc.action.TAG_DISCOVERED",
             "android.nfc.action.NDEF_DISCOVERED",
             "android.nfc.action.TECH_DISCOVERED",
         ]:
-            print("Calling on_new_intent from on_resume")
+            EXTRA_TAG = autoclass('android.nfc.NfcAdapter').EXTRA_TAG
+            tag = intent.getParcelableExtra(EXTRA_TAG)
+            print(f"on_resume: Tag present: {tag is not None}")
+            if tag:
+                print("Calling on_new_intent from on_resume")
+                Clock.schedule_once(lambda dt: self.on_new_intent(intent), 0)
+            else:
+                print("NFC action present but no tag found in intent on resume.")
+        elif action in [
+            "android.intent.action.SEND",
+            "android.intent.action.VIEW",
+        ]:
+            print("Calling on_new_intent from on_resume for SEND/VIEW")
             Clock.schedule_once(lambda dt: self.on_new_intent(intent), 0)
-            # Action is now cleared within on_new_intent after processing
         else:
             print("No shared file/text or NFC intent to process on resume.")
 
@@ -1847,10 +1856,11 @@ class MainApp(MDApp):
 
                 EXTRA_TAG = autoclass('android.nfc.NfcAdapter').EXTRA_TAG
                 tag = intent.getParcelableExtra(EXTRA_TAG)
+                print(f"Tag present: {tag is not None}")
                 if tag:
                     print("NFC tag detected (regardless of action)!")
                     tag = cast('android.nfc.Tag', tag)
-                    tech_list = tag.getTechList() # Optional: log tech list if needed for debuggingAdd commentMore actions
+                    tech_list = tag.getTechList() # log tech list if needed for debuggingAdd commentMore actions
                     print("Tag technologies detected by Android:")
                     for tech in tech_list:
                         print(f" - {tech}")
