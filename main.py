@@ -2181,6 +2181,7 @@ SwipeFileItem:
             listener = GlobalLayoutListener(self)
             root_view.getViewTreeObserver().addOnGlobalLayoutListener(listener)
             print("Android keyboard listener set up.")
+
     def on_keyboard_hidden(self):
         print("Keyboard was hidden! (triggered from GlobalLayoutListener)")
         # Your custom logic here, e.g.:
@@ -2343,7 +2344,7 @@ SwipeFileItem:
             self.manual_data_rows.pop()
 
         # Rebuild navigation for all homepage fields
-        self.enable_next_navigation_on_homepage()
+        self.enable_next_navigation_on_homepage
 
     def enable_next_navigation_on_homepage(self):
         """Enable Next/Tab navigation for all MDTextField inputs on the homepage, including manual rows."""
@@ -2573,6 +2574,8 @@ def start_foreground_service(self):
             print(f"Error starting foreground service: {e}")
     else:
         print("Foreground service is only available on Android.")
+
+s = MainApp.EPD_INIT_MAP["Good Display 3.7-inch"][0]
 
 print("Length:", len(s))
 for i, c in enumerate(s):
