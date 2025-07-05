@@ -240,7 +240,7 @@ class ManageDataScreen(Screen):
                 text="OK",
                 on_release=ok_and_never_show_again,
                 theme_text_color="Custom",
-                text_color=(0, 0.4, 1, 1) # Blue color for OK button
+                text_color=(0, 0.4, 1, 1)           # Blue color for OK button
             ),
             ],
         )
@@ -518,7 +518,7 @@ class MainApp(MDApp):
             value=0,
             thickness=15,
             color=(0.2, 0.6, 1, 1),
-            label_color=(0.2, 0.6, 1, 1),  
+            label_color=(0.2, 0.6, 1, 1), 
             background_color=(0.9, 0.9, 0.9, 1),
         )
         box.add_widget(self.nfc_progress_bar)
@@ -866,7 +866,7 @@ class MainApp(MDApp):
         self.current_data = []
         if hasattr(self, "manual_data_rows"):
             self.manual_data_rows = []
-        self.manual_data_fields = [] 
+        self.manual_data_fields = []
         home_screen = self.root.ids.home_screen
         table_container = home_screen.ids.table_container
         table_container.clear_widgets()
@@ -2575,9 +2575,18 @@ def start_foreground_service(self):
     else:
         print("Foreground service is only available on Android.")
 
+s = MainApp.EPD_INIT_MAP["Good Display 3.7-inch"][0]
+
+print("Length:", len(s))
+for i, c in enumerate(s):
+    if not c.isalnum():
+        print(f"Non-alphanumeric at {i}: {repr(c)}")
+for i in range(0, len(s), 40):
+    print(f"{i:03d}: {s[i:i+40]}")
+
 def pack_image_column_major(img):
     pixels = img.load()
-    width, height = img.size  
+    width, height = img.size
     packed = bytearray()
     for x in range(width-1, -1, -1):  # right-to-left to match demo
         for y_block in range(0, height, 8):
