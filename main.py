@@ -749,29 +749,23 @@ class MainApp(MDApp):
 
 
     def on_resume(self):
-        print("on_resume CALLED")
-        # Re-create PendingIntent and IntentFilters
+        print("on_resume CALLED - forcing full app restart")
         if is_android() and autoclass:
             try:
-                NfcAdapter = autoclass('android.nfc.NfcAdapter')
-                PendingIntent = autoclass('android.app.PendingIntent')
                 Intent = autoclass('android.content.Intent')
-                IntentFilter = autoclass('android.content.IntentFilter')
-                intent = Intent(mActivity, mActivity.getClass())
-                intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP)
-                self.pending_intent = PendingIntent.getActivity(
-                    mActivity, 0, intent, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT
-                )
-                self.intent_filters = [
-                    IntentFilter("android.nfc.action.TAG_DISCOVERED"),
-                    IntentFilter("android.nfc.action.NDEF_DISCOVERED"),
-                    IntentFilter("android.nfc.action.TECH_DISCOVERED"),
-                ]
-                print("Re-created PendingIntent and IntentFilters on resume.")
+                PythonActivity = autoclass('org.kivy.android.PythonActivity')
+                context = PythonActivity.mActivity.getApplicationContext()
+                package = context.getPackageName()
+                pm = context.getPackageManager()
+                intent = pm.getLaunchIntentForPackage(package)
+                intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK)
+                context.startActivity(intent)
+                import os
+                os._exit(0)  # Forcefully kill the current process
             except Exception as e:
-                print(f"Error re-creating PendingIntent/IntentFilters on resume: {e}")
-        self.enable_nfc_foreground_dispatch()
-        print("NFC foreground dispatch re-enabled on resume.")
+                print(f"Error restarting app: {e}")
+        else:
+            print("Not running on Android, cannot restart app.")
 
     def request_bal_exemption(self):
         if is_android() and autoclass:
@@ -1722,6 +1716,7 @@ class MainApp(MDApp):
 
     def get_private_storage_path(self):
         """Retrieve the app's private storage path."""
+
         if is_android():
             try:
                 context = mActivity.getApplicationContext()
