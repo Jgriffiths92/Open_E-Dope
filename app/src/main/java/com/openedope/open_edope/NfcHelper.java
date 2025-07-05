@@ -154,7 +154,7 @@ public class NfcHelper {
             transceiveWithRetry(nfcTech, cmd, "BW_CHUNK_" + i, listener);
 
             if (listener != null) {
-                int percent = (int) (((i + 1) * 100.0) / numFullChunks);
+                int percent = (int) (((i + 1) * 100.0) / (numFullChunks + (tailBytes > 0 ? 1 : 0)));
                 listener.onProgress(percent);
             }
         }
@@ -169,6 +169,12 @@ public class NfcHelper {
             System.arraycopy(image_buffer, numFullChunks * CHUNK_SIZE, cmd, 5, tailBytes);
             for (int j = tailBytes; j < CHUNK_SIZE; j++) cmd[j + 5] = 0;
             transceiveWithRetry(nfcTech, cmd, "BW_TAIL", listener);
+            if (listener != null) {
+                listener.onProgress(100);
+            }
+        } else if (listener != null && numFullChunks > 0) {
+            // If there was no tail, ensure we hit 100% at the end
+            listener.onProgress(100);
         }
 
         // Only send R buffer for 4.2-inch display (SSD1680, 400x300)
