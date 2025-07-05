@@ -402,16 +402,6 @@ if is_android():
                     print("Soft keyboard hidden (pyjnius)")
                     self.app.on_keyboard_hidden()
 
-    def setup_keyboard_listener(self):
-        from jnius import autoclass
-
-        activity = autoclass('org.kivy.android.PythonActivity').mActivity
-        root_view = activity.getWindow().getDecorView()
-        listener = GlobalLayoutListener(self)
-        root_view.getViewTreeObserver().addOnGlobalLayoutListener(listener)
-        print("Android keyboard listener set up.")
-
-
 class MainApp(MDApp):
     search_text = ""
     delete_option_label = StringProperty("Delete Folders After")  # Default text
@@ -2182,7 +2172,15 @@ SwipeFileItem:
     file_size: "{size}"
 ''')
             swipe_file_list.add_widget(item)
+    def setup_keyboard_listener(self):
+        if is_android():
+            from jnius import autoclass
 
+            activity = autoclass('org.kivy.android.PythonActivity').mActivity
+            root_view = activity.getWindow().getDecorView()
+            listener = GlobalLayoutListener(self)
+            root_view.getViewTreeObserver().addOnGlobalLayoutListener(listener)
+            print("Android keyboard listener set up.")
     def on_keyboard_hidden(self):
         print("Keyboard was hidden! (triggered from GlobalLayoutListener)")
         # Your custom logic here, e.g.:
@@ -2345,7 +2343,7 @@ SwipeFileItem:
             self.manual_data_rows.pop()
 
         # Rebuild navigation for all homepage fields
-        self.enable_next_navigation_on_homepage
+        self.enable_next_navigation_on_homepage()
 
     def enable_next_navigation_on_homepage(self):
         """Enable Next/Tab navigation for all MDTextField inputs on the homepage, including manual rows."""
@@ -2576,7 +2574,6 @@ def start_foreground_service(self):
     else:
         print("Foreground service is only available on Android.")
 
-s = MainApp.EPD_INIT_MAP["Good Display 3.7-inch"][0]
 print("Length:", len(s))
 for i, c in enumerate(s):
     if not c.isalnum():
