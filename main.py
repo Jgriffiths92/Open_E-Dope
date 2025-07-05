@@ -2575,15 +2575,6 @@ def start_foreground_service(self):
     else:
         print("Foreground service is only available on Android.")
 
-s = MainApp.EPD_INIT_MAP["Good Display 3.7-inch"][0]
-
-print("Length:", len(s))
-for i, c in enumerate(s):
-    if not c.isalnum():
-        print(f"Non-alphanumeric at {i}: {repr(c)}")
-for i in range(0, len(s), 40):
-    print(f"{i:03d}: {s[i:i+40]}")
-
 def pack_image_column_major(img):
     pixels = img.load()
     width, height = img.size  # <-- Add this line
