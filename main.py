@@ -376,6 +376,15 @@ if is_android():
             else:
                 print("Error: NfcProgressListener.app is None or lacks 'on_nfc_transfer_error' method.")
         
+    class GlobalLayoutListener(PythonJavaClass):
+        __javainterfaces__ = ['android/view/ViewTreeObserver$OnGlobalLayoutListener']
+        __javacontext__ = 'app'
+
+        def __init__(self, app):
+            super().__init__()
+            self.app = app
+            self.last_state = None
+
         @java_method('()V')
         def onGlobalLayout(self):
             activity = mActivity
@@ -383,19 +392,20 @@ if is_android():
             rect = autoclass('android.graphics.Rect')()
             root_view.getWindowVisibleDisplayFrame(rect)
             height_diff = root_view.getRootView().getHeight() - rect.height()
-            # Heuristic: if height_diff > 100, keyboard is probably visible
-            is_keyboard_visible = height_diff > 100
-            if self.last_height != is_keyboard_visible:
-                self.last_height = is_keyboard_visible
+            is_keyboard_visible = height_diff > 100  # Heuristic threshold
+            if self.last_state != is_keyboard_visible:
+                self.last_state = is_keyboard_visible
                 if is_keyboard_visible:
                     print("Soft keyboard shown (pyjnius)")
-                    self.app.on_keyboard_shown()  # <-- implement this in your MainApp
+                    self.app.on_keyboard_shown()
                 else:
                     print("Soft keyboard hidden (pyjnius)")
-                    self.app.on_keyboard_hidden()  # <-- implement this in your MainApp
+                    self.app.on_keyboard_hidden()
 
     def setup_keyboard_listener(self):
-        activity = mActivity
+        from jnius import autoclass
+
+        activity = autoclass('org.kivy.android.PythonActivity').mActivity
         root_view = activity.getWindow().getDecorView()
         listener = GlobalLayoutListener(self)
         root_view.getViewTreeObserver().addOnGlobalLayoutListener(listener)
@@ -450,10 +460,11 @@ class MainApp(MDApp):
             self.nfc_progress_bar.value = 100
         if hasattr(self, "nfc_progress_label"):
             self.nfc_progress_label.text = "Transfer successful!"
-            self.nfc_progress_label.color = (0, 0.6, 0, 1) # Green for success
-        Clock.schedule_once(lambda dt: self.hide_nfc_progress_dialog(), 1.5)
-         # Clear the data table, stage notes, and stage name after success
-        Clock.schedule_once(lambda dt: self.clear_table_data())       
+            self.nfc_progress_label.color = (0, 0.6, 0, 1)
+        Clock.schedule_once(lambda dt: self.hide_nfc_progress_dialog(), 2.5)
+        self.image_buffer = None
+        self.nfc_transfer_in_progress = False
+        Clock.schedule_once(lambda dt: self.clear_table_data())  # This will clear the table and show manual data input       
         print("PYTHON DEBUG: _finish_nfc_progress completed. self.current_data should be cleared by clear_table_data().")
     def on_nfc_transfer_error(self, error_message="Transfer failed!"):
         print(f"PYTHON DEBUG: on_nfc_transfer_error called with message: {error_message}")
@@ -2527,18 +2538,6 @@ SwipeFileItem:
                 Clock.schedule_once(lambda dt: self._finish_nfc_progress(), 3)
             else:
                 self.nfc_progress_bar.value = percent
-
-    def _finish_nfc_progress(self):
-        if hasattr(self, "nfc_progress_bar") and self.nfc_progress_bar:
-            self.nfc_progress_bar.value = 100
-        if hasattr(self, "nfc_progress_label"):
-            self.nfc_progress_label.text = "Transfer successful!"
-            self.nfc_progress_label.color = (0, 0.6, 0, 1)
-        Clock.schedule_once(lambda dt: self.hide_nfc_progress_dialog(), 2.5)
-        self.image_buffer = None
-        self.nfc_transfer_in_progress = False
-        Clock.schedule_once(lambda dt: self.clear_table_data())  # This will clear the table and show manual data input
-        
 
     def hide_nfc_button(self):
         """Hide the NFC button if running on Android."""
