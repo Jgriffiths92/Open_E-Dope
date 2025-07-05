@@ -701,6 +701,8 @@ class MainApp(MDApp):
         return True
 
     def on_start(self):
+        if is_android():
+            self.setup_keyboard_listener()
         # Bind global key handler for Tab/Enter navigation
         from kivy.core.window import Window
         Window.bind(on_key_down=self.global_key_handler)
@@ -2411,7 +2413,7 @@ SwipeFileItem:
                 if manual_data not in self.current_data:
                     self.current_data.append(manual_data)
 
-            self.display_table(self.current_data)
+            #self.display_table(self.current_data)
             # Clear manual input fields after adding data
             for row_fields in self.manual_data_rows:
                 for field in row_fields.values():
