@@ -346,7 +346,7 @@ class CustomFileChooserListView(FileChooserListView):
 
 
 if is_android():
-    from jnius import PythonJavaClass, java_method
+    from jnius import PythonJavaClass, java_method, cast
 
     class NfcProgressListener(PythonJavaClass):
         __javainterfaces__ = ['com/openedope/open_edope/NfcProgressListener']
@@ -375,6 +375,33 @@ if is_android():
                 Clock.schedule_once(lambda dt: self.app.on_nfc_transfer_error(message))
             else:
                 print("Error: NfcProgressListener.app is None or lacks 'on_nfc_transfer_error' method.")
+        
+        @java_method('()V')
+        def onGlobalLayout(self):
+            activity = mActivity
+            root_view = activity.getWindow().getDecorView()
+            rect = autoclass('android.graphics.Rect')()
+            root_view.getWindowVisibleDisplayFrame(rect)
+            height_diff = root_view.getRootView().getHeight() - rect.height()
+            # Heuristic: if height_diff > 100, keyboard is probably visible
+            is_keyboard_visible = height_diff > 100
+            if self.last_height != is_keyboard_visible:
+                self.last_height = is_keyboard_visible
+                if is_keyboard_visible:
+                    print("Soft keyboard shown (pyjnius)")
+                    # Trigger your logic here, e.g.:
+                    # self.app.on_keyboard_shown()
+                else:
+                    print("Soft keyboard hidden (pyjnius)")
+                    # Trigger your logic here, e.g.:
+                    # self.app.on_keyboard_hidden()
+
+    def setup_keyboard_listener(self):
+        activity = mActivity
+        root_view = activity.getWindow().getDecorView()
+        listener = GlobalLayoutListener(self)
+        root_view.getViewTreeObserver().addOnGlobalLayoutListener(listener)
+        print("Android keyboard listener set up.")
 
 
 class MainApp(MDApp):
