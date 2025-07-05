@@ -698,12 +698,12 @@ class MainApp(MDApp):
         NfcHelper.processNfcIntentByteBufferAsync(intent, width, height, image_buffer_bb, epd_init_java_array, listener)
     def on_pause(self):
         print("on_pause CALLED")
-        if is_android() and autoclass and hasattr(self, "nfc_adapter"):
-            try:
-                self.nfc_adapter.disableForegroundDispatch(mActivity)
-                print("NFC foreground dispatch disabled.")
-            except Exception as e:
-                print(f"Error disabling NFC foreground dispatch: {e}")
+        #if is_android() and autoclass and hasattr(self, "nfc_adapter"):
+            #try:
+                #self.nfc_adapter.disableForegroundDispatch(mActivity)
+                #print("NFC foreground dispatch disabled.")
+            #except Exception as e:
+                #print(f"Error disabling NFC foreground dispatch: {e}")
         return True
 
     def on_start(self):
@@ -749,7 +749,7 @@ class MainApp(MDApp):
 
 
     def on_resume(self):
-        print("on_resume CALLED - forcing full app restart")
+        print("on_resume CALLED")
         if is_android() and autoclass:
             try:
                 Intent = autoclass('android.content.Intent')
@@ -760,12 +760,10 @@ class MainApp(MDApp):
                 intent = pm.getLaunchIntentForPackage(package)
                 intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK)
                 context.startActivity(intent)
-                import os
-                os._exit(0)  # Forcefully kill the current process
             except Exception as e:
-                print(f"Error restarting app: {e}")
+                print(f"Error resuming app: {e}")
         else:
-            print("Not running on Android, cannot restart app.")
+            print("Not running on Android, cannot resume app.")
 
     def request_bal_exemption(self):
         if is_android() and autoclass:
