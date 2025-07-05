@@ -239,7 +239,7 @@ class ManageDataScreen(Screen):
             MDFlatButton(
                 text="OK",
                 on_release=ok_and_never_show_again,
-                theme_text_color="Custom",
+                theme_text_color="Custom",          # <-- Add this line
                 text_color=(0, 0.4, 1, 1)           # Blue color for OK button
             ),
             ],
@@ -376,15 +376,6 @@ if is_android():
             else:
                 print("Error: NfcProgressListener.app is None or lacks 'on_nfc_transfer_error' method.")
         
-    class GlobalLayoutListener(PythonJavaClass):
-        __javainterfaces__ = ['android/view/ViewTreeObserver$OnGlobalLayoutListener']
-        __javacontext__ = 'app'
-
-        def __init__(self, app):
-            super().__init__()
-            self.app = app
-            self.last_state = None
-
         @java_method('()V')
         def onGlobalLayout(self):
             activity = mActivity
@@ -392,15 +383,26 @@ if is_android():
             rect = autoclass('android.graphics.Rect')()
             root_view.getWindowVisibleDisplayFrame(rect)
             height_diff = root_view.getRootView().getHeight() - rect.height()
-            is_keyboard_visible = height_diff > 100  # Heuristic threshold
-            if self.last_state != is_keyboard_visible:
-                self.last_state = is_keyboard_visible
+            # Heuristic: if height_diff > 100, keyboard is probably visible
+            is_keyboard_visible = height_diff > 100
+            if self.last_height != is_keyboard_visible:
+                self.last_height = is_keyboard_visible
                 if is_keyboard_visible:
                     print("Soft keyboard shown (pyjnius)")
-                    self.app.on_keyboard_shown()
+                    # Trigger your logic here, e.g.:
+                    # self.app.on_keyboard_shown()
                 else:
                     print("Soft keyboard hidden (pyjnius)")
-                    self.app.on_keyboard_hidden()
+                    # Trigger your logic here, e.g.:
+                    # self.app.on_keyboard_hidden()
+
+    def setup_keyboard_listener(self):
+        activity = mActivity
+        root_view = activity.getWindow().getDecorView()
+        listener = GlobalLayoutListener(self)
+        root_view.getViewTreeObserver().addOnGlobalLayoutListener(listener)
+        print("Android keyboard listener set up.")
+
 
 class MainApp(MDApp):
     search_text = ""
@@ -450,11 +452,10 @@ class MainApp(MDApp):
             self.nfc_progress_bar.value = 100
         if hasattr(self, "nfc_progress_label"):
             self.nfc_progress_label.text = "Transfer successful!"
-            self.nfc_progress_label.color = (0, 0.6, 0, 1)
-        Clock.schedule_once(lambda dt: self.hide_nfc_progress_dialog(), 2.5)
-        self.image_buffer = None
-        self.nfc_transfer_in_progress = False
-        Clock.schedule_once(lambda dt: self.clear_table_data())  # This will clear the table and show manual data input       
+            self.nfc_progress_label.color = (0, 0.6, 0, 1) # Green for success
+        Clock.schedule_once(lambda dt: self.hide_nfc_progress_dialog(), 1.5)
+         # Clear the data table, stage notes, and stage name after success
+        Clock.schedule_once(lambda dt: self.clear_table_data())       
         print("PYTHON DEBUG: _finish_nfc_progress completed. self.current_data should be cleared by clear_table_data().")
     def on_nfc_transfer_error(self, error_message="Transfer failed!"):
         print(f"PYTHON DEBUG: on_nfc_transfer_error called with message: {error_message}")
@@ -491,9 +492,7 @@ class MainApp(MDApp):
                 # Try to use VibrationEffect if available, otherwise use legacy API
                 try:
                     VibrationEffect = autoclass('android.os.VibrationEffect')
-                    effect = VibrationEffect.createOneShot(500, Vibration)
-                    VibrationEffect = autoclass('android.os.VibrationEffect')
-                    effect = VibrationEffect.createOneShot(500, VibrationEffect)
+                    effect = VibrationEffect.createOneShot(500, VibrationEffect.DEFAULT_AMPLITUDE)
                     vibrator.vibrate(effect)
                     print("Vibrating with VibrationEffect")
                 except Exception:
@@ -518,7 +517,7 @@ class MainApp(MDApp):
             value=0,
             thickness=15,
             color=(0.2, 0.6, 1, 1),
-            label_color=(0.2, 0.6, 1, 1), 
+            label_color=(0.2, 0.6, 1, 1),  # <-- Add this line
             background_color=(0.9, 0.9, 0.9, 1),
         )
         box.add_widget(self.nfc_progress_bar)
@@ -702,8 +701,6 @@ class MainApp(MDApp):
         return True
 
     def on_start(self):
-        if is_android():
-            self.setup_keyboard_listener()
         # Bind global key handler for Tab/Enter navigation
         from kivy.core.window import Window
         Window.bind(on_key_down=self.global_key_handler)
@@ -866,7 +863,7 @@ class MainApp(MDApp):
         self.current_data = []
         if hasattr(self, "manual_data_rows"):
             self.manual_data_rows = []
-        self.manual_data_fields = []
+        self.manual_data_fields = []  # <-- Add this line
         home_screen = self.root.ids.home_screen
         table_container = home_screen.ids.table_container
         table_container.clear_widgets()
@@ -2172,25 +2169,6 @@ SwipeFileItem:
     file_size: "{size}"
 ''')
             swipe_file_list.add_widget(item)
-    def setup_keyboard_listener(self):
-        if is_android():
-            from jnius import autoclass
-
-            activity = autoclass('org.kivy.android.PythonActivity').mActivity
-            root_view = activity.getWindow().getDecorView()
-            listener = GlobalLayoutListener(self)
-            root_view.getViewTreeObserver().addOnGlobalLayoutListener(listener)
-            print("Android keyboard listener set up.")
-
-    def on_keyboard_hidden(self):
-        print("Keyboard was hidden! (triggered from GlobalLayoutListener)")
-        # Your custom logic here, e.g.:
-        # self.manual_spacer_widget.height = dp(80)
-    
-    def on_keyboard_shown(self):
-        print("Keyboard was shown! (triggered from GlobalLayoutListener)")
-        # Your custom logic here, e.g.:
-        # self.manual_spacer_widget.height = dp(220)
 
     def show_manual_data_input(self):
         """Display manual data input fields in the CSV data table location based on filtered display options."""
@@ -2423,7 +2401,7 @@ SwipeFileItem:
                 if manual_data not in self.current_data:
                     self.current_data.append(manual_data)
 
-            #self.display_table(self.current_data)
+            self.display_table(self.current_data)
             # Clear manual input fields after adding data
             for row_fields in self.manual_data_rows:
                 for field in row_fields.values():
@@ -2538,6 +2516,18 @@ SwipeFileItem:
             else:
                 self.nfc_progress_bar.value = percent
 
+    def _finish_nfc_progress(self):
+        if hasattr(self, "nfc_progress_bar") and self.nfc_progress_bar:
+            self.nfc_progress_bar.value = 100
+        if hasattr(self, "nfc_progress_label"):
+            self.nfc_progress_label.text = "Transfer successful!"
+            self.nfc_progress_label.color = (0, 0.6, 0, 1)
+        Clock.schedule_once(lambda dt: self.hide_nfc_progress_dialog(), 2.5)
+        self.image_buffer = None
+        self.nfc_transfer_in_progress = False
+        Clock.schedule_once(lambda dt: self.clear_table_data())  # This will clear the table and show manual data input
+        
+
     def hide_nfc_button(self):
         """Hide the NFC button if running on Android."""
         if is_android():
@@ -2576,7 +2566,6 @@ def start_foreground_service(self):
         print("Foreground service is only available on Android.")
 
 s = MainApp.EPD_INIT_MAP["Good Display 3.7-inch"][0]
-
 print("Length:", len(s))
 for i, c in enumerate(s):
     if not c.isalnum():
@@ -2586,7 +2575,7 @@ for i in range(0, len(s), 40):
 
 def pack_image_column_major(img):
     pixels = img.load()
-    width, height = img.size
+    width, height = img.size  # <-- Add this line
     packed = bytearray()
     for x in range(width-1, -1, -1):  # right-to-left to match demo
         for y_block in range(0, height, 8):
