@@ -2229,9 +2229,7 @@ SwipeFileItem:
 
         # --- ADD THIS SPACER WIDGET FOR EXTRA SPACE ABOVE THE KEYBOARD ---
         from kivy.uix.widget import Widget
-        spacer = Widget(size_hint_y=None, height=dp(80))  # Default height
-        self.manual_spacer_widget = spacer  # <-- Store reference
-        main_layout.add_widget(spacer)
+        main_layout.add_widget(Widget(size_hint_y=None, height=dp(80)))  # Adjust dp(80) as needed
 
         # Add the main layout to the table container
         table_container.add_widget(main_layout)
@@ -2250,9 +2248,9 @@ SwipeFileItem:
                     multiline=False,
                     size_hint_x=0.15
                 )
-                # Bind focus event to adjust spacer height
+                # Bind focus event to scroll to bottom when focused
                 text_field.bind(
-                    on_focus=self.on_manual_input_focus
+                    on_focus=lambda instance, value: self.scroll_manual_input_to_buttons() if value else None
                 )
                 row_fields[field_name] = text_field
                 manual_fields.append(text_field)
@@ -2287,23 +2285,11 @@ SwipeFileItem:
         # Scroll to bottom after next frame
         if hasattr(self, "manual_scrollview"):
             Clock.schedule_once(lambda dt: setattr(self.manual_scrollview, "scroll_y", 0), 0)
-    def on_manual_input_focus(self, instance, value):
-        """Increase spacer height when a manual input field is focused, else reset."""
-        if hasattr(self, "manual_spacer_widget"):
-            if value:
-                print("Manual input field focused, increasing spacer height.")
-                self.manual_spacer_widget.height = dp(160) # Increase height when focused
-            else:
-                # Only shrink if no manual field is focused
-                if not any(getattr(f, "focus", False) for f in getattr(self, "manual_data_fields", [])):
-                    self.manual_spacer_widget.height = dp(80)
-
     def scroll_manual_input_to_buttons(self):
         """Scroll the manual data input ScrollView so the button row is visible."""
         if hasattr(self, "manual_scrollview") and self.manual_scrollview:
             # Scroll to bottom (0 = bottom, 1 = top)
             Clock.schedule_once(lambda dt: setattr(self.manual_scrollview, "scroll_y", 0), 0)
-
     def delete_last_row(self, rows_layout=None):
         if rows_layout is None:
             rows_layout = self.manual_rows_layout
@@ -2321,8 +2307,6 @@ SwipeFileItem:
             # Also clear the corresponding manual_data_rows entry if you want
             if hasattr(self, "manual_data_rows") and self.manual_data_rows:
                 self.manual_data_rows[0] = {k: v for k, v in self.manual_data_rows[0].items()}
-            # After clearing, update spacer height
-            self.on_manual_input_focus(None, False)
             return  # Do not remove the last remaining data row
 
         # Remove the last row
@@ -2336,9 +2320,6 @@ SwipeFileItem:
         # Also remove the last row_fields from manual_data_rows if present
         if hasattr(self, "manual_data_rows") and self.manual_data_rows:
             self.manual_data_rows.pop()
-
-        # After deleting, update spacer height
-        self.on_manual_input_focus(None, False)
 
         # Rebuild navigation for all homepage fields
         self.enable_next_navigation_on_homepage
