@@ -389,12 +389,10 @@ if is_android():
                 self.last_height = is_keyboard_visible
                 if is_keyboard_visible:
                     print("Soft keyboard shown (pyjnius)")
-                    # Trigger your logic here, e.g.:
-                    # self.app.on_keyboard_shown()
+                    self.app.on_keyboard_shown()  # <-- implement this in your MainApp
                 else:
                     print("Soft keyboard hidden (pyjnius)")
-                    # Trigger your logic here, e.g.:
-                    # self.app.on_keyboard_hidden()
+                    self.app.on_keyboard_hidden()  # <-- implement this in your MainApp
 
     def setup_keyboard_listener(self):
         activity = mActivity
@@ -492,7 +490,9 @@ class MainApp(MDApp):
                 # Try to use VibrationEffect if available, otherwise use legacy API
                 try:
                     VibrationEffect = autoclass('android.os.VibrationEffect')
-                    effect = VibrationEffect.createOneShot(500, VibrationEffect.DEFAULT_AMPLITUDE)
+                    effect = VibrationEffect.createOneShot(500, Vibration)
+                    VibrationEffect = autoclass('android.os.VibrationEffect')
+                    effect = VibrationEffect.createOneShot(500, VibrationEffect)
                     vibrator.vibrate(effect)
                     print("Vibrating with VibrationEffect")
                 except Exception:
@@ -2169,6 +2169,16 @@ SwipeFileItem:
     file_size: "{size}"
 ''')
             swipe_file_list.add_widget(item)
+
+    def on_keyboard_hidden(self):
+        print("Keyboard was hidden! (triggered from GlobalLayoutListener)")
+        # Your custom logic here, e.g.:
+        # self.manual_spacer_widget.height = dp(80)
+    
+    def on_keyboard_shown(self):
+        print("Keyboard was shown! (triggered from GlobalLayoutListener)")
+        # Your custom logic here, e.g.:
+        # self.manual_spacer_widget.height = dp(220)
 
     def show_manual_data_input(self):
         """Display manual data input fields in the CSV data table location based on filtered display options."""
