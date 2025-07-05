@@ -723,8 +723,27 @@ class MainApp(MDApp):
 
     def on_resume(self):
         print("on_resume CALLED")
+        # Re-create PendingIntent and IntentFilters
+        if is_android() and autoclass:
+            try:
+                NfcAdapter = autoclass('android.nfc.NfcAdapter')
+                PendingIntent = autoclass('android.app.PendingIntent')
+                Intent = autoclass('android.content.Intent')
+                IntentFilter = autoclass('android.content.IntentFilter')
+                intent = Intent(mActivity, mActivity.getClass())
+                intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                self.pending_intent = PendingIntent.getActivity(
+                    mActivity, 0, intent, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT
+                )
+                self.intent_filters = [
+                    IntentFilter("android.nfc.action.TAG_DISCOVERED"),
+                    IntentFilter("android.nfc.action.NDEF_DISCOVERED"),
+                    IntentFilter("android.nfc.action.TECH_DISCOVERED"),
+                ]
+                print("Re-created PendingIntent and IntentFilters on resume.")
+            except Exception as e:
+                print(f"Error re-creating PendingIntent/IntentFilters on resume: {e}")
         self.enable_nfc_foreground_dispatch()
-        # Do NOT process the intent here.
         print("NFC foreground dispatch re-enabled on resume.")
 
     def request_bal_exemption(self):
