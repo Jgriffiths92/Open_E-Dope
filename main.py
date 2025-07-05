@@ -698,12 +698,6 @@ class MainApp(MDApp):
         NfcHelper.processNfcIntentByteBufferAsync(intent, width, height, image_buffer_bb, epd_init_java_array, listener)
     def on_pause(self):
         print("on_pause CALLED")
-        #if is_android() and autoclass and hasattr(self, "nfc_adapter"):
-            #try:
-                #self.nfc_adapter.disableForegroundDispatch(mActivity)
-                #print("NFC foreground dispatch disabled.")
-            #except Exception as e:
-                #print(f"Error disabling NFC foreground dispatch: {e}")
         return True
 
     def on_start(self):
