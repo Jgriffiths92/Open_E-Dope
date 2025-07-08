@@ -1187,8 +1187,7 @@ class MainApp(MDApp):
 
         # Regenerate the table with updated columns
         if hasattr(self, "current_data"):  # Check if data is already loaded
-            filtered_data = self.filter_table_data(self.current_data)
-            self.display_table(filtered_data)
+            self.display_table(self.current_data)
 
     def on_fab_press(self):
         """Handle the floating action button press."""
@@ -1411,7 +1410,7 @@ class MainApp(MDApp):
             show_range = settings.getboolean("show_range", True)
             show_2_wind_holds = settings.getboolean("show_2_wind_holds", True)
             self.selected_display = settings.get("display_model", "Good Display 3.7-inch")
-            self.selected_orientation = settings.get("orientation", "portrait")
+            self.selected_orientation = settings.get("orientation", "Portrait")
             self.sort_type = settings.get("sort_type", "date")
             self.sort_order = settings.get("sort_order", "asc")
         else:
