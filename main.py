@@ -1003,13 +1003,16 @@ class MainApp(MDApp):
         return processed_data
 
     def display_table(self, data):
+        from kivy.uix.scrollview import ScrollView
+        from kivy.uix.gridlayout import GridLayout
+        from kivy.uix.label import Label
+        from kivy.metrics import dp
+
         global show_range
-        # Check if data is empty
         if not data:
             print("No data to display.")
             return
 
-        # Preprocess the data to handle numeric "Target" values
         data = self.preprocess_data(data)
 
         # --- Filter out rows where all values after "Target" are "---" ---
@@ -1027,17 +1030,14 @@ class MainApp(MDApp):
             header = data[0]
             filtered_data_zeros = [header]
             for row in data[1:]:
-                # Check if all values in the row are "0" (as strings)
                 if not all(str(v).strip() == "0" for v in row.values()):
                     filtered_data_zeros.append(row)
             data = filtered_data_zeros
 
-    # Check if Range is the first column in the data
         if data and list(data[0].keys())[0] == "Range":
             show_range = True
             print("Range is in column 0, setting show_range = True")
 
-        # --- Use the exact header and row logic as display_table ---
         static_headers = ["Target", "Range", "Elv", "Wnd1", "Wnd2", "Lead"]
         headers = ["Elv", "Wnd1"]
         target_present = any(row.get("Target") for row in data)
@@ -1053,44 +1053,58 @@ class MainApp(MDApp):
         if show_lead:
             headers.append("Lead")
 
-        # Filter the data rows based on the selected headers
-        filtered_data = [
-            {header: row.get(header, "") for header in headers} for row in data
+        # Prepare data for table
+        row_data = [
+            [str(row.get(header, "")) for header in headers] for row in data
         ]
 
-        # Calculate the maximum width for each column, using the displayed header text
-        column_widths = {}
-        for header in headers:
-            display_header = "Tgt" if header == "Target" else "Rng" if header == "Range" else header
-            column_widths[header] = len(display_header)
-
-        for row in filtered_data:
-            for header in headers:
-                column_widths[header] = max(column_widths[header], len(str(row.get(header, ""))))
-
-        # Format the headers and rows as text
-        table_text = " | ".join(f"{header:<{column_widths[header]}}" for header in headers) + "\n"  # Add headers
-        table_text += "-" * (sum(column_widths.values()) + len(headers) * 3 - 1) + "\n"  # Add a separator line
-        for row in filtered_data:
-            table_text += " | ".join(
-                f"{str(row.get(header, '')):<{column_widths[header]}}" for header in headers) + "\n"  # Add rows
-
-        # Add the text to the table_container in Home Screen
+        # Clear previous widgets
         home_screen = self.root.ids.home_screen
         table_container = home_screen.ids.table_container
-        table_container.clear_widgets()  # Clear any existing widgets in the container
+        table_container.clear_widgets()
 
-        # Create a Label to display the table text
-        table_label = Label(
-            text=table_text,
-            halign="center",
-            valign="center",
-            size_hint=(1, 1),
-            text_size=(table_container.width, None),
-            color=(0, 0, 0, 1),  # Set text color to black
-            font_name="assets/fonts/RobotoMono-Regular.ttf",  # Path to the font file
+        # Create the GridLayout for the table
+        table = GridLayout(
+            cols=len(headers),
+            size_hint_y=None,
+            row_default_height=dp(36),
+            spacing=dp(1),
+            padding=dp(2),
         )
-        table_container.add_widget(table_label)
+        table.bind(minimum_height=table.setter('height'))
+
+        # Add header row
+        for header in headers:
+            display_header = "Tgt" if header == "Target" else "Rng" if header == "Range" else header
+            table.add_widget(Label(
+                text=f"[b]{display_header}[/b]",
+                markup=True,
+                size_hint_y=None,
+                height=dp(36),
+                color=(0, 0, 0, 1),
+                halign="center",
+                valign="middle",
+                font_size=dp(16),
+                bold=True,
+            ))
+
+        # Add data rows
+        for row in row_data:
+            for cell in row:
+                table.add_widget(Label(
+                    text=cell,
+                    size_hint_y=None,
+                    height=dp(36),
+                    color=(0, 0, 0, 1),
+                    halign="center",
+                    valign="middle",
+                    font_size=dp(15),
+                ))
+
+        # Put the table in a ScrollView
+        scroll = ScrollView(size_hint=(1, 1))
+        scroll.add_widget(table)
+        table_container.add_widget(scroll)
 
     def on_dots_press(self, instance):
         global show_lead, show_range, show_2_wind_holds
