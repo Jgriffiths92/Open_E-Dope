@@ -1420,48 +1420,49 @@ class MainApp(MDApp):
         self.available_fields["Lead"]["show"] = show_lead
         self.available_fields["Range"]["show"] = show_range
         self.available_fields["Wnd2"]["show"] = show_2_wind_holds
-
+    def find_max_font_size(draw, headers_text, row_texts, notes_text, image_width, image_height, font_path, min_font=8, max_font=32):
+        for font_size in range(max_font, min_font - 1, -1):
+            font = ImageFont.truetype(font_path, font_size)
+            y = 10  # Start below stage name
+            # Stage name
+            y += font_size + 10  # Stage name + spacing
+            y += 10  # line under stage name
+            # Headers
+            y += font_size + 5
+            # Rows
+            y += len(row_texts) * (font_size + 2)
+            # Notes section
+            y += 20  # spacing before notes
+            y += font_size + 5  # "Stage Notes:"
+            y += 10  # line under notes label
+            y += font_size + 5  # actual notes
+            if y < image_height:
+                return font_size
+        return min_font
     def csv_to_bitmap(self, csv_data, output_path=None):
-        """Convert CSV data to a bitmap image, resize it to fit the display resolution while keeping the aspect ratio, and save it."""
+        """Convert CSV data to a bitmap image, dynamically maximizing font size to fit all data."""
         try:
+            from PIL import Image, ImageDraw, ImageFont
+
             # Set the default output path to the assets/bitmap folder
             bitmap_directory = os.path.join(os.path.dirname(__file__), "assets", "bitmap")
             if not os.path.exists(bitmap_directory):
-                os.makedirs(bitmap_directory)  # Create the directory if it doesn't exist
-
-            # Use the default output path if none is provided
+                os.makedirs(bitmap_directory)
             if output_path is None:
                 output_path = os.path.join(bitmap_directory, "output.bmp")
 
             # Default resolution if no display is selected
             display_width, display_height = 240, 416
-
-           
-            # Load the font file (ensure the font file is in the correct path)
-            font_path = os.path.join(os.path.dirname(__file__), "assets", "fonts", "RobotoMono-Regular.ttf")
-            font = ImageFont.truetype(font_path, 12)  # Load the font file
-
-            # 1. Always draw at portrait base size
             base_width, base_height = 240, 416
-            image = Image.new("RGB", (base_width, base_height), "white")
-            draw = ImageDraw.Draw(image)
 
-            # Add the stage name at the top
-            stage_name = self.root.ids.home_screen.ids.stage_name_field.text  # Get the stage name from the text field
-            y = 10  # Starting vertical position
-            text_bbox = draw.textbbox((0, 0), stage_name, font=font)  # Get the bounding box of the text
-            text_width = text_bbox[2] - text_bbox[0]  # Calculate the text width
-            x = (base_width - text_width) // 2  # Center the text horizontally
-            draw.text((x, y), stage_name, fill="black", font=font)
-            y += 20  # Add some spacing after the stage name
+            # Load the font file
+            font_path = os.path.join(os.path.dirname(__file__), "assets", "fonts", "RobotoMono-Regular.ttf")
 
-            # Draw a horizontal line under the stage name
-            draw.line((10, y, base_width - 10, y), fill="black", width=1)
-            y += 20  # Add some spacing after the line
+            # Prepare data for measurement
+            stage_name = self.root.ids.home_screen.ids.stage_name_field.text
+            stage_notes = self.root.ids.home_screen.ids.stage_notes_field.text
 
-            # --- Use the exact header and row logic as display_table ---
             processed_data = self.preprocess_data(csv_data)
-
             # Filter out rows where all values after "Target" are "---"
             if processed_data:
                 header = processed_data[0]
@@ -1476,7 +1477,6 @@ class MainApp(MDApp):
                 header = processed_data[0]
                 filtered_data_zeros = [header]
                 for row in processed_data[1:]:
-                    # Check if all values in the row are "0" (as strings)
                     if not all(str(v).strip() == "0" for v in row.values()):
                         filtered_data_zeros.append(row)
                 processed_data = filtered_data_zeros
@@ -1505,67 +1505,118 @@ class MainApp(MDApp):
             for header in headers:
                 display_header = "Tgt" if header == "Target" else "Rng" if header == "Range" else header
                 column_widths[header] = len(display_header)
-
             for row in filtered_data:
                 for header in headers:
                     column_widths[header] = max(column_widths[header], len(str(row.get(header, ""))))
 
-            # Write headers to the image
             headers_text = " | ".join(
                 f"{('Tgt' if header == 'Target' else 'Rng' if header == 'Range' else header):<{column_widths[header]}}"
                 for header in headers
             )
+            row_texts = [
+                " | ".join(f"{str(row.get(header, '')):<{column_widths[header]}}" for header in headers)
+                for row in filtered_data
+            ]
+
+            # --- Dynamic font size calculation ---
+            def find_max_font_size():
+                min_font, max_font = 8, 32
+                for font_size in range(max_font, min_font - 1, -1):
+                    font = ImageFont.truetype(font_path, font_size)
+                    y = 10  # Start below stage name
+                    # Stage name
+                    y += font.getbbox(stage_name)[3] - font.getbbox(stage_name)[1] + 10
+                    y += 10  # line under stage name
+                    # Headers
+                    y += font.getbbox(headers_text)[3] - font.getbbox(headers_text)[1] + 5
+                    # Rows
+                    for row_text in row_texts:
+                        y += font.getbbox(row_text)[3] - font.getbbox(row_text)[1] + 2
+                    # Notes section
+                    y += 20  # spacing before notes
+                    y += font.getbbox("Stage Notes:")[3] - font.getbbox("Stage Notes:")[1] + 5
+                    y += 10  # line under notes label
+                    y += font.getbbox(stage_notes)[3] - font.getbbox(stage_notes)[1] + 5
+                    if y < base_height:
+                        # Also check width
+                        max_row_width = max(
+                            font.getbbox(stage_name)[2] - font.getbbox(stage_name)[0],
+                            font.getbbox(headers_text)[2] - font.getbbox(headers_text)[0],
+                            *(font.getbbox(row_text)[2] - font.getbbox(row_text)[0] for row_text in row_texts),
+                            font.getbbox("Stage Notes:")[2] - font.getbbox("Stage Notes:")[0],
+                            font.getbbox(stage_notes)[2] - font.getbbox(stage_notes)[0],
+                        )
+                        if max_row_width < base_width - 10:
+                            return font_size
+                return min_font
+
+            font_size = find_max_font_size()
+            font = ImageFont.truetype(font_path, font_size)
+
+            # --- Draw everything ---
+            image = Image.new("RGB", (base_width, base_height), "white")
+            draw = ImageDraw.Draw(image)
+            y = 10
+            # Stage name
+            text_bbox = draw.textbbox((0, 0), stage_name, font=font)
+            text_width = text_bbox[2] - text_bbox[0]
+            x = (base_width - text_width) // 2
+            draw.text((x, y), stage_name, fill="black", font=font)
+            y += text_bbox[3] - text_bbox[1] + 10
+
+            # Line under stage name
+            draw.line((10, y, base_width - 10, y), fill="black", width=1)
+            y += 10
+
+            # Headers
             text_bbox = draw.textbbox((0, 0), headers_text, font=font)
             text_width = text_bbox[2] - text_bbox[0]
             x = (base_width - text_width) // 2
             draw.text((x, y), headers_text, fill="black", font=font)
-            y += 20
+            y += text_bbox[3] - text_bbox[1] + 5
 
-            # Write CSV data to the image
-            for row in filtered_data:
-                row_text = " | ".join(f"{str(row.get(header, '')):<{column_widths[header]}}" for header in headers)
+            # Rows
+            for row_text in row_texts:
                 text_bbox = draw.textbbox((0, 0), row_text, font=font)
                 text_width = text_bbox[2] - text_bbox[0]
                 x = (base_width - text_width) // 2
                 draw.text((x, y), row_text, fill="black", font=font)
-                y += 20
+                y += text_bbox[3] - text_bbox[1] + 2
 
-            # Add the stage notes below the table data
-            stage_notes = self.root.ids.home_screen.ids.stage_notes_field.text  # Get the stage notes from the text field
-            y += 20  # Add some spacing before the stage notes
-            draw.line((10, y, base_width - 10, y), fill="black", width=1)  # Draw a line above the stage notes
-            y += 10  # Add some spacing after the line
-            text_bbox = draw.textbbox((0, 0), "Stage Notes:", font=font)  # Get the bounding box of the stage notes label
-            text_width = text_bbox[2] - text_bbox[0]  # Calculate the text width
-            x = (base_width - text_width) // 2  # Center the text horizontally
+            # Notes section
+            y += 20
+            draw.line((10, y, base_width - 10, y), fill="black", width=1)
+            y += 10
+            text_bbox = draw.textbbox((0, 0), "Stage Notes:", font=font)
+            text_width = text_bbox[2] - text_bbox[0]
+            x = (base_width - text_width) // 2
             draw.text((x, y), "Stage Notes:", fill="black", font=font)
-            y += 30  # Add some spacing after the stage notes label
-            draw.line((10, y, base_width - 10, y), fill="black", width=1)  # Draw a horizontal line under the stage notes label
-            y += 20  # Add some spacing after the line
-            text_bbox = draw.textbbox((0, 0), stage_notes, font=font)  # Get the bounding box of the stage notes
-            text_width = text_bbox[2] - text_bbox[0]  # Calculate the text width
-            x = (base_width - text_width) // 2  # Center the text horizontally
+            y += text_bbox[3] - text_bbox[1] + 5
+            draw.line((10, y, base_width - 10, y), fill="black", width=1)
+            y += 10
+            text_bbox = draw.textbbox((0, 0), stage_notes, font=font)
+            text_width = text_bbox[2] - text_bbox[0]
+            x = (base_width - text_width) // 2
             draw.text((x, y), stage_notes, fill="black", font=font)
 
-            # 2. Determine the final output size based on orientation and selected display
-            portrait_resolution = self.selected_resolution  # e.g., (240, 416) for 3.7"
+            # Resize to final output size
+            portrait_resolution = self.selected_resolution
             if self.selected_orientation == "Landscape":
-                final_resolution = (portrait_resolution[1], portrait_resolution[0])  # e.g., (416, 240)
+                final_resolution = (portrait_resolution[1], portrait_resolution[0])
             else:
-                final_resolution = portrait_resolution  # e.g., (240, 416)
-
-            # 3. Resize to the final resolution (this will stretch/squash if needed)
+                final_resolution = portrait_resolution
             image = image.resize(final_resolution, Image.LANCZOS)
 
-            # Save the resized image as a bitmap
-            bw_image = image.convert("1")  # Convert to 1-bit pixels
+            # Save as 1-bit bitmap
+            bw_image = image.convert("1")
             bw_image.save(output_path)
             print(f"Bitmap saved to {output_path}")
-            print(f"Bitmap dimensions: {bw_image.size}")
+            print(f"Bitmap dimensions: {bw_image.size}, font size used: {font_size}")
             return output_path
         except Exception as e:
             print(f"Error converting CSV to bitmap: {e}")
             return None
+        
     def navigate_to_home(self):
         """Navigate back to the home screen."""
         self.root.ids.screen_manager.current = "home"
