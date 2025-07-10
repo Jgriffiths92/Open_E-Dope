@@ -439,50 +439,6 @@ class MainApp(MDApp):
         else:
             print("Failed to generate bitmap.")
 
-    def update_nfc_progress(self, percent):
-        if hasattr(self, "nfc_progress_bar") and self.nfc_progress_bar:
-            # If percent is 100, delay the update by 3 seconds
-            if percent >= 100:
-                Clock.schedule_once(lambda dt: self._finish_nfc_progress(), 3)
-            else:
-                self.nfc_progress_bar.value = percent
-
-    def _finish_nfc_progress(self):
-        if hasattr(self, "nfc_progress_bar") and self.nfc_progress_bar:
-            self.nfc_progress_bar.value = 100
-        if hasattr(self, "nfc_progress_label"):
-            self.nfc_progress_label.text = "Transfer successful!"
-            self.nfc_progress_label.color = (0, 0.6, 0, 1) # Green for success
-        Clock.schedule_once(lambda dt: self.hide_nfc_progress_dialog(), 1.5)
-         # Clear the data table, stage notes, and stage name after success
-        Clock.schedule_once(lambda dt: self.clear_table_data())       
-        print("PYTHON DEBUG: _finish_nfc_progress completed. self.current_data should be cleared by clear_table_data().")
-    def on_nfc_transfer_error(self, error_message="Transfer failed!"):
-        print(f"PYTHON DEBUG: on_nfc_transfer_error called with message: {error_message}")
-        dialog_updated_successfully = False
-
-        # Attempt to update the existing progress dialog if it's fully formed
-        if hasattr(self, "nfc_progress_dialog") and self.nfc_progress_dialog and \
-           hasattr(self, "nfc_progress_label") and self.nfc_progress_label:
-            self.nfc_progress_label.text = error_message
-            self.nfc_progress_label.color = (1, 0, 0, 1)  # Red color for error
-            dialog_updated_successfully = True
-            
-            # Also hide the progress bar itself if it exists
-            if hasattr(self, "nfc_progress_bar") and self.nfc_progress_bar:
-                self.nfc_progress_bar.opacity = 0 # Hide it to emphasize the error
-        
-        if not dialog_updated_successfully:
-            # Fallback: If the dialog or its label isn't there, show a toast
-            toast(f"NFC Error: {error_message}")
-
-        # Ensure any active progress dialog is dismissed after showing the error
-        Clock.schedule_once(lambda dt: self.hide_nfc_progress_dialog(), 2.5) # Give time to see the error
-        self.image_buffer = None
-        self.nfc_transfer_in_progress = False
-        self.current_data = []
-        self.manual_data_rows = []
-        print("PYTHON DEBUG: on_nfc_transfer_error. self.current_data and manual_data_rows cleared.")
     def show_nfc_progress_dialog(self, message="Transferring data..."):
         # Vibrate for 500ms when the dialog opens (Android only)
         if is_android() and mActivity and autoclass:
@@ -1466,7 +1422,6 @@ class MainApp(MDApp):
                 output_path = os.path.join(bitmap_directory, "output.bmp")
 
             # Default resolution if no display is selected
-            display_width, display_height = 240, 416
             base_width, base_height = 240, 416
 
             # Load the font file
@@ -1514,24 +1469,6 @@ class MainApp(MDApp):
                 {header: row.get(header, "") for header in headers} for row in processed_data
             ]
 
-            # Calculate the maximum width for each column, using the displayed header text
-            column_widths = {}
-            for header in headers:
-                display_header = "Tgt" if header == "Target" else "Rng" if header == "Range" else header
-                column_widths[header] = len(display_header)
-            for row in filtered_data:
-                for header in headers:
-                    column_widths[header] = max(column_widths[header], len(str(row.get(header, ""))))
-
-            headers_text = " | ".join(
-                f"{('Tgt' if header == 'Target' else 'Rng' if header == 'Range' else header):<{column_widths[header]}}"
-                for header in headers
-            )
-            row_texts = [
-                " | ".join(f"{str(row.get(header, '')):<{column_widths[header]}}" for header in headers)
-                for row in filtered_data
-            ]
-
             # --- Dynamic font size calculation ---
             def find_max_font_size():
                 min_font, max_font = 8, 32
@@ -1542,10 +1479,10 @@ class MainApp(MDApp):
                     y += font.getbbox(stage_name)[3] - font.getbbox(stage_name)[1] + 10
                     y += 10  # line under stage name
                     # Headers
-                    y += font.getbbox(headers_text)[3] - font.getbbox(headers_text)[1] + 5
+                    y += font.getbbox("Tgt")[3] - font.getbbox("Tgt")[1] + 5
                     # Rows
-                    for row_text in row_texts:
-                        y += font.getbbox(row_text)[3] - font.getbbox(row_text)[1] + 2
+                    for row in filtered_data:
+                        y += font.getbbox("Tgt")[3] - font.getbbox("Tgt")[1] + 2
                     # Notes section
                     y += 20  # spacing before notes
                     y += font.getbbox("Stage Notes:")[3] - font.getbbox("Stage Notes:")[1] + 5
@@ -1553,65 +1490,109 @@ class MainApp(MDApp):
                     y += font.getbbox(stage_notes)[3] - font.getbbox(stage_notes)[1] + 5
                     if y < base_height:
                         # Also check width
-                        max_row_width = max(
-                            font.getbbox(stage_name)[2] - font.getbbox(stage_name)[0],
-                            font.getbbox(headers_text)[2] - font.getbbox(headers_text)[0],
-                            *(font.getbbox(row_text)[2] - font.getbbox(row_text)[0] for row_text in row_texts),
-                            font.getbbox("Stage Notes:")[2] - font.getbbox("Stage Notes:")[0],
-                            font.getbbox(stage_notes)[2] - font.getbbox(stage_notes)[0],
-                        )
-                        if max_row_width < base_width - 10:
+                        col_widths = []
+                        for header in headers:
+                            max_width = font.getbbox("Tgt" if header == "Target" else "Rng" if header == "Range" else header)[2]
+                            for row in filtered_data:
+                                cell_text = str(row.get(header, ""))
+                                cell_width = font.getbbox(cell_text)[2]
+                                max_width = max(max_width, cell_width)
+                            col_widths.append(max_width + 12)
+                        table_width = sum(col_widths)
+                        if table_width < base_width - 4: # 2px margin each side
                             return font_size
                 return min_font
 
             font_size = find_max_font_size()
             font = ImageFont.truetype(font_path, font_size)
 
-            # --- Draw everything ---
+            # --- Draw everything with vertical lines and a header underline ---
             image = Image.new("RGB", (base_width, base_height), "white")
             draw = ImageDraw.Draw(image)
             y = 10
+
+            row_height = font.size + 8
+
             # Stage name
             text_bbox = draw.textbbox((0, 0), stage_name, font=font)
             text_width = text_bbox[2] - text_bbox[0]
             x = (base_width - text_width) // 2
             draw.text((x, y), stage_name, fill="black", font=font)
+            draw.text((x+1, y), stage_name, fill="black", font=font)  # Simulate bold
             y += text_bbox[3] - text_bbox[1] + 10
 
             # Line under stage name
-            draw.line((10, y, base_width - 10, y), fill="black", width=1)
+            draw.line((2, y, base_width - 2, y), fill="black", width=1)
+            y += 10
+            table_top = y
+
+            # --- Table grid setup ---
+            n_cols = len(headers)
+            n_rows = len(filtered_data) + 1  # +1 for header row
+
+            # Calculate column widths
+            col_widths = []
+            for header in headers:
+                max_width = draw.textbbox((0, 0), "Tgt" if header == "Target" else "Rng" if header == "Range" else header, font=font)[2]
+                for row in filtered_data:
+                    cell_text = str(row.get(header, ""))
+                    cell_width = draw.textbbox((0, 0), cell_text, font=font)[2]
+                    max_width = max(max_width, cell_width)
+                col_widths.append(max_width + 12)  # Add padding
+
+            table_width = sum(col_widths)
+            table_margin = 2  # Reduce left/right margin to 2px
+            table_left = (base_width - table_width) // 2
+            if table_left < table_margin:
+                table_left = table_margin
+
+            # Draw header row (bold)
+            col_x = table_left
+            for col_idx, header in enumerate(headers):
+                header_text = "Tgt" if header == "Target" else "Rng" if header == "Range" else header
+                cell_x = col_x + (col_widths[col_idx] - draw.textbbox((0, 0), header_text, font=font)[2]) // 2
+                cell_y = table_top + (row_height - font.size) // 2
+                draw.text((cell_x, cell_y), header_text, fill="black", font=font)
+                draw.text((cell_x+1, cell_y), header_text, fill="black", font=font)  # Simulate bold
+                col_x += col_widths[col_idx]
+
+            # Draw solid vertical lines at column boundaries
+            col_x = table_left
+            for col_idx in range(1, n_cols):  # Start at 1, stop before n_cols
+                col_x += col_widths[col_idx - 1]
+                draw.line((col_x, table_top, col_x, table_top + row_height * n_rows), fill="black", width=1)
+
+            # Draw a solid horizontal line under the headers
+            draw.line((table_left, table_top + row_height, table_left + sum(col_widths), table_top + row_height), fill="black", width=1)
+
+            # Draw data rows (no boxes)
+            for row_idx, row in enumerate(filtered_data):
+                col_x = table_left
+                for col_idx, header in enumerate(headers):
+                    cell_text = str(row.get(header, ""))
+                    cell_x = col_x + (col_widths[col_idx] - draw.textbbox((0, 0), cell_text, font=font)[2]) // 2
+                    cell_y = table_top + row_height * (row_idx + 1) + (row_height - font.size) // 2
+                    draw.text((cell_x, cell_y), cell_text, fill="black", font=font)
+                    col_x += col_widths[col_idx]
+
+            y = table_top + row_height * n_rows + 20
+
+            # --- Centered Notes section ---
+            notes_label = "Stage Notes:"
+            notes_label_bbox = draw.textbbox((0, 0), notes_label, font=font)
+            notes_label_width = notes_label_bbox[2] - notes_label_bbox[0]
+            notes_label_x = (base_width - notes_label_width) // 2
+            draw.text((notes_label_x, y), notes_label, fill="black", font=font)
+            draw.text((notes_label_x+1, y), notes_label, fill="black", font=font)  # Simulate bold
+            y += font.size + 5
+
+            draw.line((2, y, base_width - 2, y), fill="black", width=1)
             y += 10
 
-            # Headers
-            text_bbox = draw.textbbox((0, 0), headers_text, font=font)
-            text_width = text_bbox[2] - text_bbox[0]
-            x = (base_width - text_width) // 2
-            draw.text((x, y), headers_text, fill="black", font=font)
-            y += text_bbox[3] - text_bbox[1] + 5
-
-            # Rows
-            for row_text in row_texts:
-                text_bbox = draw.textbbox((0, 0), row_text, font=font)
-                text_width = text_bbox[2] - text_bbox[0]
-                x = (base_width - text_width) // 2
-                draw.text((x, y), row_text, fill="black", font=font)
-                y += text_bbox[3] - text_bbox[1] + 2
-
-            # Notes section
-            y += 20
-            draw.line((10, y, base_width - 10, y), fill="black", width=1)
-            y += 10
-            text_bbox = draw.textbbox((0, 0), "Stage Notes:", font=font)
-            text_width = text_bbox[2] - text_bbox[0]
-            x = (base_width - text_width) // 2
-            draw.text((x, y), "Stage Notes:", fill="black", font=font)
-            y += text_bbox[3] - text_bbox[1] + 5
-            draw.line((10, y, base_width - 10, y), fill="black", width=1)
-            y += 10
-            text_bbox = draw.textbbox((0, 0), stage_notes, font=font)
-            text_width = text_bbox[2] - text_bbox[0]
-            x = (base_width - text_width) // 2
-            draw.text((x, y), stage_notes, fill="black", font=font)
+            notes_text_bbox = draw.textbbox((0, 0), stage_notes, font=font)
+            notes_text_width = notes_text_bbox[2] - notes_text_bbox[0]
+            notes_text_x = (base_width - notes_text_width) // 2
+            draw.text((notes_text_x, y), stage_notes, fill="black", font=font)
 
             # Resize to final output size
             portrait_resolution = self.selected_resolution
@@ -1714,6 +1695,7 @@ class MainApp(MDApp):
             "Good Display 2.9-inch": (128, 296),
         }
         if not hasattr(self, "native_resolution") or self.native_resolution is None:
+
             self.native_resolution = display_resolutions.get(self.selected_display, (240, 416))
         self.selected_resolution = self.native_resolution  # Always portrait
         self.save_settings()
@@ -1781,7 +1763,7 @@ class MainApp(MDApp):
                 return private_storage_path
             except Exception as e:
                 print(f"Error retrieving private storage path: {e}")
-                return None
+
         else:
             # Use a local directory for non-Android platforms
             private_storage_path = os.path.join(os.path.dirname(__file__), "private_storage")
