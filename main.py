@@ -428,8 +428,18 @@ class MainApp(MDApp):
         import os
         return os.path.basename(path)
     def on_nfc_button_press(self, *args):
-        """Handle the NFC button press: generate the bitmap from current data."""
         print("NFC button pressed!")
+        # Add manual data first if any manual fields are filled
+        if (
+            hasattr(self, "manual_data_rows")
+            and self.manual_data_rows
+            and any(
+                any(field.text.strip() for field in row_fields.values())
+                for row_fields in self.manual_data_rows
+            )
+        ):
+            print("Manual data input detected, adding manual data before generating bitmap.")
+            self.add_manual_data()
         if not hasattr(self, "current_data") or not self.current_data:
             print("No data loaded to generate bitmap.")
             return
