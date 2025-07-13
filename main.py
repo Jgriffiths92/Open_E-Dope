@@ -276,7 +276,7 @@ class ManageDataScreen(Screen):
 
         def confirm_delete(*args):
             app = App.get_running_app()
-            csv_dir = app.ensure_csv_directory()
+            csv_dir = app.get_external_storage_path()
             try:
                 for item in os.listdir(csv_dir):
                     item_path = os.path.join(csv_dir, item)
@@ -396,7 +396,7 @@ if is_android():
                     # Trigger your logic here, e.g.:
                     # self.app.on_keyboard_hidden()
 
-    def setup_keyboard_listener(self):
+    def setup_keyboard_listener():
         activity = mActivity
         root_view = activity.getWindow().getDecorView()
         listener = GlobalLayoutListener(self)
@@ -548,7 +548,7 @@ class MainApp(MDApp):
         super().__init__(**kwargs)
         self.config_parser = ConfigParser()  # Initialize ConfigParser
         self.current_data = [] # Initialize current_data to store CSV data
-        private_storage_path = self.get_private_storage_path() # Get the private storage path
+        private_storage_path = self.get_external_storage_path() # Get the private storage path
         self.config_file = os.path.join(private_storage_path, "settings.ini")  # Path to the settings file
         self.standalone_mode_enabled = False  # Default to standalone mode being disabled
         self.selected_display = "Good Display 3.7-inch"  # Default selected display
@@ -753,7 +753,7 @@ class MainApp(MDApp):
         if threshold is None:
             return  # Never delete
 
-        csv_dir = self.ensure_csv_directory()
+        csv_dir = self.get_external_storage_path()
         now = time.time()
         for folder in os.listdir(csv_dir):
             folder_path = os.path.join(csv_dir, folder)
@@ -790,7 +790,7 @@ class MainApp(MDApp):
         # Dynamically set the rootpath for the FileChooserListView
         self.root = Builder.load_file("layout.kv")  # Load the root widget from the KV file
         saved_cards_screen = self.root.ids.screen_manager.get_screen("saved_cards")
-        csv_directory = self.ensure_csv_directory()
+        csv_directory = self.get_external_storage_path()
 
         # Handle the intent if the app was opened via an intent
         if is_android():
@@ -1179,7 +1179,7 @@ class MainApp(MDApp):
 
         if not self.dialog:
             # Get the list of folders in the assets/CSV directory
-            csv_directory = self.ensure_csv_directory()
+            csv_directory = self.get_external_storage_path()
             folders = [f for f in os.listdir(csv_directory) if os.path.isdir(os.path.join(csv_directory, f))]
 
             # Create a BoxLayout to hold the dropdown button and text input
@@ -1294,27 +1294,23 @@ class MainApp(MDApp):
                 if not all(str(v).strip() == "---" for v in values_after_target):
                     filtered_data.append(row)
             self.current_data = filtered_data
-            # Determine the private storage path
-            storage_path = self.get_private_storage_path()
+            # Use external storage path instead of private storage
+            storage_path = self.get_external_storage_path()
             if storage_path:
                 try:
-                    # Ensure the CSV folder exists
-                    csv_folder_path = os.path.join(storage_path, "CSV")
-                    if not os.path.exists(csv_folder_path):
-                        os.makedirs(csv_folder_path)
-
+                    # Ensure the data cards folder exists
+                    cards_folder_path = storage_path  # Already created by get_external_storage_path
                     # Construct the file name and path
                     file_name = f"{self.root.ids.home_screen.ids.stage_name_field.text}.csv"
                     if new_event_name:
-                        # Use the new event name to create a folder inside the CSV folder
-                        event_folder_path = os.path.join(csv_folder_path, new_event_name)
+                        # Use the new event name to create a folder inside the external folder
+                        event_folder_path = os.path.join(cards_folder_path, new_event_name)
                         if not os.path.exists(event_folder_path):
-                            os.makedirs(event_folder_path)  # Create the folder if it doesn't exist
+                            os.makedirs(event_folder_path)
                         file_path = os.path.join(event_folder_path, file_name)
                     elif self.selected_save_folder:
-                        # Use the selected folder inside the CSV folder
                         if not os.path.exists(self.selected_save_folder):
-                            os.makedirs(self.selected_save_folder)  # Create the folder if it doesn't exist
+                            os.makedirs(self.selected_save_folder)
                         file_path = os.path.join(self.selected_save_folder, file_name)
                     else:
                         toast("No folder selected or created. Cannot save data.")
@@ -1736,58 +1732,38 @@ class MainApp(MDApp):
         # Add your cleanup logic here
 
     def get_external_storage_path(self):
-        """Retrieve the external storage path using mActivity or default to assets/CSV."""
+        """
+        Retrieve a custom external storage path (e.g., /storage/emulated/0/OpenEDopeDataCards on Android,
+        ~/OpenEDopeDataCards on desktop). Creates the directory if it doesn't exist.
+        """
+        import os
         if is_android():
             try:
-                # Get the Android context
-                context = mActivity.getApplicationContext()
-
-                # Get the external files directory
-                result = context.getExternalFilesDir(None)  # Pass `None` to get the root directory
-                if result:
-                    storage_path = str(result.toString())
-                    print(f"External storage path: {storage_path}")
-                    return storage_path
-                else:
-                    print("Failed to retrieve external storage path.")
-                    return None
+                from jnius import autoclass
+                Environment = autoclass('android.os.Environment')
+                # Get the root of external storage (shared by all apps)
+                external_root = Environment.getExternalStorageDirectory().getAbsolutePath()
+                custom_dir = os.path.join(external_root, "OpenEDopeDataCards")
+                if not os.path.exists(custom_dir):
+                    os.makedirs(custom_dir)
+                print(f"External storage path: {custom_dir}")
+                return custom_dir
             except Exception as e:
                 print(f"Error retrieving external storage path: {e}")
                 return None
         else:
-            # Default to assets/CSV folder
-            csv_directory = os.path.join(os.path.dirname(__file__), "assets", "CSV")
-            if not os.path.exists(csv_directory):
-                os.makedirs(csv_directory)
-            print(f"Defaulting to assets/CSV folder: {csv_directory}")
-            return csv_directory
-
-    def get_private_storage_path(self):
-        """Retrieve the app's private storage path."""
-
-        if is_android():
-            try:
-                context = mActivity.getApplicationContext()
-                private_storage_path = context.getFilesDir().getAbsolutePath()
-                print(f"Private storage path: {private_storage_path}")
-                return private_storage_path
-            except Exception as e:
-                print(f"Error retrieving private storage path: {e}")
-
-        else:
-            # Use a local directory for non-Android platforms
-            private_storage_path = os.path.join(os.path.dirname(__file__), "private_storage")
-            if not os.path.exists(private_storage_path):
-                os.makedirs(private_storage_path)
-            print(f"Private storage path (non-Android): { private_storage_path}")
-        return private_storage_path
+            # Use the user's home directory on desktop
+            custom_dir = os.path.join(os.path.expanduser("~"), "OpenEDopeDataCards")
+            if not os.path.exists(custom_dir):
+                               os.makedirs(custom_dir)
+            print(f"Defaulting to: {custom_dir}")
+            return custom_dir
 
     def save_to_external_storage(self, file_name, content):
-        """Save a file to the external storage directory or assets/CSV."""
+        """Save a file to the custom external storage directory."""
         storage_path = self.get_external_storage_path()
         if storage_path:
             try:
-                # Construct the full file path
                 file_path = os.path.join(storage_path, file_name)
 
                 # Write the content to the file
@@ -1798,14 +1774,6 @@ class MainApp(MDApp):
                 print(f"Error saving file to storage: {e}")
         else:
             print("Storage path is not available.")
-
-        if is_android():
-            print("Running on Android. External storage is available.")
-            storage_path = self.get_external_storage_path()
-            if storage_path:
-                print(f"External storage path: {storage_path}")
-        else:
-            print("Not running on Android. External storage is not available.")
 
     def initialize_nfc(self):
         """Initialize the NFC adapter and enable foreground dispatch."""
@@ -2084,7 +2052,7 @@ class MainApp(MDApp):
 
     def copy_assets_to_internal_storage(self):
         """Copy the assets/CSV folder to the app's private storage directory."""
-        private_storage_path = self.get_private_storage_path()
+        private_storage_path = self.get_external_storage_path()
        
         if private_storage_path:
             try:
@@ -2145,13 +2113,13 @@ class MainApp(MDApp):
     def delete_file_or_folder(self, path):
         """Delete the selected file or folder and refresh the file list."""
         try:
-            base_dir = os.path.abspath(self.get_private_storage_path())
+            base_dir = os.path.abspath(self.get_external_storage_path())
             abs_path = os.path.abspath(path)
             saved_cards_screen = self.root.ids.screen_manager.get_screen("saved_cards")
 
             # If deleting a folder or a non-csv file, always go to assets/CSV first
             if not abs_path.lower().endswith(".csv"):
-                csv_root = self.ensure_csv_directory()
+                csv_root = self.get_external_storage_path()
                 self.populate_swipe_file_list()
 
             if os.path.exists(abs_path):
@@ -2181,10 +2149,10 @@ class MainApp(MDApp):
         swipe_file_list.clear_widgets()
 
         if target_dir is None:
-            target_dir = self.ensure_csv_directory()
+            target_dir = self.get_external_storage_path()
 
         # Add parent directory entry if not at root
-        root_dir = self.ensure_csv_directory()
+        root_dir = self.get_external_storage_path()
         if os.path.abspath(target_dir) != os.path.abspath(root_dir):
             parent_dir = os.path.abspath(os.path.join(target_dir, ".."))
             item = Builder.load_string(f'''
