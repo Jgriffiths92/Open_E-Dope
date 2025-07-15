@@ -598,6 +598,8 @@ class MainApp(MDApp):
                 img = img.rotate(90, expand=True)
             # else: do not rotate for landscape
             image_buffer = pack_image_column_major(img)
+            # Invert bits to match demo polarity
+            image_buffer = bytes(b ^ 0xFF for b in image_buffer)
             width, height = img.size
         expected_size = width * height // 8
         if len(image_buffer) != expected_size:
