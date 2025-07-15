@@ -633,8 +633,12 @@ class MainApp(MDApp):
         # 4. Final validation before sending to Java
         # Check for all-zero (blank) image buffer
         if all(b == 0 for b in image_buffer):
-            print("ERROR: Image buffer is all zeros (blank image)!")
+            print("ERROR: Image buffer is all zeros (all black)!")
             toast("Cannot send blank image to NFC tag.")
+            return
+        if all(b == 0xFF for b in image_buffer):
+            print("ERROR: Image buffer is all 0xFF (all white)!")
+            toast("Cannot send blank (all white) image to NFC tag.")
             return
 
         # 4. Pass the intent down!
@@ -1750,6 +1754,7 @@ class MainApp(MDApp):
                 result = context.getExternalFilesDir(None)  # Pass `None` to get the root directory
                 if result:
                     storage_path = str(result.toString())
+
                     print(f"External storage path: {storage_path}")
                     return storage_path
                 else:
