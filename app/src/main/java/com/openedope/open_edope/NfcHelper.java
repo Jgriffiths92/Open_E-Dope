@@ -122,6 +122,13 @@ public class NfcHelper {
     }
 
     private static void executeWriteProtocol(Object nfcTech, int width0, int height0, byte[] image_buffer, String[] epd_init, NfcProgressListener listener) throws IOException {
+        // --- Print the first 32 bytes of the image buffer for debugging ---
+        StringBuilder sb = new StringBuilder();
+        int printLen = Math.min(32, image_buffer.length);
+        for (int i = 0; i < printLen; i++) {
+            sb.append(String.format("%02X ", image_buffer[i]));
+        }
+        Log.d(TAG, "First 32 bytes of image_buffer: " + sb.toString());
         // Send DIY command before init
         byte[] diyCmd = hexStringToBytes("F0DB020000");
         byte[] response = transceiveWithRetry(nfcTech, diyCmd, "DIY_CMD", listener);

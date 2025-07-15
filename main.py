@@ -598,7 +598,6 @@ class MainApp(MDApp):
                 img = img.rotate(90, expand=True)
             # else: do not rotate for landscape
             image_buffer = pack_image_column_major(img)
-            # Invert bits to match demo polarity
             image_buffer = bytes(b ^ 0xFF for b in image_buffer)
             width, height = img.size
         expected_size = width * height // 8
@@ -606,7 +605,10 @@ class MainApp(MDApp):
             toast("Bitmap size error. Cannot send to NFC.")
             print(f"Bitmap size error: got {len(image_buffer)}, expected {expected_size}")
             return
-
+        # Print the first 32 bytes for inspection
+        print("First 32 bytes of image_buffer:", list(image_buffer[:32]))
+        # Optionally, print as hex for easier comparison
+        print("First 32 bytes (hex):", " ".join(f"{b:02X}" for b in image_buffer[:32]))
         # 3. Prepare epd_init (replace with your actual values)
         epd_init = self.EPD_INIT_MAP.get(self.selected_display)
         if not epd_init:
