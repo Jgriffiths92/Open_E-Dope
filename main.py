@@ -2620,15 +2620,15 @@ SwipeFileItem:
                 print(f"Error processing subject content: {e}")
                 
     def hide_nfc_progress_dialog(self):
-        if hasattr(self, "nfc_progress_dialog") and self.nfc_progress_dialog:
-            self.nfc_progress_dialog.dismiss()
-            self.nfc_progress_dialog = None
         # Nullify bar and label to ensure they are recreated fresh by show_nfc_progress_dialog
         # and to prevent callbacks from trying to update stale UI elements.
         if hasattr(self, "nfc_progress_bar"):
             self.nfc_progress_bar = None
         if hasattr(self, "nfc_progress_label"):
             self.nfc_progress_label = None
+        if hasattr(self, "nfc_progress_dialog") and self.nfc_progress_dialog:
+            self.nfc_progress_dialog.dismiss()
+            self.nfc_progress_dialog = None
     def update_nfc_progress(self, percent):
         if hasattr(self, "nfc_progress_bar") and self.nfc_progress_bar:
             # If percent is 100, delay the update by 3 seconds
