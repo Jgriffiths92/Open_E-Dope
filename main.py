@@ -1637,7 +1637,6 @@ class MainApp(MDApp):
 
             y = table_top + row_height * n_rows + 20
 
-            # --- Centered Notes section ---
             # --- Centered Notes section (only if notes exist) ---
             if stage_notes.strip():
                 notes_label = "Stage Notes:"
