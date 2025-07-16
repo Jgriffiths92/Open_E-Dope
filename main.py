@@ -595,7 +595,7 @@ class MainApp(MDApp):
         with Image.open(output_path) as img:
             img = img.convert("1", dither=Image.NONE)
             if self.selected_orientation == "Portrait":
-                img = img.rotate(90, expand=True)
+                img = img.rotate(-90, expand=True)
             # else: do not rotate for landscape
             image_buffer = pack_image_column_major(img)
             width, height = img.size
