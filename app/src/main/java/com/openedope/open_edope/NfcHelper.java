@@ -133,9 +133,6 @@ public class NfcHelper {
         Log.d(TAG, "EPD Init [0] response: " + hexToString(response));
         if (!isSuccessResponse(response)) {
             Log.w(TAG, "EPD Init [0] command possibly failed or no 9000 status.");
-            // Decide if this is critical enough to stop:
-            // if (listener != null) listener.onError("EPD Init [0] failed.");
-            // return;
         } else {
             Log.i(TAG, "EPD Init [0] command success (9000).");
         }
@@ -167,19 +164,35 @@ public class NfcHelper {
             }
         }
 
-        // Send R buffer (inverted)
-        Log.d(TAG, "Sending R buffer (inverted)...");
-        for (int i = 0; i < numFullChunks; i++) {
-            cmd = new byte[5 + CHUNK_SIZE];
-            cmd[0] = CMD_PREFIX_F0;
-            cmd[1] = CMD_SEND_DATA_D2;
-            cmd[2] = IDX_R_BUFFER;
-            cmd[3] = (byte) i;      // Chunk index
-            cmd[4] = (byte) CHUNK_SIZE; // Chunk data length
-            for (int j = 0; j < CHUNK_SIZE; j++) {
-                cmd[j + 5] = (byte) ~image_buffer[j + i * CHUNK_SIZE];
+        // --- Skip R buffer if this is a 2.9-inch display (detected by epd_init) ---
+        boolean is29Inch = false;
+        if (epd_init != null && epd_init.length > 0 && epd_init[0] != null) {
+            // Example: 2.9-inch Good Display init string usually starts with "A5 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00"
+            // You may want to check for a unique substring or exact match for your 2.9-inch EPD init
+            String epdInit0 = epd_init[0].replaceAll("\\s+", "").toUpperCase();
+            // Example: check for a known 2.9-inch EPD init prefix (adjust as needed for your actual init string)
+            if (epdInit0.startsWith("A500000000000000000000000000000000000000000000000000000000000000")) {
+                is29Inch = true;
             }
-            transceiveWithRetry(nfcTech, cmd, "R_CHUNK_" + i, listener);
+        }
+
+        if (!is29Inch) {
+            // Send R buffer (inverted)
+            Log.d(TAG, "Sending R buffer (inverted)...");
+            for (int i = 0; i < numFullChunks; i++) {
+                cmd = new byte[5 + CHUNK_SIZE];
+                cmd[0] = CMD_PREFIX_F0;
+                cmd[1] = CMD_SEND_DATA_D2;
+                cmd[2] = IDX_R_BUFFER;
+                cmd[3] = (byte) i;      // Chunk index
+                cmd[4] = (byte) CHUNK_SIZE; // Chunk data length
+                for (int j = 0; j < CHUNK_SIZE; j++) {
+                    cmd[j + 5] = (byte) ~image_buffer[j + i * CHUNK_SIZE];
+                }
+                transceiveWithRetry(nfcTech, cmd, "R_CHUNK_" + i, listener);
+            }
+        } else {
+            Log.d(TAG, "Skipping R buffer for 2.9-inch display (detected by epd_init).");
         }
 
         // Handle tail data for BW buffer (if any)
@@ -193,15 +206,11 @@ public class NfcHelper {
             cmd[3] = (byte) numFullChunks; // Index of the tail chunk
             cmd[4] = (byte) CHUNK_SIZE;   // Command expects full chunk declaration, actual data might be less
             System.arraycopy(image_buffer, numFullChunks * CHUNK_SIZE, cmd, 5, tailBytes);
-            // Zero-pad the rest of the chunk data if necessary (though the device might ignore extra bytes based on its protocol)
             for (int j = tailBytes; j < CHUNK_SIZE; j++) {
                 cmd[j + 5] = 0;
             }
             transceiveWithRetry(nfcTech, cmd, "BW_TAIL", listener);
         }
-        // Note: The original code sent a full chunk for the tail, padded with zeros.
-        // The R buffer tail was not explicitly sent in the original logic.
-        // If the device requires an R buffer tail, similar logic would be needed here.
 
         // Send refresh command
         byte[] refreshCmd = new byte[]{CMD_PREFIX_F0, CMD_REFRESH_D4, (byte) 0x05, (byte) 0x80, (byte) 0x00};
