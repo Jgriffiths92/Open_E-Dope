@@ -1035,6 +1035,7 @@ class MainApp(MDApp):
         home_screen = self.root.ids.home_screen
         table_container = home_screen.ids.table_container
         table_container.clear_widgets()
+        self.manual_data_fields = []  # <-- Add this line to clear manual fields when showing table
 
         # Create the GridLayout for the table
         table = GridLayout(
