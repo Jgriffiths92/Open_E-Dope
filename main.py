@@ -1516,7 +1516,7 @@ class MainApp(MDApp):
                                 max_width = max(max_width, cell_width)
                             col_widths.append(max_width + 12)
                         table_width = sum(col_widths)
-                        if table_width < base_width - 4: # 2px margin each side
+                        if table_width < base_width - 2: # 1px margin each side
                             return font_size
                 return min_font
 
@@ -1580,7 +1580,7 @@ class MainApp(MDApp):
                 draw.line((col_x, table_top, col_x, table_top + row_height * n_rows), fill="black", width=1)
 
             # Draw a solid horizontal line under the headers
-            draw.line((table_left, table_top + row_height, table_left + sum(col_widths), table_top + row_height), fill="black", width=1)
+            draw.line((2, table_top + row_height, base_width - 2, table_top + row_height), fill="black", width=1)
 
             # Draw data rows (no boxes)
             for row_idx, row in enumerate(filtered_data):
