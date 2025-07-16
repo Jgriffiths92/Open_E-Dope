@@ -122,15 +122,8 @@ public class NfcHelper {
     }
 
     private static void executeWriteProtocol(Object nfcTech, int width0, int height0, byte[] image_buffer, String[] epd_init, NfcProgressListener listener) throws IOException {
-        // --- Print the first 32 bytes of the image buffer for debugging ---
-        StringBuilder sb = new StringBuilder();
-        int printLen = Math.min(32, image_buffer.length);
-        for (int i = 0; i < printLen; i++) {
-            sb.append(String.format("%02X ", image_buffer[i]));
-        }
-        Log.d(TAG, "First 32 bytes of image_buffer: " + sb.toString());
         // Send DIY command before init
-        byte[] diyCmd = hexStringToBytes("F0DB020000");
+        byte[] diyCmd = hexStringToBytes("F0DB020000"); // Consider making "F0DB020000" a constant
         byte[] response = transceiveWithRetry(nfcTech, diyCmd, "DIY_CMD", listener);
         Log.d(TAG, "DIY command response: " + hexToString(response));
 
@@ -138,87 +131,77 @@ public class NfcHelper {
         byte[] cmd = hexStringToBytes(epd_init[0]);
         response = transceiveWithRetry(nfcTech, cmd, "EPD_INIT_0", listener);
         Log.d(TAG, "EPD Init [0] response: " + hexToString(response));
+        if (!isSuccessResponse(response)) {
+            Log.w(TAG, "EPD Init [0] command possibly failed or no 9000 status.");
+            // Decide if this is critical enough to stop:
+            // if (listener != null) listener.onError("EPD Init [0] failed.");
+            // return;
+        } else {
+            Log.i(TAG, "EPD Init [0] command success (9000).");
+        }
 
-        // Send screen cut command
         cmd = hexStringToBytes(epd_init[1]);
         response = transceiveWithRetry(nfcTech, cmd, "EPD_INIT_1", listener);
         Log.d(TAG, "EPD Init [1] response: " + hexToString(response));
 
         int totalDataBytes = width0 * height0 / 8;
         int numFullChunks = totalDataBytes / CHUNK_SIZE;
-        int tailBytes = totalDataBytes % CHUNK_SIZE;
 
-        // Always send BW buffer
+        // Send BW buffer
         Log.d(TAG, "Sending BW buffer...");
         for (int i = 0; i < numFullChunks; i++) {
             cmd = new byte[5 + CHUNK_SIZE];
             cmd[0] = CMD_PREFIX_F0;
             cmd[1] = CMD_SEND_DATA_D2;
             cmd[2] = IDX_BW_BUFFER;
-            cmd[3] = (byte) i;
-            cmd[4] = (byte) CHUNK_SIZE;
+            cmd[3] = (byte) i;      // Chunk index
+            cmd[4] = (byte) CHUNK_SIZE; // Chunk data length
             System.arraycopy(image_buffer, i * CHUNK_SIZE, cmd, 5, CHUNK_SIZE);
             transceiveWithRetry(nfcTech, cmd, "BW_CHUNK_" + i, listener);
 
             if (listener != null) {
-                int percent = (int) (((i + 1) * 100.0) / (numFullChunks + (tailBytes > 0 ? 1 : 0)));
+                // Progress based on full chunks of BW buffer
+                int percent = (int) (((i + 1) * 100.0) / numFullChunks);
+                Log.d(TAG, "JAVA: Calling listener.onProgress (" + percent + "%). Listener: " + listener.hashCode());
                 listener.onProgress(percent);
             }
         }
-        // Tail for BW
-        if (tailBytes != 0) {
+
+        // Send R buffer (inverted)
+        Log.d(TAG, "Sending R buffer (inverted)...");
+        for (int i = 0; i < numFullChunks; i++) {
             cmd = new byte[5 + CHUNK_SIZE];
             cmd[0] = CMD_PREFIX_F0;
             cmd[1] = CMD_SEND_DATA_D2;
+            cmd[2] = IDX_R_BUFFER;
+            cmd[3] = (byte) i;      // Chunk index
+            cmd[4] = (byte) CHUNK_SIZE; // Chunk data length
+            for (int j = 0; j < CHUNK_SIZE; j++) {
+                cmd[j + 5] = (byte) ~image_buffer[j + i * CHUNK_SIZE];
+            }
+            transceiveWithRetry(nfcTech, cmd, "R_CHUNK_" + i, listener);
+        }
+
+        // Handle tail data for BW buffer (if any)
+        int tailBytes = totalDataBytes % CHUNK_SIZE;
+        if (tailBytes != 0) {
+            Log.d(TAG, "Sending BW tail (" + tailBytes + " bytes)...");
+            cmd = new byte[5 + CHUNK_SIZE]; // Pad to full chunk_size for command structure
+            cmd[0] = CMD_PREFIX_F0;
+            cmd[1] = CMD_SEND_DATA_D2;
             cmd[2] = IDX_BW_BUFFER;
-            cmd[3] = (byte) numFullChunks;
-            cmd[4] = (byte) CHUNK_SIZE;
+            cmd[3] = (byte) numFullChunks; // Index of the tail chunk
+            cmd[4] = (byte) CHUNK_SIZE;   // Command expects full chunk declaration, actual data might be less
             System.arraycopy(image_buffer, numFullChunks * CHUNK_SIZE, cmd, 5, tailBytes);
-            for (int j = tailBytes; j < CHUNK_SIZE; j++) cmd[j + 5] = 0;
+            // Zero-pad the rest of the chunk data if necessary (though the device might ignore extra bytes based on its protocol)
+            for (int j = tailBytes; j < CHUNK_SIZE; j++) {
+                cmd[j + 5] = 0;
+            }
             transceiveWithRetry(nfcTech, cmd, "BW_TAIL", listener);
-            if (listener != null) {
-                listener.onProgress(100);
-            }
-        } else if (listener != null && numFullChunks > 0) {
-            // If there was no tail, ensure we hit 100% at the end
-            listener.onProgress(100);
         }
-
-        // Only send R buffer for 4.2-inch display (SSD1680, 400x300)
-        boolean is42Inch = false;
-        if (epd_init[0].equals("F0DB000063A00603300190012CA4010CA502000AA40108A502000AA4010CA502000AA40102A10112A40102A104012B0101A1021101A103440031A105452B010000A1023C01A1021880A1024E00A1034F2B01A3022426A20222F7A20120A40102A2021001A502000A")) {
-            is42Inch = true;
-        }
-
-        if (is42Inch) {
-            Log.d(TAG, "Sending R buffer (inverted) for 4.2-inch...");
-            for (int i = 0; i < numFullChunks; i++) {
-                cmd = new byte[5 + CHUNK_SIZE];
-                cmd[0] = CMD_PREFIX_F0;
-                cmd[1] = CMD_SEND_DATA_D2;
-                cmd[2] = IDX_R_BUFFER;
-                cmd[3] = (byte) i;
-                cmd[4] = (byte) CHUNK_SIZE;
-                for (int j = 0; j < CHUNK_SIZE; j++) {
-                    cmd[j + 5] = (byte) ~image_buffer[j + i * CHUNK_SIZE];
-                }
-                transceiveWithRetry(nfcTech, cmd, "R_CHUNK_" + i, listener);
-            }
-            // Tail for R
-            if (tailBytes != 0) {
-                cmd = new byte[5 + CHUNK_SIZE];
-                cmd[0] = CMD_PREFIX_F0;
-                cmd[1] = CMD_SEND_DATA_D2;
-                cmd[2] = IDX_R_BUFFER;
-                cmd[3] = (byte) numFullChunks;
-                cmd[4] = (byte) CHUNK_SIZE;
-                for (int j = 0; j < tailBytes; j++) {
-                    cmd[j + 5] = (byte) ~image_buffer[j + numFullChunks * CHUNK_SIZE];
-                }
-                for (int j = tailBytes; j < CHUNK_SIZE; j++) cmd[j + 5] = (byte) 0xFF;
-                transceiveWithRetry(nfcTech, cmd, "R_TAIL", listener);
-            }
-        }
+        // Note: The original code sent a full chunk for the tail, padded with zeros.
+        // The R buffer tail was not explicitly sent in the original logic.
+        // If the device requires an R buffer tail, similar logic would be needed here.
 
         // Send refresh command
         byte[] refreshCmd = new byte[]{CMD_PREFIX_F0, CMD_REFRESH_D4, (byte) 0x05, (byte) 0x80, (byte) 0x00};
@@ -226,8 +209,9 @@ public class NfcHelper {
         Log.d(TAG, "Refresh command response: " + hexToString(response));
         if (isSuccessResponse(response)) {
             Log.i(TAG, "Refresh command success (9000).");
-            if (listener != null && numFullChunks == 0 && tailBytes > 0) {
-                listener.onProgress(100);
+            if (listener != null && numFullChunks == 0 && tailBytes > 0) { // If only tail was sent
+                 Log.d(TAG, "JAVA: Calling listener.onProgress (100% - tail only). Listener: " + listener.hashCode());
+                 listener.onProgress(100); // Ensure 100% if only a tail was sent
             }
         } else {
             Log.w(TAG, "Refresh command possibly failed or no 9000 status.");

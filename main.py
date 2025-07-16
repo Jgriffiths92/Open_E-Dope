@@ -593,12 +593,11 @@ class MainApp(MDApp):
         # 2. Read bitmap as 1bpp bytes and get dimensions &  Validate bitmap buffer size before sending to Java
         from PIL import Image
         with Image.open(output_path) as img:
-            img = img.convert("1", dither=Image.FLOYDSTEINBERG)
+            img = img.convert("1", dither=Image.NONE)
             if self.selected_orientation == "Portrait":
                 img = img.rotate(90, expand=True)
             # else: do not rotate for landscape
             image_buffer = pack_image_column_major(img)
-            image_buffer = bytes(b ^ 0xFF for b in image_buffer)
             width, height = img.size
         expected_size = width * height // 8
         if len(image_buffer) != expected_size:
@@ -1756,7 +1755,7 @@ class MainApp(MDApp):
                     storage_path = str(result.toString())
 
                     print(f"External storage path: {storage_path}")
-                    return storage_path
+                    return storage_path                
                 else:
                     print("Failed to retrieve external storage path.")
                     return None
