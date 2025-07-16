@@ -1641,11 +1641,18 @@ class MainApp(MDApp):
 
             # --- Draw wrapped stage notes ---
             notes_max_width = base_width - 8  # 4px margin each side
-            wrapped_lines = wrap_text(stage_notes, font, notes_max_width)
-            notes_line_height = font.getbbox("A")[3] - font.getbbox("A")[1] + 2
+             # Process text line by line to respect user's newlines
+            all_wrapped_lines = []
+            initial_lines = stage_notes.split('\n')
+            for initial_line in initial_lines:
+                # The existing wrap_text function is fine for single lines
+                wrapped_sub_lines = wrap_text(initial_line, font, notes_max_width)
+                all_wrapped_lines.extend(wrapped_sub_lines)
+            wrapped_lines = all_wrapped_lines
             for line in wrapped_lines:
                 notes_text_bbox = draw.textbbox((0, 0), line, font=font)
                 notes_text_width = notes_text_bbox[2] - notes_text_bbox[0]
+                notes_line_height = notes_text_bbox[3] - notes_text_bbox[1] + 2
                 notes_text_x = (base_width - notes_text_width) // 2
                 draw.text((notes_text_x, y), line, fill="black", font=font)
                 y += notes_line_height
