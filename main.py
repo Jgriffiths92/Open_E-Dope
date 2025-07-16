@@ -2629,8 +2629,14 @@ SwipeFileItem:
         self.image_buffer = None
         self.nfc_transfer_in_progress = False
         Clock.schedule_once(lambda dt: self.clear_table_data())  # This will clear the table and show manual data input
+    
+    def on_nfc_transfer_error(self, message):
+            """Handle NFC transfer errors (including tag disconnect)."""
+            print(f"NFC transfer error: {message}")
+            self.hide_nfc_progress_dialog()
+            from kivymd.toast import toast
+            toast(f"NFC Error: {message}")
         
-
     def hide_nfc_button(self):
         """Hide the NFC button if running on Android."""
         if is_android():
