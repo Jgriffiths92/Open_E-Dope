@@ -885,11 +885,13 @@ class MainApp(MDApp):
                         for i, line in enumerate(lines):
                             if line.strip().lower() == "stage notes:":
                                 stage_notes = "".join(lines[i + 1:]).strip()
-                                self.root.ids.home_screen.ids.stage_notes_field.text = stage_notes
+                                self.root.ids.home_screen.ids.stage_notes_field.text = stage_notes  
                                 break
                 except Exception as e:
                     print(f"Error extracting stage notes: {e}")
             print(f"Selected: {selected_path}")  # Log the selected file or folder
+
+
 
             # Check if the selected file is a CSV
             if selected_path.endswith(".csv"):
@@ -1346,7 +1348,10 @@ class MainApp(MDApp):
 
                         # Write the stage notes as the footer
                         stage_notes = self.root.ids.home_screen.ids.stage_notes_field.text.strip()
-                        if stage_notes:
+                        # Write "Stage Notes:" header if there is data
+                        if stage_notes :
+                            writer.writerow([])  # Add an empty row before the footer
+                            writer.writerow(["Stage Notes:"])
                             writer.writerow([])  # Add an empty row before the footer
                             writer.writerow(["Stage Notes:"])
                             writer.writerow([stage_notes])
@@ -1420,11 +1425,16 @@ class MainApp(MDApp):
             # Rows
             y += len(row_texts) * (font_size + 2)
             # Notes section
-            y += 20  # spacing before notes
-            y += font_size + 5  # "Stage Notes:"
-            y += 10  # line under notes label
-            y += font_size + 5  # actual notes
-            if y < image_height:
+            if stage_notes.strip():
+                y += 20  # spacing before notes
+                y += font.getbbox("Stage Notes:")[3] - font.getbbox("Stage Notes:")[1] + 5
+                y += 10  # line under notes label
+                 # Wrapped notes
+                notes_max_width = base_width - 8  # 4px margin each side
+                wrapped_lines = wrap_text(stage_notes, font, notes_max_width)
+                notes_line_height = font.getbbox("A")[3] - font.getbbox("A")[1] + 2
+                notes_height = len(wrapped_lines) * notes_line_height
+                y += notes_height
                 return font_size
         return min_font
     def csv_to_bitmap(self, csv_data, output_path=None):
@@ -1628,16 +1638,17 @@ class MainApp(MDApp):
             y = table_top + row_height * n_rows + 20
 
             # --- Centered Notes section ---
-            notes_label = "Stage Notes:"
-            notes_label_bbox = draw.textbbox((0, 0), notes_label, font=font)
-            notes_label_width = notes_label_bbox[2] - notes_label_bbox[0]
-            notes_label_x = (base_width - notes_label_width) // 2
-            draw.text((notes_label_x, y), notes_label, fill="black", font=font)
-            draw.text((notes_label_x+1, y), notes_label, fill="black", font=font)  # Simulate bold
-            y += font.size + 5
-
-            draw.line((2, y, base_width - 2, y), fill="black", width=1)
-            y += 10
+            # --- Centered Notes section (only if notes exist) ---
+            if stage_notes.strip():
+                notes_label = "Stage Notes:"
+                notes_label_bbox = draw.textbbox((0, 0), notes_label, font=font)
+                notes_label_width = notes_label_bbox[2] - notes_label_bbox[0]
+                notes_label_x = (base_width - notes_label_width) // 2
+                draw.text((notes_label_x, y), notes_label, fill="black", font=font)
+                draw.text((notes_label_x+1, y), notes_label, fill="black", font=font)  # Simulate bold
+                y += font.size + 5
+                draw.line((2, y, base_width - 2, y), fill="black", width=1)
+                y += 10
 
             # --- Draw wrapped stage notes ---
             notes_max_width = base_width - 8  # 4px margin each side
