@@ -458,9 +458,9 @@ class MainApp(MDApp):
                 # Try to use VibrationEffect if available, otherwise use legacy API
                 try:
                     VibrationEffect = autoclass('android.os.VibrationEffect')
-                    effect = VibrationEffect.createOneShot(500, VibrationEffect.DEFAULT_AMPLITUDE)
+                    effect = VibrationEffect.createOneShot(500, Vibration)
                     vibrator.vibrate(effect)
-                    print("Vibrating with VibrationEffect")
+                   
                 except Exception:
                     vibrator.vibrate(500)
                     print("Vibrating with legacy API")
@@ -1407,7 +1407,7 @@ class MainApp(MDApp):
         self.available_fields["Lead"]["show"] = show_lead
         self.available_fields["Range"]["show"] = show_range
         self.available_fields["Wnd2"]["show"] = show_2_wind_holds
-    def find_max_font_size(draw, headers_text, row_texts, notes_text, image_width, image_height, font_path, min_font=8, max_font=32):
+    def find_max_font_size(self, draw, headers_text, row_texts, notes_text, image_width, image_height, font_path, min_font=8, max_font=32):
         for font_size in range(max_font, min_font - 1, -1):
             font = ImageFont.truetype(font_path, font_size)
             y = 10  # Start below stage name
@@ -1486,7 +1486,27 @@ class MainApp(MDApp):
                 {header: row.get(header, "") for header in headers} for row in processed_data
             ]
 
-            # --- Dynamic font size calculation ---
+            # --- Dynamic font size calculation with stage notes wrapping ---
+            def wrap_text(text, font, max_width):
+                """Wrap text to fit within max_width using the given font."""
+                lines = []
+                if not text:
+                    return [""]
+                words = text.split()
+                line = ""
+                for word in words:
+                    test_line = f"{line} {word}".strip()
+                    w = font.getbbox(test_line)[2]
+                    if w <= max_width:
+                        line = test_line
+                    else:
+                        if line:
+                            lines.append(line)
+                        line = word
+                if line:
+                    lines.append(line)
+                return lines
+
             def find_max_font_size():
                 min_font, max_font = 8, 32
                 for font_size in range(max_font, min_font - 1, -1):
@@ -1495,16 +1515,28 @@ class MainApp(MDApp):
                     # Stage name
                     y += font.getbbox(stage_name)[3] - font.getbbox(stage_name)[1] + 10
                     y += 10  # line under stage name
-                    # Headers
-                    y += font.getbbox("Tgt")[3] - font.getbbox("Tgt")[1] + 5
-                    # Rows
-                    for row in filtered_data:
-                        y += font.getbbox("Tgt")[3] - font.getbbox("Tgt")[1] + 2
+
+                    # Table header
+                    row_height = font.size + 8
+                    y += row_height  # header row
+
+                    # Data rows
+                    y += row_height * len(filtered_data)
+
                     # Notes section
                     y += 20  # spacing before notes
                     y += font.getbbox("Stage Notes:")[3] - font.getbbox("Stage Notes:")[1] + 5
                     y += 10  # line under notes label
-                    y += font.getbbox(stage_notes)[3] - font.getbbox(stage_notes)[1] + 5
+
+                    # Wrapped notes
+                    notes_max_width = base_width - 8  # 4px margin each side
+                    wrapped_lines = wrap_text(stage_notes, font, notes_max_width)
+                    notes_line_height = font.getbbox("A")[3] - font.getbbox("A")[1] + 2
+                    notes_height = len(wrapped_lines) * notes_line_height
+                    y += notes_height
+
+                    y += 4  # safety margin
+
                     if y < base_height:
                         # Also check width
                         col_widths = []
@@ -1606,10 +1638,16 @@ class MainApp(MDApp):
             draw.line((2, y, base_width - 2, y), fill="black", width=1)
             y += 10
 
-            notes_text_bbox = draw.textbbox((0, 0), stage_notes, font=font)
-            notes_text_width = notes_text_bbox[2] - notes_text_bbox[0]
-            notes_text_x = (base_width - notes_text_width) // 2
-            draw.text((notes_text_x, y), stage_notes, fill="black", font=font)
+            # --- Draw wrapped stage notes ---
+            notes_max_width = base_width - 8  # 4px margin each side
+            wrapped_lines = wrap_text(stage_notes, font, notes_max_width)
+            notes_line_height = font.getbbox("A")[3] - font.getbbox("A")[1] + 2
+            for line in wrapped_lines:
+                notes_text_bbox = draw.textbbox((0, 0), line, font=font)
+                notes_text_width = notes_text_bbox[2] - notes_text_bbox[0]
+                notes_text_x = (base_width - notes_text_width) // 2
+                draw.text((notes_text_x, y), line, fill="black", font=font)
+                y += notes_line_height
 
             # Resize to final output size
             portrait_resolution = self.selected_resolution
@@ -1729,6 +1767,7 @@ class MainApp(MDApp):
 
         if active:
             self.show_manual_data_input()  # Show manual data input fields
+
         else:
             # Clear the manual data input fields and restore the table container
             home_screen = self.root.ids.home_screen
