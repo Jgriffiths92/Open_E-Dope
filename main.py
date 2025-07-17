@@ -1454,10 +1454,8 @@ class MainApp(MDApp):
                 os.makedirs(bitmap_directory)
             if output_path is None:
                 output_path = os.path.join(bitmap_directory, "output.bmp")
-            if output_path:
-                base_width, base_height = self.selected_resolution
-            else:
-                base_width, base_height = 240, 416  # default resolution
+            
+            base_width, base_height = self.selected_resolution
             # Load the font file
             font_path = os.path.join(os.path.dirname(__file__), "assets", "fonts", "RobotoMono-Regular.ttf")
 
