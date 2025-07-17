@@ -881,11 +881,18 @@ class MainApp(MDApp):
                 try:
                     with open(selected_path, mode="r", encoding="utf-8") as csv_file:
                         lines = csv_file.readlines()
-                        # Look for the "Stage Notes:" footer and extract the notes
+                        # Look for the "Stage Notes:" footer and extract all lines after it
                         for i, line in enumerate(lines):
                             if line.strip().lower() == "stage notes:":
-                                stage_notes = "".join(lines[i + 1:]).strip()
-                                self.root.ids.home_screen.ids.stage_notes_field.text = stage_notes  
+                                # Collect all lines after "Stage Notes:" until end of file or next header
+                                stage_notes_lines = []
+                                for note_line in lines[i + 1:]:
+                                    stage_notes_lines.append(note_line.rstrip('\n'))
+                                stage_notes = "\n".join(stage_notes_lines).strip()
+                                # Remove leading/trailing quotes if present
+                                if stage_notes.startswith('"') and stage_notes.endswith('"'):
+                                    stage_notes = stage_notes[1:-1]
+                                self.root.ids.home_screen.ids.stage_notes_field.text = stage_notes
                                 break
                 except Exception as e:
                     print(f"Error extracting stage notes: {e}")
@@ -1353,7 +1360,6 @@ class MainApp(MDApp):
                             writer.writerow([])  # Add an empty row before the footer
                             writer.writerow(["Stage Notes:"])
                             writer.writerow([])  # Add an empty row before the footer
-                            writer.writerow(["Stage Notes:"])
                             writer.writerow([stage_notes])
 
                         print(f"Data saved to: {file_path}")
