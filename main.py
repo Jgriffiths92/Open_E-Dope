@@ -202,6 +202,15 @@ class SavedCardsScreen(Screen):
             width_mult=3,
         )
         self.sort_menu.open()
+from kivymd.uix.card import MDCardSwipe
+
+class CustomSwipeFileItem(MDCardSwipe):
+    swipe_disabled = False
+
+    def on_touch_move(self, touch):
+        if self.swipe_disabled:
+            return False  # Prevent swipe gesture
+        return super().on_touch_move(touch)
 class ManageDataScreen(Screen):
     delete_option_label = StringProperty("Delete Folders After")  # Default text
     def on_enter(self):
@@ -2263,6 +2272,7 @@ SwipeFileItem:
     icon: "arrow-left"
     file_size: ""
     display_name: "Back"
+    swipe_disabled: True
 ''')
             swipe_file_list.add_widget(item)
 

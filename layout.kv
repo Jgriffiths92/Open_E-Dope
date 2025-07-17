@@ -281,7 +281,8 @@ MDNavigationLayout:
                     height: dp(32)
                     on_release: app.open_orientation_dropdown(self)
 
-<SwipeFileItem@MDCardSwipe>:
+<SwipeFileItem@CustomSwipeFileItem>:
+    swipe_disabled: False
     radius: [0, 0, 0, 0]
     file_path: ""
     icon: "folder"
@@ -299,13 +300,16 @@ MDNavigationLayout:
             icon: "delete"
             theme_text_color: "Custom"
             text_color: 1, 1, 1, 1
-            on_release: app.delete_file_or_folder(root.file_path)
+            disabled: root.swipe_disabled
+            opacity: 0 if root.swipe_disabled else 1
+            on_release: app.delete_file_or_folder(root.file_path, root) if not root.swipe_disabled else None
     MDCardSwipeFrontBox:
         MDCard:
             radius: [0, 0, 0, 0]
             elevation: 0
             style: "filled"
             size_hint: 1, 1
+            on_release: root.on_release() if hasattr(root, 'on_release') and callable(root.on_release) else None
             OneLineAvatarIconListItem:
                 text: root.display_name if hasattr(root, "display_name") and root.display_name else (app.get_basename(root.file_path)[:-4] if app.get_basename(root.file_path).lower().endswith('.csv') else app.get_basename(root.file_path))
                 text_color: 0, 0, 0, 1
@@ -313,6 +317,8 @@ MDNavigationLayout:
                     app.populate_swipe_file_list(root.file_path) if hasattr(root, "display_name") and root.display_name == "Back" else app.on_file_selected([root.file_path])
                 IconLeftWidget:
                     icon: root.icon if root.icon == "arrow-left" else ""
+                    on_release:
+                        app.populate_swipe_file_list(root.file_path) if root.icon == "arrow-left" else None
 
 <RightLabel@Label>:
     color: 0, 0, 0, 1
