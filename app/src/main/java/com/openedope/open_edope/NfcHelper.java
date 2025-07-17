@@ -167,11 +167,10 @@ public class NfcHelper {
         // --- Skip R buffer if this is a 2.9-inch display (detected by epd_init) ---
         boolean is29Inch = false;
         if (epd_init != null && epd_init.length > 0 && epd_init[0] != null) {
-            // Example: 2.9-inch Good Display init string usually starts with "A5 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00"
-            // You may want to check for a unique substring or exact match for your 2.9-inch EPD init
+            // Match the actual prefix used in Python EPD_INIT_MAP for 2.9-inch
             String epdInit0 = epd_init[0].replaceAll("\\s+", "").toUpperCase();
-            // Example: check for a known 2.9-inch EPD init prefix (adjust as needed for your actual init string)
-            if (epdInit0.startsWith("A500000000000000000000000000000000000000000000000000000000000000")) {
+            // Use the first 32 hex chars of your actual init string
+            if (epdInit0.startsWith("F0DB000067A006012000800128A4010C")) {
                 is29Inch = true;
             }
         }
