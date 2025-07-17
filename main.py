@@ -500,6 +500,10 @@ class MainApp(MDApp):
         )
         self.nfc_progress_label.bind(size=self.nfc_progress_label.setter('text_size'))
         box.add_widget(self.nfc_progress_label)
+        # Reset progress bar and label
+        self.nfc_progress_bar.value = 0
+        self.nfc_progress_label.text = message
+        self.nfc_progress_label.color = (0, 0, 0, 1)
 
         self.nfc_progress_dialog = MDDialog(
             title="NFC Transfer",
@@ -585,7 +589,7 @@ class MainApp(MDApp):
             return
 
         # 1. Convert CSV to bitmap
-        output_path = self.csv_to_bitmap(self.current_data, self.selected_resolution)
+        output_path = self.csv_to_bitmap(self.current_data)
         if not output_path:
             print("Failed to create bitmap.")
             return
