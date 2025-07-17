@@ -489,7 +489,7 @@ class MainApp(MDApp):
             size=(120, 120),
             pos_hint={"center_x": 0.5, "center_y": 0.6},
             max=100,
-            value=0,
+            value=0,  # Reset to 0
             thickness=15,
             color=(0.2, 0.6, 1, 1),
             label_color=(0.2, 0.6, 1, 1),
@@ -511,6 +511,7 @@ class MainApp(MDApp):
         box.add_widget(self.nfc_progress_label)
         # Reset progress bar and label
         self.nfc_progress_bar.value = 0
+        self.nfc_progress_bar._refresh_text()
         self.nfc_progress_label.text = message
         self.nfc_progress_label.color = (0, 0, 0, 1)
 
