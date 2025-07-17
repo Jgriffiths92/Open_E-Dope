@@ -585,7 +585,7 @@ class MainApp(MDApp):
             return
 
         # 1. Convert CSV to bitmap
-        output_path = self.csv_to_bitmap(self.current_data)
+        output_path = self.csv_to_bitmap(self.current_data, self.selected_resolution)
         if not output_path:
             print("Failed to create bitmap.")
             return
@@ -1448,10 +1448,10 @@ class MainApp(MDApp):
                 os.makedirs(bitmap_directory)
             if output_path is None:
                 output_path = os.path.join(bitmap_directory, "output.bmp")
-
-            # Default resolution if no display is selected
-            base_width, base_height = 240, 416
-
+            if output_path:
+                base_width, base_height = self.selected_resolution
+            else:
+                base_width, base_height = 240, 416  # default resolution
             # Load the font file
             font_path = os.path.join(os.path.dirname(__file__), "assets", "fonts", "RobotoMono-Regular.ttf")
 
@@ -1671,9 +1671,6 @@ class MainApp(MDApp):
             portrait_resolution = self.selected_resolution
             if self.selected_orientation == "Landscape":
                 final_resolution = (portrait_resolution[1], portrait_resolution[0])
-            else:
-                final_resolution = portrait_resolution
-            image = image.resize(final_resolution, Image.LANCZOS)
 
             # Save as 1-bit bitmap
             bw_image = image.convert("1")
