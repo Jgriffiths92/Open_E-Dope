@@ -396,7 +396,7 @@ if is_android():
                     # Trigger your logic here, e.g.:
                     # self.app.on_keyboard_hidden()
 
-    def setup_keyboard_listener(self):
+    def setup_keyboard_listener():
         activity = mActivity
         root_view = activity.getWindow().getDecorView()
         listener = GlobalLayoutListener(self)
@@ -2651,7 +2651,19 @@ SwipeFileItem:
             self.hide_nfc_progress_dialog()
             from kivymd.toast import toast
             toast(f"NFC Error: {message}")
-        
+
+            # Restart NFC foreground dispatch on Android
+            if is_android() and hasattr(self, "nfc_adapter") and self.nfc_adapter:
+                try:
+                    # Disable foreground dispatch
+                    self.nfc_adapter.disableForegroundDispatch(mActivity)
+                    print("NFC foreground dispatch disabled.")
+                    # Re-enable foreground dispatch
+                    self.enable_nfc_foreground_dispatch()
+                    print("NFC foreground dispatch re-enabled.")
+                except Exception as e:
+                    print(f"Error restarting NFC foreground dispatch: {e}")
+
     def hide_nfc_button(self):
         """Hide the NFC button if running on Android."""
         if is_android():
