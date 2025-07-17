@@ -500,9 +500,7 @@ class MainApp(MDApp):
         )
         self.nfc_progress_label.bind(size=self.nfc_progress_label.setter('text_size'))
         box.add_widget(self.nfc_progress_label)
-        self.nfc_progress_bar.value = 0
-        self.nfc_progress_label.text = message
-        self.nfc_progress_label.color = (0, 0, 0, 1)
+
         self.nfc_progress_dialog = MDDialog(
             title="NFC Transfer",
             type="custom",
