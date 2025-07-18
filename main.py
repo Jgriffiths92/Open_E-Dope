@@ -37,6 +37,7 @@ from kivy.properties import StringProperty
 from kivy.uix.scrollview import ScrollView
 from kivy.uix.anchorlayout import AnchorLayout
 from kivy.uix.widget import Widget
+from kivy.core.text import Label as CoreLabel
 
 
 # Global configuration variables
@@ -484,16 +485,19 @@ class MainApp(MDApp):
         # Use FloatLayout to allow centering
         box = FloatLayout(size_hint_y=None, height="200dp")
 
+        # Create a new CoreLabel for each progress bar instance
+        progress_label = CoreLabel(text="{}%", font_size=40)
         self.nfc_progress_bar = CircularProgressBar(
             size_hint=(None, None),
             size=(120, 120),
             pos_hint={"center_x": 0.5, "center_y": 0.6},
             max=100,
-            value=0,  # Reset to 0
+            value=0,
             thickness=15,
             color=(0.2, 0.6, 1, 1),
             label_color=(0.2, 0.6, 1, 1),
             background_color=(0.9, 0.9, 0.9, 1),
+            label=progress_label,  # <-- Always pass a new label!
         )
         box.add_widget(self.nfc_progress_bar)
 
