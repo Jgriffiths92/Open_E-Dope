@@ -694,8 +694,44 @@ class MainApp(MDApp):
     def on_start(self):
         # Bind global key handler for Tab/Enter navigation
         from kivy.core.window import Window
+
+        # Apply to the stage name field
+        stage_name_field = self.root.ids.home_screen.ids.stage_name_field
+        stage_name_field.bind(text=self.auto_capitalize)
+
+        # Apply to the stage notes field
+        stage_notes_field = self.root.ids.home_screen.ids.stage_notes_field
+        stage_notes_field.bind(text=self.auto_capitalize)
+
         Window.bind(on_key_down=self.global_key_handler)
 
+    def auto_capitalize(self, instance, value):
+        """
+        A method to automatically capitalize the first letter of each line
+        in a MDTextField.
+        """
+        # This check prevents infinite recursion when we update the text.
+        if hasattr(instance, '_is_capitalizing') and instance._is_capitalizing:
+            return
+
+        lines = value.split('\n')
+        capitalized_lines = [line[0].upper() + line[1:] if line else '' for line in lines]
+        new_text = '\n'.join(capitalized_lines)
+
+        if new_text != value:
+            cursor_index = instance.cursor_index()
+            instance._is_capitalizing = True
+            instance.text = new_text
+            try:
+                instance.cursor = instance.get_cursor_from_index(cursor_index)
+            except IndexError:
+                instance.cursor = instance.get_cursor_from_index(len(instance.text))
+            delattr(instance, '_is_capitalizing')
+
+    def global_key_handler(self, window, key, scancode, codepoint, modifiers):
+        # Only act if HomeScreen is current
+        if self.root.ids.screen_manager.current != "home":
+            return False
     def global_key_handler(self, window, key, scancode, codepoint, modifiers):
         # Only act if HomeScreen is current
         if self.root.ids.screen_manager.current != "home":
