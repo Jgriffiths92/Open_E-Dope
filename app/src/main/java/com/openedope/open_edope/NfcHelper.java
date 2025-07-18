@@ -209,8 +209,6 @@ public class NfcHelper {
                 cmd[j + 5] = 0;
             }
             transceiveWithRetry(nfcTech, cmd, "BW_TAIL", listener);
-            if (listener != null) {
-                listener.onProgress(100); // Always report 100% after tail
             }
         }
 
