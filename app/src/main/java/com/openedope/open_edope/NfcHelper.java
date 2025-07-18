@@ -164,6 +164,23 @@ public class NfcHelper {
             }
         }
 
+        // Handle tail data for BW buffer (if any)
+        int tailBytes = totalDataBytes % CHUNK_SIZE;
+        if (tailBytes != 0) {
+            Log.d(TAG, "Sending BW tail (" + tailBytes + " bytes)...");
+            cmd = new byte[5 + CHUNK_SIZE]; // Pad to full chunk_size for command structure
+            cmd[0] = CMD_PREFIX_F0;
+            cmd[1] = CMD_SEND_DATA_D2;
+            cmd[2] = IDX_BW_BUFFER;
+            cmd[3] = (byte) numFullChunks; // Index of the tail chunk
+            cmd[4] = (byte) CHUNK_SIZE;   // Command expects full chunk declaration
+            System.arraycopy(image_buffer, numFullChunks * CHUNK_SIZE, cmd, 5, tailBytes);
+            for (int j = tailBytes; j < CHUNK_SIZE; j++) {
+                cmd[j + 5] = 0; // Zero-pad the rest of the chunk
+            }
+            transceiveWithRetry(nfcTech, cmd, "BW_TAIL", listener);
+        }
+
         // --- Skip R buffer if this is a 2.9-inch display (detected by epd_init) ---
         boolean is29Inch = false;
         if (epd_init != null && epd_init.length > 0 && epd_init[0] != null) {
@@ -190,25 +207,26 @@ public class NfcHelper {
                 }
                 transceiveWithRetry(nfcTech, cmd, "R_CHUNK_" + i, listener);
             }
+
+            // Handle tail data for R buffer (if any)
+            if (tailBytes != 0) {
+                Log.d(TAG, "Sending R tail (" + tailBytes + " bytes)...");
+                cmd = new byte[5 + CHUNK_SIZE];
+                cmd[0] = CMD_PREFIX_F0;
+                cmd[1] = CMD_SEND_DATA_D2;
+                cmd[2] = IDX_R_BUFFER;
+                cmd[3] = (byte) numFullChunks;
+                cmd[4] = (byte) CHUNK_SIZE;
+                for (int j = 0; j < tailBytes; j++) {
+                    cmd[j + 5] = (byte) ~image_buffer[j + numFullChunks * CHUNK_SIZE];
+                }
+                for (int j = tailBytes; j < CHUNK_SIZE; j++) {
+                    cmd[j + 5] = 0; // Zero-pad the rest
+                }
+                transceiveWithRetry(nfcTech, cmd, "R_TAIL", listener);
+            }
         } else {
             Log.d(TAG, "Skipping R buffer for 2.9-inch display (detected by epd_init).");
-        }
-
-        // Handle tail data for BW buffer (if any)
-        int tailBytes = totalDataBytes % CHUNK_SIZE;
-        if (tailBytes != 0) {
-            Log.d(TAG, "Sending BW tail (" + tailBytes + " bytes)...");
-            cmd = new byte[5 + CHUNK_SIZE]; // Pad to full chunk_size for command structure
-            cmd[0] = CMD_PREFIX_F0;
-            cmd[1] = CMD_SEND_DATA_D2;
-            cmd[2] = IDX_BW_BUFFER;
-            cmd[3] = (byte) numFullChunks; // Index of the tail chunk
-            cmd[4] = (byte) CHUNK_SIZE;   // Command expects full chunk declaration, actual data might be less
-            System.arraycopy(image_buffer, numFullChunks * CHUNK_SIZE, cmd, 5, tailBytes);
-            for (int j = tailBytes; j < CHUNK_SIZE; j++) {
-                cmd[j + 5] = 0;
-            }
-            transceiveWithRetry(nfcTech, cmd, "BW_TAIL", listener);
         }
 
         // Send refresh command
