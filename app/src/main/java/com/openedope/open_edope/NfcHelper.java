@@ -197,7 +197,7 @@ public class NfcHelper {
         // Handle tail data for BW buffer (if any)
         int tailBytes = totalDataBytes % CHUNK_SIZE;
         if (tailBytes != 0) {
-            Log.d(TAG, "Sending BW tail (" + tailBytes + " bytes)..."); 
+            Log.d(TAG, "Sending BW tail (" + tailBytes + " bytes)...");
             cmd = new byte[5 + CHUNK_SIZE]; // Pad to full chunk_size for command structure
             cmd[0] = CMD_PREFIX_F0;
             cmd[1] = CMD_SEND_DATA_D2;
@@ -209,7 +209,6 @@ public class NfcHelper {
                 cmd[j + 5] = 0;
             }
             transceiveWithRetry(nfcTech, cmd, "BW_TAIL", listener);
-            }
         }
 
         // Send refresh command
