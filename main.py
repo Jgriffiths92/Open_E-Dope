@@ -542,84 +542,75 @@ class MainApp(MDApp):
         except Exception as e:
             print(f"Error generating bitmap: {e}")
             
-        def show_refreshing_in_nfc_dialog(self):
-            print("DEBUG: Showing refreshing screen in NFC dialog")
+    def show_refreshing_in_nfc_dialog(self):
+        print("DEBUG: Showing refreshing screen in NFC dialog")
         if hasattr(self, "nfc_progress_dialog") and self.nfc_progress_dialog:
-            from kivy.uix.floatlayout import FloatLayout
+            from kivy.uix.boxlayout import BoxLayout
             from kivy.uix.label import Label
             from kivymd.uix.button import MDIconButton
             from kivy.animation import Animation
-    
+
             # Nullify old references so nothing tries to update them
             self.nfc_progress_bar = None
             self.nfc_progress_label = None
-    
-            box = FloatLayout(size_hint_y=None, height="200dp")
+
+            box = FloatLayout(orientation="vertical", spacing=20, padding=20)
             refresh_icon = MDIconButton(
                 icon="refresh",
                 font_size="64sp",
                 theme_text_color="Custom",
                 text_color=(0.2, 0.6, 1, 1),
-                pos_hint={"center_x": 0.5, "center_y": 0.6}
+                pos_hint={"center_x": 0.5}
             )
             box.add_widget(refresh_icon)
-    
+
             # Animate the icon to rotate indefinitely
             anim = Animation(angle=360, duration=1)
             anim += Animation(angle=0, duration=0)
             anim.repeat = True
             refresh_icon.angle = 0
             anim.start(refresh_icon)
-    
+
             label = Label(
                 text="Refreshing screen...",
-                size_hint=(None, None),
-                size=(200, 40),
-                pos_hint={"center_x": 0.5, "y": 0.05},
+                size_hint=(1, None),
+                height=40,
                 halign="center",
                 valign="middle",
                 color=(0, 0, 0.7, 1),
             )
             label.bind(size=label.setter('text_size'))
             box.add_widget(label)
-    
+
             # Replace dialog content
             self.nfc_progress_dialog.content_cls = box
             self.nfc_progress_dialog.title = "Refreshing"
             self.nfc_progress_dialog.auto_dismiss = False
-    
-            # Force dialog to update if already open
-            if self.nfc_progress_dialog._window:
-                self.nfc_progress_dialog.dismiss()
-                Clock.schedule_once(lambda dt: self.nfc_progress_dialog.open(), 0.05)
-            else:
+            # If the dialog is already open, refresh its content
+            if not self.nfc_progress_dialog._window:
                 self.nfc_progress_dialog.open()
 
     def show_refresh_error_in_nfc_dialog(self, error_message="Refresh failed!"):
-        print("DEBUG: Showing refresh error in NFC dialog")
+        """Show an error message in the existing NFC dialog."""
         if hasattr(self, "nfc_progress_dialog") and self.nfc_progress_dialog:
-            from kivy.uix.floatlayout import FloatLayout
+            from kivy.uix.boxlayout import BoxLayout
             from kivy.uix.label import Label
             from kivymd.uix.button import MDIconButton
+            from kivy.uix.floatlayout import FloatLayout
 
-            # Nullify old references
-            self.nfc_progress_bar = None
-            self.nfc_progress_label = None
-
-            box = FloatLayout(size_hint_y=None, height="200dp")
+            box = FloatLayout(orientation="vertical", spacing=20, padding=20)
             error_icon = MDIconButton(
                 icon="alert-circle",
-                font_size="64sp",
+                user_font_size="64sp",
                 theme_text_color="Custom",
                 text_color=(1, 0, 0, 1),
-                pos_hint={"center_x": 0.5, "center_y": 0.6}
+                pos_hint={"center_x": 0.5}
             )
             box.add_widget(error_icon)
             label = Label(
                 text=error_message,
-                size_hint=(None, None),
-                size=(200, 40),
-                pos_hint={"center_x": 0.5, "y": 0.05},
+                size_hint=(1, None),
+                height=40,
                 halign="center",
                 valign="middle",
                 color=(1, 0, 0, 1),
@@ -629,13 +620,7 @@ class MainApp(MDApp):
             self.nfc_progress_dialog.content_cls = box
             self.nfc_progress_dialog.title = "Error"
             self.nfc_progress_dialog.auto_dismiss = False
-
-            # Force dialog to update if already open
-            if self.nfc_progress_dialog._window:
-                self.nfc_progress_dialog.dismiss()
-                Clock.schedule_once(lambda dt: self.nfc_progress_dialog.open(), 0.05)
-            else:
-                self.nfc_progress_dialog.open()
+            self.nfc_progress_dialog.open()
 
     def on_permissions_result(self, permissions, grant_results):
         """Handle the result of the permission request."""
@@ -1046,18 +1031,29 @@ class MainApp(MDApp):
 
             # Check if the selected file is a CSV
             if selected_path.endswith(".csv"):
-                # Read the CSV file and convert it to a dictionary
-                data = self.read_csv_to_dict(selected_path)
-                self.current_data = data  # Store the data for filtering or other operations
+                try:
+                    # Read the CSV file and convert it to a dictionary
+                    data = self.read_csv_to_dict(selected_path)
+                    self.current_data = data  # Store the data for filtering or other operations
 
-                # Preprocess the data
-                processed_data = self.preprocess_data(data)
+                    # Preprocess the data
+                    processed_data = self.preprocess_data(data)
 
-                # Display the data as a table on the Home Screen
-                self.display_table(processed_data)
+                    # Display the data as a table on the Home Screen
+                    self.display_table(processed_data)
 
-                # Navigate back to the Home Screen
-                self.root.ids.screen_manager.current = "home"  # Reference the Home Screen by its name in layout.kv
+                    # Reset the FileChooserListView to its rootpath
+                    saved_cards_screen = self.root.ids.screen_manager.get_screen("saved_cards")
+
+                    # Navigate back to the Home Screen
+                    self.root.ids.screen_manager.current = "home"  # Reference the Home Screen by its name in layout.kv
+
+                    print(f"CSV loaded: {os.path.basename(selected_path)}")
+                except Exception as e:
+                    print(f"Error reading CSV: {e}")
+            else:
+                print("Please select a valid CSV file.")
+        else:
             print("No file selected")
 
     def read_csv_to_dict(self, file_or_path):
@@ -1962,7 +1958,7 @@ class MainApp(MDApp):
                 os.makedirs(csv_directory)
             print(f"Defaulting to assets/CSV folder: {csv_directory}")
             return csv_directory
-        
+
     def get_private_storage_path(self):
         """Retrieve the app's private storage path."""
 
@@ -2793,12 +2789,9 @@ SwipeFileItem:
             self.show_refreshing_in_nfc_dialog()
             # Show "Refreshing..." for 1.7s, then close dialog, then clear data/UI
             def finish_refresh(dt2):
-                try:
-                    self.hide_nfc_progress_dialog()
-                    Clock.schedule_once(lambda dt3: self.clear_table_data(), 0.1)
-                    print("PYTHON DEBUG: _finish_nfc_progress completed. self.current_data should be cleared by clear_table_data().")
-                except Exception as e:
-                    self.show_refresh_error_in_nfc_dialog(f"Refresh failed: {e}")
+                self.hide_nfc_progress_dialog()
+                Clock.schedule_once(lambda dt3: self.clear_table_data(), 0.1)
+                print("PYTHON DEBUG: _finish_nfc_progress completed. self.current_data should be cleared by clear_table_data().")
             Clock.schedule_once(finish_refresh, 1.7)
 
         # Show "Transfer successful!" for 1.2s, then "Refreshing..." for 1.2s
