@@ -69,7 +69,6 @@ except ImportError:
     MifareClassic = None
     MifareUltralight = None
 
-
 def is_android():
     """Check if the app is running on an Android device."""
     try:
@@ -81,7 +80,6 @@ def is_android():
         return True
     except ImportError:
         return False
-
 
 # Import the nfc module if not running on Android
 if not is_android():
@@ -154,11 +152,9 @@ Builder.load_string('''
     FileChooserListView
 ''')
 
-
 # Define Screens
 class HomeScreen(Screen):
     pass
-
 
 class SavedCardsScreen(Screen):
     def on_enter(self):
@@ -212,6 +208,7 @@ class CustomSwipeFileItem(MDCardSwipe):
         if self.swipe_disabled:
             return False  # Prevent swipe gesture
         return super().on_touch_move(touch)
+
 class ManageDataScreen(Screen):
     delete_option_label = StringProperty("Delete Folders After")  # Default text
     def on_enter(self):
@@ -255,6 +252,7 @@ class ManageDataScreen(Screen):
             ],
         )
         dialog.open()
+
     def open_delete_option_menu(self, caller):
         options = [
             {"text": "After 1 week", "on_release": lambda: self.set_delete_option("week")},
@@ -413,7 +411,6 @@ if is_android():
         root_view.getViewTreeObserver().addOnGlobalLayoutListener(listener)
         print("Android keyboard listener set up.")
 
-
 class MainApp(MDApp):
     search_text = ""
     delete_option_label = StringProperty("Delete Folders After")  # Default text
@@ -434,9 +431,11 @@ class MainApp(MDApp):
             "F0DA000003F00120", # Screen Cut
         ],
     }
+
     def get_basename(self, path):
         import os
         return os.path.basename(path)
+    
     def on_nfc_button_press(self, *args):
         print("NFC button pressed!")
         # Add manual data first if any manual fields are filled
@@ -764,6 +763,7 @@ class MainApp(MDApp):
         listener = NfcProgressListener(self)
         # Call the ByteBuffer method
         NfcHelper.processNfcIntentByteBufferAsync(intent, width, height, image_buffer_bb, epd_init_java_array, listener)
+    
     def on_pause(self):
         print("on_pause CALLED")
         return True
@@ -841,7 +841,6 @@ class MainApp(MDApp):
             all_fields.append(home_screen.ids.stage_notes_field)
         return all_fields
 
-
     def on_resume(self):
         print("on_resume CALLED")
         if is_android() and autoclass:
@@ -875,6 +874,7 @@ class MainApp(MDApp):
                 print("Requested BAL exemption.")
             except Exception as e:
                 print(f"Error requesting BAL exemption: {e}")
+    
     def delete_old_folders(self):
         """Delete folders in assets/CSV older than the selected threshold."""
         thresholds = {
@@ -899,8 +899,8 @@ class MainApp(MDApp):
                         print(f"Deleted old folder: {folder_path}")
                     except Exception as e:
                         print(f"Error deleting folder {folder_path}: {e}")
+    
     def build(self):
-
         """Build the app's UI and initialize settings."""
         # Set the theme to Light
         self.theme_cls.theme_style = "Light"
@@ -1024,8 +1024,6 @@ class MainApp(MDApp):
                 except Exception as e:
                     print(f"Error extracting stage notes: {e}")
             print(f"Selected: {selected_path}")  # Log the selected file or folder
-
-
 
             # Check if the selected file is a CSV
             if selected_path.endswith(".csv"):
@@ -1406,8 +1404,8 @@ class MainApp(MDApp):
                     ),
                 ],
             )
-
         self.dialog.open()
+
     def handle_save_dialog(self, text_input):
         home_screen = self.root.ids.home_screen
         table_container = home_screen.ids.table_container
@@ -1546,6 +1544,7 @@ class MainApp(MDApp):
         self.available_fields["Lead"]["show"] = show_lead
         self.available_fields["Range"]["show"] = show_range
         self.available_fields["Wnd2"]["show"] = show_2_wind_holds
+
     def find_max_font_size(self, draw, headers_text, row_texts, notes_text, image_width, image_height, font_path, min_font=8, max_font=32):
         for font_size in range(max_font, min_font - 1, -1):
             font = ImageFont.truetype(font_path, font_size)
@@ -1570,6 +1569,7 @@ class MainApp(MDApp):
                 y += notes_height
                 return font_size
         return min_font
+    
     def csv_to_bitmap(self, csv_data, output_path=None):
         """Convert CSV data to a bitmap image, dynamically maximizing font size to fit all data."""
         try:
@@ -2372,7 +2372,6 @@ class MainApp(MDApp):
         except Exception as e:
             print(f"Error deleting file or folder: {e}")
 
-
     def populate_swipe_file_list(self, target_dir=None, sort_by=None, reverse=None):
         saved_cards_screen = self.root.ids.screen_manager.get_screen("saved_cards")
         swipe_file_list = saved_cards_screen.ids.swipe_file_list
@@ -2540,11 +2539,13 @@ SwipeFileItem:
         # Scroll to bottom after next frame
         if hasattr(self, "manual_scrollview"):
             Clock.schedule_once(lambda dt: setattr(self.manual_scrollview, "scroll_y", 0), 0)
+
     def scroll_manual_input_to_buttons(self):
         """Scroll the manual data input ScrollView so the button row is visible."""
         if hasattr(self, "manual_scrollview") and self.manual_scrollview:
             # Scroll to bottom (0 = bottom, 1 = top)
             Clock.schedule_once(lambda dt: setattr(self.manual_scrollview, "scroll_y", 0), 0)
+
     def delete_last_row(self, rows_layout=None):
         if rows_layout is None:
             rows_layout = self.manual_rows_layout
@@ -2628,6 +2629,7 @@ SwipeFileItem:
                     return orig_handler(instance, *args)
                 return _on_key_down
             tf.keyboard_on_key_down = make_keyboard_on_key_down(i, tf._orig_keyboard_on_key_down)
+            
     def add_manual_data(self):
         try:
             for row_fields in self.manual_data_rows:
