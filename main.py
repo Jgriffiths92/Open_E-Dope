@@ -596,25 +596,30 @@ class MainApp(MDApp):
                 self.nfc_progress_dialog.open()
 
     def show_refresh_error_in_nfc_dialog(self, error_message="Refresh failed!"):
-        """Show an error message in the existing NFC dialog."""
+        print("DEBUG: Showing refresh error in NFC dialog")
         if hasattr(self, "nfc_progress_dialog") and self.nfc_progress_dialog:
-            from kivy.uix.boxlayout import BoxLayout
+            from kivy.uix.floatlayout import FloatLayout
             from kivy.uix.label import Label
             from kivymd.uix.button import MDIconButton
-    
-            box = BoxLayout(orientation="vertical", spacing=20, padding=20)
+
+            # Nullify old references
+            self.nfc_progress_bar = None
+            self.nfc_progress_label = None
+
+            box = FloatLayout(size_hint_y=None, height="200dp")
             error_icon = MDIconButton(
                 icon="alert-circle",
-                user_font_size="64sp",
+                font_size="64sp",
                 theme_text_color="Custom",
                 text_color=(1, 0, 0, 1),
-                pos_hint={"center_x": 0.5}
+                pos_hint={"center_x": 0.5, "center_y": 0.6}
             )
             box.add_widget(error_icon)
             label = Label(
                 text=error_message,
-                size_hint=(1, None),
-                height=40,
+                size_hint=(None, None),
+                size=(200, 40),
+                pos_hint={"center_x": 0.5, "y": 0.05},
                 halign="center",
                 valign="middle",
                 color=(1, 0, 0, 1),
@@ -624,7 +629,13 @@ class MainApp(MDApp):
             self.nfc_progress_dialog.content_cls = box
             self.nfc_progress_dialog.title = "Error"
             self.nfc_progress_dialog.auto_dismiss = False
-            self.nfc_progress_dialog.open()
+
+            # Force dialog to update if already open
+            if self.nfc_progress_dialog._window:
+                self.nfc_progress_dialog.dismiss()
+                Clock.schedule_once(lambda dt: self.nfc_progress_dialog.open(), 0.05)
+            else:
+                self.nfc_progress_dialog.open()
 
     def on_permissions_result(self, permissions, grant_results):
         """Handle the result of the permission request."""
@@ -1951,7 +1962,7 @@ class MainApp(MDApp):
                 os.makedirs(csv_directory)
             print(f"Defaulting to assets/CSV folder: {csv_directory}")
             return csv_directory
-
+        
     def get_private_storage_path(self):
         """Retrieve the app's private storage path."""
 
