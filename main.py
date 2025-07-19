@@ -544,21 +544,22 @@ class MainApp(MDApp):
             
     def show_refreshing_in_nfc_dialog(self):
         print("DEBUG: Showing refreshing screen in NFC dialog")
-        """Show a rotating refresh icon in the existing NFC dialog."""
         if hasattr(self, "nfc_progress_dialog") and self.nfc_progress_dialog:
             from kivy.uix.boxlayout import BoxLayout
             from kivy.uix.label import Label
             from kivymd.uix.button import MDIconButton
             from kivy.animation import Animation
 
-            # Remove old widgets from dialog content
+            # Nullify old references so nothing tries to update them
+            self.nfc_progress_bar = None
+            self.nfc_progress_label = None
+
             box = BoxLayout(orientation="vertical", spacing=20, padding=20)
-            # Add rotating refresh icon
             refresh_icon = MDIconButton(
                 icon="refresh",
                 font_size="64sp",
                 theme_text_color="Custom",
-                text_color=(0, 0, 0.7, 1),
+                text_color=(0.2, 0.6, 1, 1),
                 pos_hint={"center_x": 0.5}
             )
             box.add_widget(refresh_icon)
@@ -570,7 +571,6 @@ class MainApp(MDApp):
             refresh_icon.angle = 0
             anim.start(refresh_icon)
 
-            # Add label below the icon
             label = Label(
                 text="Refreshing screen...",
                 size_hint=(1, None),
@@ -586,7 +586,9 @@ class MainApp(MDApp):
             self.nfc_progress_dialog.content_cls = box
             self.nfc_progress_dialog.title = "Refreshing"
             self.nfc_progress_dialog.auto_dismiss = False
-            self.nfc_progress_dialog.open()
+            # If the dialog is already open, refresh its content
+            if not self.nfc_progress_dialog._window:
+                self.nfc_progress_dialog.open()
 
     def show_refresh_error_in_nfc_dialog(self, error_message="Refresh failed!"):
         """Show an error message in the existing NFC dialog."""
