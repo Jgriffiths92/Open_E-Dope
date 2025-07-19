@@ -250,7 +250,7 @@ public class NfcHelper {
         }
 
         // Example inside your NFC processing code
-        if (responseCode == 0x9000) {
+        if (isSuccessResponse(response)) {
             if (listener != null) {
                 listener.onRefreshSuccess();
             }
