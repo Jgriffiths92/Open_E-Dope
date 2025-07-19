@@ -543,6 +543,7 @@ class MainApp(MDApp):
             print(f"Error generating bitmap: {e}")
             
     def show_refreshing_in_nfc_dialog(self):
+        print("DEBUG: Showing refreshing screen in NFC dialog")
         """Show a rotating refresh icon in the existing NFC dialog."""
         if hasattr(self, "nfc_progress_dialog") and self.nfc_progress_dialog:
             from kivy.uix.boxlayout import BoxLayout
@@ -2783,7 +2784,7 @@ SwipeFileItem:
 
         def show_refresh(dt):
             self.show_refreshing_in_nfc_dialog()
-            # Show "Refreshing..." for 1.2s, then close dialog, then clear data/UI
+            # Show "Refreshing..." for 1.7s, then close dialog, then clear data/UI
             def finish_refresh(dt2):
                 self.hide_nfc_progress_dialog()
                 Clock.schedule_once(lambda dt3: self.clear_table_data(), 0.1)
