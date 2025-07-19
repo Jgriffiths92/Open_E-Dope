@@ -555,7 +555,7 @@ class MainApp(MDApp):
             # Add rotating refresh icon
             refresh_icon = MDIconButton(
                 icon="refresh",
-                user_font_size="64sp",
+                font_size="64sp",
                 theme_text_color="Custom",
                 text_color=(0, 0, 0.7, 1),
                 pos_hint={"center_x": 0.5}
@@ -2779,13 +2779,13 @@ SwipeFileItem:
             self.nfc_progress_bar.value = 100
         if hasattr(self, "nfc_progress_label"):
             self.nfc_progress_label.text = "Transfer successful!"
-            self.nfc_progress_label.color = (0, 0.6, 0, 1) # Green for success
+            self.nfc_progress_label.color = (0, 0.6, 0, 1)  # Green for success
 
         def show_refresh(dt):
             self.show_refreshing_in_nfc_dialog()
             def finish_refresh(dt2):
-                self.clear_table_data()
-                self.hide_nfc_progress_dialog()
+                self.hide_nfc_progress_dialog()   # Hide dialog first!
+                self.clear_table_data()           # Then clear data/UI
                 print("PYTHON DEBUG: _finish_nfc_progress completed. self.current_data should be cleared by clear_table_data().")
             Clock.schedule_once(finish_refresh, 1.2)  # Show refreshing for 1.2s
 
