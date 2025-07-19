@@ -406,7 +406,7 @@ if is_android():
                     # Trigger your logic here, e.g.:
                     # self.app.on_keyboard_hidden()
 
-    def setup_keyboard_listener(self):
+    def setup_keyboard_listener():
         activity = mActivity
         root_view = activity.getWindow().getDecorView()
         listener = GlobalLayoutListener(self)
@@ -542,6 +542,83 @@ class MainApp(MDApp):
                 print("Failed to generate bitmap.")
         except Exception as e:
             print(f"Error generating bitmap: {e}")
+            
+    def show_refreshing_in_nfc_dialog(self):
+        """Show a rotating refresh icon in the existing NFC dialog."""
+        if hasattr(self, "nfc_progress_dialog") and self.nfc_progress_dialog:
+            from kivy.uix.boxlayout import BoxLayout
+            from kivy.uix.label import Label
+            from kivymd.uix.button import MDIconButton
+            from kivy.animation import Animation
+
+            # Remove old widgets from dialog content
+            box = BoxLayout(orientation="vertical", spacing=20, padding=20)
+            # Add rotating refresh icon
+            refresh_icon = MDIconButton(
+                icon="refresh",
+                user_font_size="64sp",
+                theme_text_color="Custom",
+                text_color=(0, 0, 0.7, 1),
+                pos_hint={"center_x": 0.5}
+            )
+            box.add_widget(refresh_icon)
+
+            # Animate the icon to rotate indefinitely
+            anim = Animation(angle=360, duration=1)
+            anim += Animation(angle=0, duration=0)
+            anim.repeat = True
+            refresh_icon.angle = 0
+            anim.start(refresh_icon)
+
+            # Add label below the icon
+            label = Label(
+                text="Refreshing screen...",
+                size_hint=(1, None),
+                height=40,
+                halign="center",
+                valign="middle",
+                color=(0, 0, 0.7, 1),
+            )
+            label.bind(size=label.setter('text_size'))
+            box.add_widget(label)
+
+            # Replace dialog content
+            self.nfc_progress_dialog.content_cls = box
+            self.nfc_progress_dialog.title = "Refreshing"
+            self.nfc_progress_dialog.auto_dismiss = False
+            self.nfc_progress_dialog.open()
+
+    def show_refresh_error_in_nfc_dialog(self, error_message="Refresh failed!"):
+        """Show an error message in the existing NFC dialog."""
+        if hasattr(self, "nfc_progress_dialog") and self.nfc_progress_dialog:
+            from kivy.uix.boxlayout import BoxLayout
+            from kivy.uix.label import Label
+            from kivymd.uix.button import MDIconButton
+    
+            box = BoxLayout(orientation="vertical", spacing=20, padding=20)
+            error_icon = MDIconButton(
+                icon="alert-circle",
+                user_font_size="64sp",
+                theme_text_color="Custom",
+                text_color=(1, 0, 0, 1),
+                pos_hint={"center_x": 0.5}
+            )
+            box.add_widget(error_icon)
+            label = Label(
+                text=error_message,
+                size_hint=(1, None),
+                height=40,
+                halign="center",
+                valign="middle",
+                color=(1, 0, 0, 1),
+            )
+            label.bind(size=label.setter('text_size'))
+            box.add_widget(label)
+            self.nfc_progress_dialog.content_cls = box
+            self.nfc_progress_dialog.title = "Error"
+            self.nfc_progress_dialog.auto_dismiss = False
+            self.nfc_progress_dialog.open()
+
     def on_permissions_result(self, permissions, grant_results):
         """Handle the result of the permission request."""
         for permission, granted in zip(permissions, grant_results):
@@ -728,10 +805,6 @@ class MainApp(MDApp):
                 instance.cursor = instance.get_cursor_from_index(len(instance.text))
             delattr(instance, '_is_capitalizing')
 
-    def global_key_handler(self, window, key, scancode, codepoint, modifiers):
-        # Only act if HomeScreen is current
-        if self.root.ids.screen_manager.current != "home":
-            return False
     def global_key_handler(self, window, key, scancode, codepoint, modifiers):
         # Only act if HomeScreen is current
         if self.root.ids.screen_manager.current != "home":
@@ -1118,7 +1191,7 @@ class MainApp(MDApp):
                 markup=True,
                 size_hint_y=None,
                 height=dp(36),
-                color=(0, 0, 0, 1),
+                 color=(0, 0, 0, 1),
                 halign="center",
                 valign="middle",
                 font_size=dp(16),
@@ -2168,6 +2241,10 @@ class MainApp(MDApp):
 
             # Navigate to the Home Screen
             self.root.ids.screen_manager.current = "home"
+            self.display_table(processed_data)
+
+            # Navigate to the Home Screen
+            self.root.ids.screen_manager.current = "home"
             print(f"Processed received CSV: {file_path_or_uri}")
         except Exception as e:
             print(f"Error processing received CSV: {e}")
@@ -2686,6 +2763,7 @@ SwipeFileItem:
         if hasattr(self, "nfc_progress_dialog") and self.nfc_progress_dialog:
             self.nfc_progress_dialog.dismiss()
             self.nfc_progress_dialog = None
+
     def update_nfc_progress(self, percent):
         if hasattr(self, "nfc_progress_bar") and self.nfc_progress_bar:
             # If percent is 100, delay the update by 3 seconds
@@ -2699,11 +2777,17 @@ SwipeFileItem:
             self.nfc_progress_bar.value = 100
         if hasattr(self, "nfc_progress_label"):
             self.nfc_progress_label.text = "Transfer successful!"
-            self.nfc_progress_label.color = (0, 0.6, 0, 1)
-        Clock.schedule_once(lambda dt: self.hide_nfc_progress_dialog(), 2.5)
-        self.image_buffer = None
-        self.nfc_transfer_in_progress = False
-        Clock.schedule_once(lambda dt: self.clear_table_data())  # This will clear the table and show manual data input
+            self.nfc_progress_label.color = (0, 0.6, 0, 1) # Green for success
+
+        def show_refresh(dt):
+            self.show_refreshing_in_nfc_dialog()
+            def finish_refresh(dt2):
+                self.clear_table_data()
+                self.hide_nfc_progress_dialog()
+                print("PYTHON DEBUG: _finish_nfc_progress completed. self.current_data should be cleared by clear_table_data().")
+            Clock.schedule_once(finish_refresh, 1.2)  # Show refreshing for 1.2s
+
+        Clock.schedule_once(show_refresh, 1.2)  # Show "Transfer successful!" for 1.2s
     
     def on_nfc_transfer_error(self, message):
             """Handle NFC transfer errors (including tag disconnect)."""
