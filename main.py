@@ -2261,7 +2261,7 @@ class MainApp(MDApp):
         else:
             print("Private storage path is not available.")
             return None
-    
+        
     def delete_file_or_folder(self, path):
         """Delete the selected file or folder and refresh the file list."""
         try:
@@ -2294,6 +2294,7 @@ class MainApp(MDApp):
                 print(f"Path does not exist: {abs_path}")
         except Exception as e:
             print(f"Error deleting file or folder: {e}")
+
 
     def populate_swipe_file_list(self, target_dir=None, sort_by=None, reverse=None):
         saved_cards_screen = self.root.ids.screen_manager.get_screen("saved_cards")
