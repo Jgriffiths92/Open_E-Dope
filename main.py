@@ -621,11 +621,7 @@ class MainApp(MDApp):
             from kivymd.uix.button import MDIconButton
             from kivy.uix.floatlayout import FloatLayout
 
-            # Nullify old references so nothing tries to update them
-            self.nfc_progress_bar = None
-            self.nfc_progress_label = None
-
-            box = FloatLayout(size_hint_y=None, height="200dp")
+            box = FloatLayout(orientation="vertical", spacing=20, padding=20)
             error_icon = MDIconButton(
                 icon="alert-circle",
                 font_size="64sp",
