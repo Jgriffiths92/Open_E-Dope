@@ -2783,13 +2783,15 @@ SwipeFileItem:
 
         def show_refresh(dt):
             self.show_refreshing_in_nfc_dialog()
+            # Show "Refreshing..." for 1.2s, then close dialog, then clear data/UI
             def finish_refresh(dt2):
-                self.hide_nfc_progress_dialog()   # Hide dialog first!
-                self.clear_table_data()           # Then clear data/UI
+                self.hide_nfc_progress_dialog()
+                Clock.schedule_once(lambda dt3: self.clear_table_data(), 0.1)
                 print("PYTHON DEBUG: _finish_nfc_progress completed. self.current_data should be cleared by clear_table_data().")
-            Clock.schedule_once(finish_refresh, 1.2)  # Show refreshing for 1.2s
+            Clock.schedule_once(finish_refresh, 1.7)
 
-        Clock.schedule_once(show_refresh, 1.2)  # Show "Transfer successful!" for 1.2s
+        # Show "Transfer successful!" for 1.2s, then "Refreshing..." for 1.2s
+        Clock.schedule_once(show_refresh, 1.2) 
     
     def on_nfc_transfer_error(self, message):
             """Handle NFC transfer errors (including tag disconnect)."""
