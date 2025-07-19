@@ -382,6 +382,13 @@ if is_android():
                 from kivy.clock import Clock
                 Clock.schedule_once(lambda dt: self.app.on_refresh_success())
 
+        @java_method('()V')
+        def onRefreshSuccess(self):
+            print("NFC Refresh Success (9000) from Java")
+            if self.app and hasattr(self.app, 'on_refresh_success'):
+                from kivy.clock import Clock
+                Clock.schedule_once(lambda dt: self.app.on_refresh_success())
+
         @java_method('(Ljava/lang/String;)V')
         def onError(self, message):
             print(f"NFC Error from Java: {message}")
@@ -561,13 +568,13 @@ class MainApp(MDApp):
             self.nfc_progress_bar = None
             self.nfc_progress_label = None
 
-            box = FloatLayout(orientation="vertical", spacing=20, padding=20)
+            box = FloatLayout(size_hint_y=None, height="200dp")
             refresh_icon = MDIconButton(
                 icon="refresh",
                 font_size="64sp",
                 theme_text_color="Custom",
                 text_color=(0.2, 0.6, 1, 1),
-                pos_hint={"center_x": 0.5}
+                pos_hint={"center_x": 0.5, "center_y": 0.6}
             )
             box.add_widget(refresh_icon)
 
@@ -582,6 +589,7 @@ class MainApp(MDApp):
                 text="Refreshing screen...",
                 size_hint=(1, None),
                 height=40,
+                pos_hint={"center_x": 0.5, "y": 0.05},
                 halign="center",
                 valign="middle",
                 color=(0, 0, 0.7, 1),
@@ -593,34 +601,44 @@ class MainApp(MDApp):
             self.nfc_progress_dialog.content_cls = box
             self.nfc_progress_dialog.title = "Refreshing"
             self.nfc_progress_dialog.auto_dismiss = False
-            # If the dialog is already open, refresh its content
+            # If the dialog is not open, open it
             if not self.nfc_progress_dialog._window:
                 self.nfc_progress_dialog.open()
+
     def on_refresh_success(self):
         print("Refresh command success (9000) received.")
-        self.hide_nfc_progress_dialog()
-        self.clear_table_data()
+        # Wait 2 seconds before hiding dialog and clearing table
+        def delayed_clear(dt):
+            self.hide_nfc_progress_dialog()
+            self.clear_table_data()
+        from kivy.clock import Clock
+        Clock.schedule_once(delayed_clear, 2)
 
     def show_refresh_error_in_nfc_dialog(self, error_message="Refresh failed!"):
-        """Show an error message in the existing NFC dialog."""
+        print("DEBUG: Showing refresh error in NFC dialog")
         if hasattr(self, "nfc_progress_dialog") and self.nfc_progress_dialog:
             from kivy.uix.label import Label
             from kivymd.uix.button import MDIconButton
             from kivy.uix.floatlayout import FloatLayout
 
-            box = FloatLayout(orientation="vertical", spacing=20, padding=20)
+            # Nullify old references so nothing tries to update them
+            self.nfc_progress_bar = None
+            self.nfc_progress_label = None
+
+            box = FloatLayout(size_hint_y=None, height="200dp")
             error_icon = MDIconButton(
                 icon="alert-circle",
-                user_font_size="64sp",
+                font_size="64sp",
                 theme_text_color="Custom",
                 text_color=(1, 0, 0, 1),
-                pos_hint={"center_x": 0.5}
+                pos_hint={"center_x": 0.5, "center_y": 0.6}
             )
             box.add_widget(error_icon)
             label = Label(
                 text=error_message,
                 size_hint=(1, None),
                 height=40,
+                pos_hint={"center_x": 0.5, "y": 0.05},
                 halign="center",
                 valign="middle",
                 color=(1, 0, 0, 1),
@@ -630,7 +648,15 @@ class MainApp(MDApp):
             self.nfc_progress_dialog.content_cls = box
             self.nfc_progress_dialog.title = "Error"
             self.nfc_progress_dialog.auto_dismiss = False
-            self.nfc_progress_dialog.open()
+            # If the dialog is not open, open it
+            if not self.nfc_progress_dialog._window:
+                self.nfc_progress_dialog.open()
+
+            # Add a 2-second delay before closing and clearing
+            def delayed_clear(dt):
+                self.hide_nfc_progress_dialog()
+            from kivy.clock import Clock
+            Clock.schedule_once(delayed_clear, 2)
 
     def on_permissions_result(self, permissions, grant_results):
         """Handle the result of the permission request."""
@@ -775,7 +801,7 @@ class MainApp(MDApp):
             epd_init_java_array[i] = String(s)
         # Create the progress listener
         listener = NfcProgressListener(self)
-        # Call the ByteBuffer method
+        self.show_refreshing_in_nfc_dialog()  # <-- Show the dialog here
         NfcHelper.processNfcIntentByteBufferAsync(intent, width, height, image_buffer_bb, epd_init_java_array, listener)
     
     def on_pause(self):
@@ -1762,6 +1788,7 @@ class MainApp(MDApp):
                 col_x += col_widths[col_idx]
 
             # Draw solid vertical lines at column boundaries
+
             col_x = table_left
             for col_idx in range(1, n_cols):  # Start at 1, stop before n_cols
                 col_x += col_widths[col_idx - 1]
@@ -2354,7 +2381,6 @@ class MainApp(MDApp):
             return None
         
     def delete_file_or_folder(self, path):
-        """Delete the selected file or folder and refresh the file list."""
         try:
             base_dir = os.path.abspath(self.get_private_storage_path())
             abs_path = os.path.abspath(path)

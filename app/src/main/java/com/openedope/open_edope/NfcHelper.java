@@ -239,8 +239,21 @@ public class NfcHelper {
                  Log.d(TAG, "JAVA: Calling listener.onProgress (100% - tail only). Listener: " + listener.hashCode());
                  listener.onProgress(100); // Ensure 100% if only a tail was sent
             }
+            if (listener != null) {
+                listener.onRefreshSuccess();
+            }
         } else {
             Log.w(TAG, "Refresh command possibly failed or no 9000 status.");
+            if (listener != null) {
+                listener.onError("Refresh command failed (no 9000 status).");
+            }
+        }
+
+        // Example inside your NFC processing code
+        if (responseCode == 0x9000) {
+            if (listener != null) {
+                listener.onRefreshSuccess();
+            }
         }
     }
 
