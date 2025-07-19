@@ -1189,7 +1189,7 @@ class MainApp(MDApp):
                 markup=True,
                 size_hint_y=None,
                 height=dp(36),
-                 color=(0, 0, 0, 1),
+                color=(0, 0, 0, 1),
                 halign="center",
                 valign="middle",
                 font_size=dp(16),
