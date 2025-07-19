@@ -2804,7 +2804,7 @@ SwipeFileItem:
                 print("PYTHON DEBUG: _finish_nfc_progress completed. self.current_data should be cleared by clear_table_data().")
             Clock.schedule_once(finish_refresh, 1.7)
 
-        # Show "Transfer successful!" for 1.2s, then "Refreshing..." for 1.2s
+        # Show "Transfer successful!" for 1.2s, then "Refreshing..." for 1.7s
         Clock.schedule_once(show_refresh, 1.2) 
     
     def on_nfc_transfer_error(self, message):
