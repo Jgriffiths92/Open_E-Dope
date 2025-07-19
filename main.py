@@ -375,6 +375,13 @@ if is_android():
             else:
                 print("Error: NfcProgressListener.app is None or lacks 'update_nfc_progress' method.")
 
+        @java_method('()V')
+        def onRefreshSuccess(self):
+            print("NFC Refresh Success (9000) from Java")
+            if self.app and hasattr(self.app, 'on_refresh_success'):
+                from kivy.clock import Clock
+                Clock.schedule_once(lambda dt: self.app.on_refresh_success())
+
         @java_method('(Ljava/lang/String;)V')
         def onError(self, message):
             print(f"NFC Error from Java: {message}")
@@ -545,10 +552,10 @@ class MainApp(MDApp):
     def show_refreshing_in_nfc_dialog(self):
         print("DEBUG: Showing refreshing screen in NFC dialog")
         if hasattr(self, "nfc_progress_dialog") and self.nfc_progress_dialog:
-            from kivy.uix.boxlayout import BoxLayout
             from kivy.uix.label import Label
             from kivymd.uix.button import MDIconButton
             from kivy.animation import Animation
+            from kivy.uix.floatlayout import FloatLayout
 
             # Nullify old references so nothing tries to update them
             self.nfc_progress_bar = None
@@ -589,11 +596,14 @@ class MainApp(MDApp):
             # If the dialog is already open, refresh its content
             if not self.nfc_progress_dialog._window:
                 self.nfc_progress_dialog.open()
+    def on_refresh_success(self):
+        print("Refresh command success (9000) received.")
+        self.hide_nfc_progress_dialog()
+        self.clear_table_data()
 
     def show_refresh_error_in_nfc_dialog(self, error_message="Refresh failed!"):
         """Show an error message in the existing NFC dialog."""
         if hasattr(self, "nfc_progress_dialog") and self.nfc_progress_dialog:
-            from kivy.uix.boxlayout import BoxLayout
             from kivy.uix.label import Label
             from kivymd.uix.button import MDIconButton
             from kivy.uix.floatlayout import FloatLayout
