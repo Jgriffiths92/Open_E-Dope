@@ -302,7 +302,7 @@ MDNavigationLayout:
             text_color: 1, 1, 1, 1
             disabled: root.swipe_disabled
             opacity: 0 if root.swipe_disabled else 1
-            on_release: app.delete_file_or_folder(root.file_path, root) if not root.swipe_disabled else None
+            on_release: app.delete_file_or_folder(root.file_path) if not root.swipe_disabled else None
     MDCardSwipeFrontBox:
         MDCard:
             radius: [0, 0, 0, 0]
