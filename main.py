@@ -381,7 +381,7 @@ if is_android():
             if self.app and hasattr(self.app, 'on_refresh_success'):
                 from kivy.clock import Clock
                 Clock.schedule_once(lambda dt: self.app.on_refresh_success())
-                
+
         @java_method('(Ljava/lang/String;)V')
         def onRefreshError(self, message):
             print(f"PYTHON: onRefreshError called from Java with message: {message}")
@@ -616,7 +616,7 @@ class MainApp(MDApp):
             self.hide_nfc_progress_dialog()
             self.clear_table_data()
         from kivy.clock import Clock
-        Clock.schedule_once(delayed_clear, 2)
+        Clock.schedule_once(delayed_clear, 2.5)
 
     def show_refresh_error_in_nfc_dialog(self, error_message="Refresh failed!"):
         print("DEBUG: Showing refresh error in NFC dialog")
@@ -656,7 +656,7 @@ class MainApp(MDApp):
             def delayed_clear(dt):
                 self.hide_nfc_progress_dialog()
             from kivy.clock import Clock
-            Clock.schedule_once(delayed_clear, 2)
+            Clock.schedule_once(delayed_clear, 2.5)
 
     def on_permissions_result(self, permissions, grant_results):
         """Handle the result of the permission request."""
