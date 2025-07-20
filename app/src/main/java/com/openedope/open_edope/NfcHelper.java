@@ -264,6 +264,9 @@ public class NfcHelper {
                 // Ensure 100% if only a tail was sent or if not already at 100%
                 listener.onProgress(100);
             }
+            if (listener != null) {
+                listener.onRefreshSuccess();
+            }
         } else {
             Log.w(TAG, "Refresh command possibly failed or no 9000 status.");
             if (listener != null) {
