@@ -790,7 +790,7 @@ class MainApp(MDApp):
             epd_init_java_array[i] = String(s)
         # Create the progress listener
         listener = NfcProgressListener(self)
-        self.show_refreshing_in_nfc_dialog()
+        #self.show_refreshing_in_nfc_dialog()
         NfcHelper.processNfcIntentByteBufferAsync(intent, width, height, image_buffer_bb, epd_init_java_array, listener)
     
     def on_pause(self):
@@ -2809,7 +2809,9 @@ SwipeFileItem:
         if hasattr(self, "nfc_progress_label"):
             self.nfc_progress_label.text = "Transfer successful!"
             self.nfc_progress_label.color = (0, 0.6, 0, 1)  # Green for success
-        
+         # Show the refreshing dialog after a short delay (optional)
+        from kivy.clock import Clock
+        Clock.schedule_once(lambda dt: self.show_refreshing_in_nfc_dialog(), 1.0)
 
     def on_nfc_transfer_error(self, message):
             """Handle NFC transfer errors (including tag disconnect)."""
