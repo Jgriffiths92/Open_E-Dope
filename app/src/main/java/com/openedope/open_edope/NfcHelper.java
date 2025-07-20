@@ -144,6 +144,8 @@ public class NfcHelper {
         int totalDataBytes = width0 * height0 / 8;
         int numFullChunks = totalDataBytes / CHUNK_SIZE;
         int tailBytes = totalDataBytes % CHUNK_SIZE;
+
+        // --- Skip R buffer if this is a 2.9-inch display (detected by epd_init) ---
         boolean is29Inch = false;
         if (epd_init != null && epd_init.length > 0 && epd_init[0] != null) {
             String epdInit0 = epd_init[0].replaceAll("\\s+", "").toUpperCase();
@@ -191,7 +193,7 @@ public class NfcHelper {
                 cmd[j + 5] = 0; // Zero-pad the rest of the chunk
             }
             transceiveWithRetry(nfcTech, cmd, "BW_TAIL", listener);
-
+            
             chunkIndex++;
             if (listener != null) {
                 int percent = (int) (((chunkIndex) * 100.0) / totalChunks);
@@ -200,17 +202,7 @@ public class NfcHelper {
             }
         }
 
-        // --- Skip R buffer if this is a 2.9-inch display (detected by epd_init) ---
-        boolean is29Inch = false;
-        if (epd_init != null && epd_init.length > 0 && epd_init[0] != null) {
-            // Match the actual prefix used in Python EPD_INIT_MAP for 2.9-inch
-            String epdInit0 = epd_init[0].replaceAll("\\s+", "").toUpperCase();
-            // Use the first 32 hex chars of your actual init string
-            if (epdInit0.startsWith("F0DB000067A006012000800128A4010C")) {
-                is29Inch = true;
-            }
-        }
-
+        
         if (!is29Inch) {
             // Send R buffer (inverted)
             Log.d(TAG, "Sending R buffer (inverted)...");
