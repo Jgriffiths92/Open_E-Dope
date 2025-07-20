@@ -270,7 +270,7 @@ public class NfcHelper {
         } else {
             Log.w(TAG, "Refresh command possibly failed or no 9000 status.");
             if (listener != null) {
-                listener.onError("Refresh command failed (no 9000 status).");
+                listener.onRefreshError("Refresh command failed (no 9000 status).");
             }
         }
     }
