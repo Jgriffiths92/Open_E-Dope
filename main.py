@@ -478,12 +478,10 @@ class MainApp(MDApp):
             try:
                 Context = autoclass('android.content.Context')
                 vibrator = mActivity.getSystemService(Context.VIBRATOR_SERVICE)
-                # Try to use VibrationEffect if available, otherwise use legacy API
                 try:
                     VibrationEffect = autoclass('android.os.VibrationEffect')
-                    effect = VibrationEffect.createOneShot(500, Vibration)
+                    effect = VibrationEffect.create
                     vibrator.vibrate(effect)
-                   
                 except Exception:
                     vibrator.vibrate(500)
                     print("Vibrating with legacy API")
@@ -492,13 +490,15 @@ class MainApp(MDApp):
 
         if hasattr(self, "nfc_progress_dialog") and self.nfc_progress_dialog:
             self.nfc_progress_dialog.dismiss()
+
         from kivy.uix.floatlayout import FloatLayout
         from kivy.uix.label import Label
 
-        # Use FloatLayout to allow centering
-        box = FloatLayout(size_hint_y=None, height="200dp")
+        # Create a persistent container for dialog content
+        self.nfc_dialog_container = FloatLayout(size_hint_y=None, height="200dp")
 
-        # Create a new CoreLabel for each progress bar instance
+        # Progress bar
+        from kivy.core.text import Label as CoreLabel
         progress_label = CoreLabel(text="{}%", font_size=40)
         self.nfc_progress_bar = CircularProgressBar(
             size_hint=(None, None),
@@ -510,11 +510,11 @@ class MainApp(MDApp):
             color=(0.2, 0.6, 1, 1),
             label_color=(0.2, 0.6, 1, 1),
             background_color=(0.9, 0.9, 0.9, 1),
-            label=progress_label,  # <-- Always pass a new label!
+            label=progress_label,
         )
-        box.add_widget(self.nfc_progress_bar)
+        self.nfc_dialog_container.clear_widgets()
+        self.nfc_dialog_container.add_widget(self.nfc_progress_bar)
 
-        # Add the label below the progress bar, also centered
         self.nfc_progress_label = Label(
             text=message,
             size_hint=(None, None),
@@ -525,17 +525,12 @@ class MainApp(MDApp):
             color=(0, 0, 0, 1),
         )
         self.nfc_progress_label.bind(size=self.nfc_progress_label.setter('text_size'))
-        box.add_widget(self.nfc_progress_label)
-        # Reset progress bar and label
-        self.nfc_progress_bar.value = 0
-        self.nfc_progress_bar._refresh_text()
-        self.nfc_progress_label.text = message
-        self.nfc_progress_label.color = (0, 0, 0, 1)
+        self.nfc_dialog_container.add_widget(self.nfc_progress_label)
 
         self.nfc_progress_dialog = MDDialog(
             title="NFC Transfer",
             type="custom",
-            content_cls=box,
+            content_cls=self.nfc_dialog_container,
             auto_dismiss=False,
         )
         self.nfc_progress_dialog.open()
@@ -562,17 +557,13 @@ class MainApp(MDApp):
 
     def _show_refreshing_in_nfc_dialog_ui(self):
         print("DEBUG: Showing refreshing screen in NFC dialog")
-        if hasattr(self, "nfc_progress_dialog") and self.nfc_progress_dialog:
+        if hasattr(self, "nfc_progress_dialog") and self.nfc_progress_dialog and hasattr(self, "nfc_dialog_container"):
             from kivy.uix.label import Label
             from kivymd.uix.button import MDIconButton
             from kivy.animation import Animation
-            from kivy.uix.floatlayout import FloatLayout
 
-            # Nullify old references so nothing tries to update them
-            self.nfc_progress_bar = None
-            self.nfc_progress_label = None
+            self.nfc_dialog_container.clear_widgets()
 
-            box = FloatLayout(size_hint_y=None, height="200dp")
             refresh_icon = MDIconButton(
                 icon="refresh",
                 font_size="64sp",
@@ -580,9 +571,9 @@ class MainApp(MDApp):
                 text_color=(0.2, 0.6, 1, 1),
                 pos_hint={"center_x": 0.5, "center_y": 0.6}
             )
-            box.add_widget(refresh_icon)
+            self.nfc_dialog_container.add_widget(refresh_icon)
             print("refresh_icon created")
-            # Animate the icon to rotate indefinitely
+
             anim = Animation(angle=360, duration=1)
             anim += Animation(angle=0, duration=0)
             anim.repeat = True
@@ -599,10 +590,8 @@ class MainApp(MDApp):
                 color=(0, 0, 0.7, 1),
             )
             label.bind(size=label.setter('text_size'))
-            box.add_widget(label)
+            self.nfc_dialog_container.add_widget(label)
 
-            # Replace dialog content
-            self.nfc_progress_dialog.content_cls = box
             self.nfc_progress_dialog.title = "Refreshing"
             self.nfc_progress_dialog.auto_dismiss = False
             # If the dialog is not open, open it
@@ -622,12 +611,12 @@ class MainApp(MDApp):
 
     def show_refresh_error_in_nfc_dialog(self, error_message="Refresh failed!"):
         print("DEBUG: Showing refresh error in NFC dialog")
-        if hasattr(self, "nfc_progress_dialog") and self.nfc_progress_dialog:
+        if hasattr(self, "nfc_progress_dialog") and self.nfc_progress_dialog and hasattr(self, "nfc_dialog_container"):
             from kivy.uix.label import Label
             from kivymd.uix.button import MDIconButton
-            from kivy.uix.floatlayout import FloatLayout
 
-            box = FloatLayout(orientation="vertical", spacing=20, padding=20)
+            self.nfc_dialog_container.clear_widgets()
+
             error_icon = MDIconButton(
                 icon="alert-circle",
                 font_size="64sp",
@@ -635,7 +624,7 @@ class MainApp(MDApp):
                 text_color=(1, 0, 0, 1),
                 pos_hint={"center_x": 0.5, "center_y": 0.6}
             )
-            box.add_widget(error_icon)
+            self.nfc_dialog_container.add_widget(error_icon)
             label = Label(
                 text=error_message,
                 size_hint=(1, None),
@@ -646,13 +635,9 @@ class MainApp(MDApp):
                 color=(1, 0, 0, 1),
             )
             label.bind(size=label.setter('text_size'))
-            box.add_widget(label)
-            self.nfc_progress_dialog.content_cls = box
+            self.nfc_dialog_container.add_widget(label)
             self.nfc_progress_dialog.title = "Error"
             self.nfc_progress_dialog.auto_dismiss = False
-            # If the dialog is not open, open it
-            if not self.nfc_progress_dialog._window:
-                self.nfc_progress_dialog.open()
 
             # Add a 2-second delay before closing and clearing
             def delayed_clear(dt):
@@ -2604,6 +2589,9 @@ SwipeFileItem:
                     widget.text = ""
             # Also clear the corresponding manual_data_rows entry if you want
             if hasattr(self, "manual_data_rows") and self.manual_data_rows:
+                    widget.text = ""
+            # Also clear the corresponding manual_data_rows entry if you want
+            if hasattr(self, "manual_data_rows") and self.manual_data_rows:
                 self.manual_data_rows[0] = {k: v for k, v in self.manual_data_rows[0].items()}
             return  # Do not remove the last remaining data row
 
@@ -2884,6 +2872,10 @@ def pack_image_column_major(img):
     for x in range(width-1, -1, -1):  # right-to-left to match demo
         for y_block in range(0, height, 8):
             byte = 0
+            for bit in range(8):
+                y = y_block + bit
+                if y >= height:
+                    continue
             for bit in range(8):
                 y = y_block + bit
                 if y >= height:
