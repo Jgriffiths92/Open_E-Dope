@@ -377,7 +377,7 @@ if is_android():
 
         @java_method('()V')
         def onRefreshSuccess(self):
-            print("NFC Refresh Success (9000) from Java")
+            print("PYTHON: onRefreshSuccess called from Java")
             if self.app and hasattr(self.app, 'on_refresh_success'):
                 from kivy.clock import Clock
                 Clock.schedule_once(lambda dt: self.app.on_refresh_success())
@@ -603,7 +603,7 @@ class MainApp(MDApp):
                 self.nfc_progress_dialog.open()
 
     def on_refresh_success(self):
-        print("Refresh command success (9000) received.")
+        print("PYTHON: on_refresh_success running")
         # Wait 2 seconds before hiding dialog and clearing table
         def delayed_clear(dt):
             self.hide_nfc_progress_dialog()
