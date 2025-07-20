@@ -581,7 +581,7 @@ class MainApp(MDApp):
                 pos_hint={"center_x": 0.5, "center_y": 0.6}
             )
             box.add_widget(refresh_icon)
-
+            print("refresh_icon created")
             # Animate the icon to rotate indefinitely
             anim = Animation(angle=360, duration=1)
             anim += Animation(angle=0, duration=0)
