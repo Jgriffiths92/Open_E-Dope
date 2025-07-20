@@ -273,13 +273,6 @@ public class NfcHelper {
                 listener.onError("Refresh command failed (no 9000 status).");
             }
         }
-
-        // Example inside your NFC processing code
-        if (isSuccessResponse(response)) {
-            if (listener != null) {
-                listener.onRefreshSuccess();
-            }
-        }
     }
 
     private static byte[] transceiveWithRetry(Object nfcTech, byte[] cmd, String cmdName, NfcProgressListener listener) throws IOException {
