@@ -550,6 +550,10 @@ class MainApp(MDApp):
             print(f"Error generating bitmap: {e}")
             
     def show_refreshing_in_nfc_dialog(self):
+        from kivy.clock import Clock
+        Clock.schedule_once(lambda dt: self._show_refreshing_in_nfc_dialog_ui(), 0)
+
+    def _show_refreshing_in_nfc_dialog_ui(self):
         print("DEBUG: Showing refreshing screen in NFC dialog")
         if hasattr(self, "nfc_progress_dialog") and self.nfc_progress_dialog:
             from kivy.uix.label import Label
