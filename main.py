@@ -2797,9 +2797,8 @@ SwipeFileItem:
 
     def update_nfc_progress(self, percent):
         if hasattr(self, "nfc_progress_bar") and self.nfc_progress_bar:
-            # If percent is 100, delay the update by 3 seconds
             if percent >= 100:
-                Clock.schedule_once(lambda dt: self._finish_nfc_progress(), 3)
+            self._finish_nfc_progress()
             else:
                 self.nfc_progress_bar.value = percent
 
