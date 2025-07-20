@@ -797,7 +797,6 @@ class MainApp(MDApp):
             epd_init_java_array[i] = String(s)
         # Create the progress listener
         listener = NfcProgressListener(self)
-        self.show_refreshing_in_nfc_dialog()  # <-- Show the dialog here
         NfcHelper.processNfcIntentByteBufferAsync(intent, width, height, image_buffer_bb, epd_init_java_array, listener)
     
     def on_pause(self):
