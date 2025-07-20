@@ -382,13 +382,6 @@ if is_android():
                 from kivy.clock import Clock
                 Clock.schedule_once(lambda dt: self.app.on_refresh_success())
 
-        @java_method('()V')
-        def onRefreshSuccess(self):
-            print("NFC Refresh Success (9000) from Java")
-            if self.app and hasattr(self.app, 'on_refresh_success'):
-                from kivy.clock import Clock
-                Clock.schedule_once(lambda dt: self.app.on_refresh_success())
-
         @java_method('(Ljava/lang/String;)V')
         def onError(self, message):
             print(f"NFC Error from Java: {message}")
