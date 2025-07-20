@@ -797,6 +797,7 @@ class MainApp(MDApp):
             epd_init_java_array[i] = String(s)
         # Create the progress listener
         listener = NfcProgressListener(self)
+        self.show_refreshing_in_nfc_dialog()
         NfcHelper.processNfcIntentByteBufferAsync(intent, width, height, image_buffer_bb, epd_init_java_array, listener)
     
     def on_pause(self):
@@ -1726,7 +1727,7 @@ class MainApp(MDApp):
                             col_widths.append(max_width + 12)
                         table_width = sum(col_widths)
                         if table_width < base_width - 2: # 1px margin each side
-                            return font_size
+                          return font_size
                 return min_font
 
             font_size = find_max_font_size()
@@ -2815,19 +2816,8 @@ SwipeFileItem:
         if hasattr(self, "nfc_progress_label"):
             self.nfc_progress_label.text = "Transfer successful!"
             self.nfc_progress_label.color = (0, 0.6, 0, 1)  # Green for success
+        
 
-        def show_refresh(dt):
-            self.show_refreshing_in_nfc_dialog()
-            # Show "Refreshing..." for 1.7s, then close dialog, then clear data/UI
-            def finish_refresh(dt2):
-                self.hide_nfc_progress_dialog()
-                Clock.schedule_once(lambda dt3: self.clear_table_data(), 0.1)
-                print("PYTHON DEBUG: _finish_nfc_progress completed. self.current_data should be cleared by clear_table_data().")
-            Clock.schedule_once(finish_refresh, 1.7)
-
-        # Show "Transfer successful!" for 1.2s, then "Refreshing..." for 1.7s
-        Clock.schedule_once(show_refresh, 1.2) 
-    
     def on_nfc_transfer_error(self, message):
             """Handle NFC transfer errors (including tag disconnect)."""
             print(f"NFC transfer error: {message}")
