@@ -493,9 +493,23 @@ class MainApp(MDApp):
 
         from kivy.uix.floatlayout import FloatLayout
         from kivy.uix.label import Label
+        from kivy.uix.boxlayout import BoxLayout
+
+        # Custom header label
+        header_label = Label(
+            text="NFC Transfer",
+            halign="center",
+            valign="middle",
+            size_hint=(1, None),
+            height="40dp",
+            font_size="20sp",
+            color=(0, 0, 0, 1),
+        )
+        header_label.bind(size=header_label.setter('text_size'))
 
         # Create a persistent container for dialog content
-        self.nfc_dialog_container = FloatLayout(size_hint_y=None, height="200dp")
+        self.nfc_dialog_container = BoxLayout(orientation="vertical", size_hint_y=None, height="240dp")
+        self.nfc_dialog_container.add_widget(header_label)
 
         # Progress bar
         from kivy.core.text import Label as CoreLabel
@@ -512,7 +526,6 @@ class MainApp(MDApp):
             background_color=(0.9, 0.9, 0.9, 1),
             label=progress_label,
         )
-        self.nfc_dialog_container.clear_widgets()
         self.nfc_dialog_container.add_widget(self.nfc_progress_bar)
 
         self.nfc_progress_label = Label(
@@ -528,7 +541,7 @@ class MainApp(MDApp):
         self.nfc_dialog_container.add_widget(self.nfc_progress_label)
 
         self.nfc_progress_dialog = MDDialog(
-            title="NFC Transfer",
+            title="",  # Leave title blank
             type="custom",
             content_cls=self.nfc_dialog_container,
             auto_dismiss=False,
@@ -566,9 +579,11 @@ class MainApp(MDApp):
 
             refresh_icon = MDIconButton(
                 icon="refresh",
-                font_size="64sp",
+                user_font_size="120sp",  # Make icon as large as the progress bar
                 theme_text_color="Custom",
                 text_color=(0.2, 0.6, 1, 1),
+                size_hint=(None, None),
+                size=(120, 120),
                 pos_hint={"center_x": 0.5, "center_y": 0.6}
             )
             self.nfc_dialog_container.add_widget(refresh_icon)
@@ -619,9 +634,11 @@ class MainApp(MDApp):
 
             error_icon = MDIconButton(
                 icon="alert-circle",
-                font_size="64sp",
+                user_font_size="120sp",  # Make icon as large as the progress bar
                 theme_text_color="Custom",
                 text_color=(1, 0, 0, 1),
+                size_hint=(None, None),
+                size=(120, 120),
                 pos_hint={"center_x": 0.5, "center_y": 0.6}
             )
             self.nfc_dialog_container.add_widget(error_icon)
