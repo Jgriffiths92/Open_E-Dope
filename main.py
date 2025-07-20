@@ -495,15 +495,28 @@ class MainApp(MDApp):
         from kivy.uix.label import Label
 
         # Create a persistent container for dialog content
-        self.nfc_dialog_container = FloatLayout(size_hint_y=None, height="200dp")
+        self.nfc_dialog_container = FloatLayout(size_hint_y=None, height="220dp")  # Slightly taller for title
 
-        # Progress bar
-        from kivy.core.text import Label as CoreLabel
-        progress_label = CoreLabel(text="{}%", font_size=40)
+        # Add a custom title label at the top, centered horizontally
+        self.title_label = Label(
+            text="NFC Transfer",
+            size_hint=(1, None),
+            height=40,
+            pos_hint={"top": 1, "center_x": 0.5},
+            halign="center",
+            valign="middle",
+            font_size="20sp",
+            bold=True,
+            color=(0, 0, 0, 1),
+        )
+        self.title_label.bind(size=self.title_label.setter('text_size'))
+        self.nfc_dialog_container.add_widget(self.title_label)
+
+        # Add the progress bar below the title
         self.nfc_progress_bar = CircularProgressBar(
             size_hint=(None, None),
             size=(120, 120),
-            pos_hint={"center_x": 0.5, "center_y": 0.6},
+            pos_hint={"center_x": 0.5, "center_y": 0.55},  # Lowered to make room for title
             max=100,
             value=0,
             thickness=15,
@@ -528,7 +541,7 @@ class MainApp(MDApp):
         self.nfc_dialog_container.add_widget(self.nfc_progress_label)
 
         self.nfc_progress_dialog = MDDialog(
-            title="NFC Transfer",
+            title="",  # Hide default title
             type="custom",
             content_cls=self.nfc_dialog_container,
             auto_dismiss=False,
@@ -564,6 +577,11 @@ class MainApp(MDApp):
 
             self.nfc_dialog_container.clear_widgets()
 
+            # Update the title label text to "Refreshing"
+            if hasattr(self, "title_label"):
+                self.title_label.text = "Refreshing"
+                self.nfc_dialog_container.add_widget(self.title_label)
+
             refresh_icon = MDIconButton(
                 icon="refresh",
                 font_size="120sp",
@@ -587,12 +605,11 @@ class MainApp(MDApp):
                 pos_hint={"center_x": 0.5, "y": 0.05},
                 halign="center",
                 valign="middle",
-                color=(0, 0, 0.7, 1),
+                color=(0, 0, 0, 1),
             )
             label.bind(size=label.setter('text_size'))
             self.nfc_dialog_container.add_widget(label)
 
-            self.nfc_progress_dialog.title = "Refreshing"
             self.nfc_progress_dialog.auto_dismiss = False
             # If the dialog is not open, open it
             if not self.nfc_progress_dialog._window:
@@ -617,6 +634,11 @@ class MainApp(MDApp):
 
             self.nfc_dialog_container.clear_widgets()
 
+            # Update the title label text to "Error"
+            if hasattr(self, "title_label"):
+                self.title_label.text = "Refresh Error"
+                self.nfc_dialog_container.add_widget(self.title_label)
+
             error_icon = MDIconButton(
                 icon="alert-circle",
                 font_size="120sp",
@@ -636,7 +658,6 @@ class MainApp(MDApp):
             )
             label.bind(size=label.setter('text_size'))
             self.nfc_dialog_container.add_widget(label)
-            self.nfc_progress_dialog.title = "Error"
             self.nfc_progress_dialog.auto_dismiss = False
 
             # Add a 2-second delay before closing and clearing
@@ -2696,6 +2717,7 @@ SwipeFileItem:
             print("Manual data added and input fields cleared:", self.current_data)
         except Exception as e:
             print(f"Error adding manual data: {e}")
+
     def copy_directory_from_assets(self, asset_manager, source_path, dest_path):
         """Recursively copy a directory from the assets folder to the destination."""
         try:
@@ -2703,7 +2725,6 @@ SwipeFileItem:
             for file_name in files:
                 sub_source_path = f"{source_path}/{file_name}"
                 sub_dest_path = os.path.join(dest_path, file_name)
-
                 if asset_manager.list(sub_source_path):  # Check if it's a directory
                     if not os.path.exists(sub_dest_path):
                         os.makedirs(sub_dest_path)
