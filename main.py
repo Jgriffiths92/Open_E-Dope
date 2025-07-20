@@ -613,8 +613,10 @@ class MainApp(MDApp):
         print("PYTHON: on_refresh_success running")
         # Wait 2 seconds before hiding dialog and clearing table
         def delayed_clear(dt):
+            print("DEBUG: Hiding NFC progress dialog after refresh icon shown")
             self.hide_nfc_progress_dialog()
-            self.clear_table_data()
+            Clock.schedule_once(lambda dt: self.clear_table_data(), 0.5)
+
         from kivy.clock import Clock
         Clock.schedule_once(delayed_clear, 2.5)
 
