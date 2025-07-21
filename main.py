@@ -39,6 +39,7 @@ from kivy.uix.anchorlayout import AnchorLayout
 from kivy.uix.widget import Widget
 from kivy.core.text import Label as CoreLabel
 from kivymd.uix.label import MDIcon
+from kivy.uix.image import Image
 
 
 # Global configuration variables
@@ -2555,7 +2556,6 @@ SwipeFileItem:
         main_layout.add_widget(buttons_layout)
 
         # --- ADD THIS SPACER WIDGET FOR EXTRA SPACE ABOVE THE KEYBOARD ---
-        from kivy.uix.widget import Widget
         main_layout.add_widget(Widget(size_hint_y=None, height=dp(80)))  # Adjust dp(80) as needed
 
         # Add the main layout to the table container
