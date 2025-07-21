@@ -609,19 +609,14 @@ class MainApp(MDApp):
                 refresh_icon,
                 size_hint=(None, None),
                 size=(dp(120), dp(120)),
+                pos_hint={"center_x": 0.5, "center_y": 0.6}
             )
             self.nfc_dialog_container.add_widget(rotating)
-
-            # --- Force the RotatingWidget to the center of the dialog container ---
+            # Force position and size after layout
             def fix_center(*args):
-                # Use the center of the dialog container, not the progress bar
                 rotating.center = self.nfc_dialog_container.center
                 refresh_icon.center = rotating.center
-                # Also update the rotation origin
-                rotating._rotate.origin = rotating.center
-            from kivy.clock import Clock
             Clock.schedule_once(fix_center, 0)
-            self.nfc_dialog_container.bind(size=lambda *a: fix_center())
 
             # Animate the rotation (counter-clockwise, like the demo)
             rotating.angle = 0
@@ -644,6 +639,7 @@ class MainApp(MDApp):
 
             self.nfc_progress_dialog.title = "Refreshing"
             self.nfc_progress_dialog.auto_dismiss = False
+            # If the dialog is not open, open it
             if not self.nfc_progress_dialog._window:
                 self.nfc_progress_dialog.open()
 
