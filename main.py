@@ -171,19 +171,17 @@ class RotatingWidget(Widget):
             self._rotate = Rotate(angle=self.angle, origin=self.center)
         with self.canvas.after:
             self._pop = PopMatrix()
-        self.bind(pos=self._update_origin, size=self._update_origin, angle=self._update_angle)
-        self.bind(size=self._center_child, pos=self._center_child)
+        self.bind(pos=self._update_all, size=self._update_all, angle=self._update_angle)
 
-    def _update_origin(self, *args):
+    def _update_all(self, *args):
+        # Always keep the rotation origin and child centered
         self._rotate.origin = self.center
+        if self.child:
+            self.child.center = self.center
 
     def _update_angle(self, *args):
         self._rotate.angle = self.angle
 
-    def _center_child(self, *args):
-        # Center the child widget inside this widget
-        if self.child:
-            self.child.center = self.center
 class SavedCardsScreen(Screen):
     def on_enter(self):
         try:
@@ -612,7 +610,7 @@ class MainApp(MDApp):
 
             # Animate the rotation
             rotating.angle = 0
-            anim = Animation(angle=360, duration=1)
+            anim = Animation(angle=-360, duration=1)
             anim += Animation(angle=0, duration=0)
             anim.repeat = True
             anim.start(rotating)
