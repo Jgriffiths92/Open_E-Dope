@@ -599,13 +599,12 @@ class MainApp(MDApp):
                 text_color=(0.2, 0.6, 1, 1),
                 size_hint=(None, None),
                 size=(dp(120), dp(120)),
-                pos=(0, 0),  # Let the container handle positioning
             )
 
             rotating = RotatingWidget(
                 refresh_icon,
                 size_hint=(None, None),
-                size=(dp(140), dp(140)),
+                size=(dp(120), dp(120)),  # Match icon size for perfect centering
                 pos_hint={"center_x": 0.5, "center_y": 0.6}
             )
             self.nfc_dialog_container.add_widget(rotating)
@@ -1798,6 +1797,7 @@ class MainApp(MDApp):
 
             table_width = sum(col_widths)
             table_margin = 2  # Reduce left/right margin to 2px
+            table_left = (base_width - table_width) // 2
             table_left = (base_width - table_width) // 2
             if table_left < table_margin:
                 table_left = table_margin
