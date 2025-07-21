@@ -598,17 +598,17 @@ class MainApp(MDApp):
 
             refresh_icon = MDIconButton(
                 icon="refresh",
-                font_size=dp(120),
+                font_size=dp(200),
                 theme_text_color="Custom",
                 text_color=(0.2, 0.6, 1, 1),
                 size_hint=(None, None),
-                size=(dp(120), dp(120)),
+                size=(dp(200), dp(200)),
             )
 
             rotating = RotatingWidget(
                 refresh_icon,
                 size_hint=(None, None),
-                size=(dp(120), dp(120)),
+                size=(dp(200), dp(200)),
                 pos_hint={"center_x": 0.5, "center_y": 0.6}
             )
             self.nfc_dialog_container.add_widget(rotating)
