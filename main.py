@@ -597,13 +597,12 @@ class MainApp(MDApp):
 
             self.nfc_dialog_container.clear_widgets()
 
-            refresh_icon = MDIcon(
-                icon="refresh",
-                font_size=dp(120),
-                theme_text_color="Custom",
-                text_color=(0.2, 0.6, 1, 1),
+            refresh_icon = Image(
+                source="assets/images/refresh_icon.png",  # Use your own PNG/SVG path here
                 size_hint=(None, None),
-                size=(dp(120), dp(120)),
+                size=(dp(120), dp(120)),      # Adjust size as needed
+                allow_stretch=True,
+                keep_ratio=True,
             )
 
             rotating = RotatingWidget(
@@ -663,12 +662,12 @@ class MainApp(MDApp):
 
             self.nfc_dialog_container.clear_widgets()
 
-            error_icon = MDIconButton(
-                icon="alert-circle",
-                font_size=dp(120),  # Use dp() and pass a number, not a string
-                theme_text_color="Custom",
-                text_color=(1, 0, 0, 1),
-                pos_hint={"center_x": 0.5, "center_y": 0.6}
+            error_icon = Image(
+                source="assets/images/warning_icon.png",  # Use your own PNG/SVG path here
+                size_hint=(None, None),
+                size=(dp(120), dp(120)),      # Adjust size as needed
+                allow_stretch=True,
+                keep_ratio=True,
             )
             self.nfc_dialog_container.add_widget(error_icon)
             label = Label(
