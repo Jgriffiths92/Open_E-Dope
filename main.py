@@ -566,7 +566,7 @@ class MainApp(MDApp):
 
             refresh_icon = MDIconButton(
                 icon="refresh",
-                font_size="120sp",
+                font_size="120dp",
                 theme_text_color="Custom",
                 text_color=(0.2, 0.6, 1, 1),
                 pos_hint={"center_x": 0.5, "center_y": 0.6}
@@ -619,7 +619,7 @@ class MainApp(MDApp):
 
             error_icon = MDIconButton(
                 icon="alert-circle",
-                font_size="120sp",
+                font_size="120dp",
                 theme_text_color="Custom",
                 text_color=(1, 0, 0, 1),
                 pos_hint={"center_x": 0.5, "center_y": 0.6}
