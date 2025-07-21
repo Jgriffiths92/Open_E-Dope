@@ -176,6 +176,8 @@ class RotatingWidget(Widget):
 
     def _update_origin(self, *args):
         self._rotate.origin = self.center
+        if self.child:
+            self.child.center = self.center  # Ensure child is always centered
 
     def _update_angle(self, *args):
         self._rotate.angle = self.angle
@@ -610,7 +612,11 @@ class MainApp(MDApp):
                 pos_hint={"center_x": 0.5, "center_y": 0.6}
             )
             self.nfc_dialog_container.add_widget(rotating)
-            print("refresh_icon created")
+            # Force position and size after layout
+            def fix_center(*args):
+                rotating.center = self.nfc_dialog_container.center
+                refresh_icon.center = rotating.center
+            Clock.schedule_once(fix_center, 0)
 
             # Animate the rotation (counter-clockwise, like the demo)
             rotating.angle = 0
