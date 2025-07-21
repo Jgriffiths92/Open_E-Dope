@@ -155,7 +155,29 @@ Builder.load_string('''
 # Define Screens
 class HomeScreen(Screen):
     pass
+from kivy.uix.widget import Widget
+from kivy.properties import NumericProperty
+from kivy.graphics import PushMatrix, PopMatrix, Rotate
 
+class RotatingWidget(Widget):
+    angle = NumericProperty(0)
+
+    def __init__(self, child, **kwargs):
+        super().__init__(**kwargs)
+        self.child = child
+        self.add_widget(child)
+        with self.canvas.before:
+            self._push = PushMatrix()
+            self._rotate = Rotate(angle=self.angle, origin=self.center)
+        with self.canvas.after:
+            self._pop = PopMatrix()
+        self.bind(pos=self._update_origin, size=self._update_origin, angle=self._update_angle)
+
+    def _update_origin(self, *args):
+        self._rotate.origin = self.center
+
+    def _update_angle(self, *args):
+        self._rotate.angle = self.angle
 class SavedCardsScreen(Screen):
     def on_enter(self):
         try:
@@ -566,19 +588,22 @@ class MainApp(MDApp):
 
             refresh_icon = MDIconButton(
                 icon="refresh",
-                font_size="120dp",
+                font_size=dp(120),  # Use dp() and pass a number, not a string
                 theme_text_color="Custom",
                 text_color=(0.2, 0.6, 1, 1),
                 pos_hint={"center_x": 0.5, "center_y": 0.6}
             )
-            self.nfc_dialog_container.add_widget(refresh_icon)
+
+            rotating = RotatingWidget(refresh_icon, size_hint=(None, None), size=(dp(140), dp(140)))
+            self.nfc_dialog_container.add_widget(rotating)
             print("refresh_icon created")
 
+            # Animate the rotation
+            rotating.angle = 0
             anim = Animation(angle=360, duration=1)
             anim += Animation(angle=0, duration=0)
             anim.repeat = True
-            refresh_icon.angle = 0
-            anim.start(refresh_icon)
+            anim.start(rotating)
 
             label = Label(
                 text="Refreshing screen...",
@@ -619,7 +644,7 @@ class MainApp(MDApp):
 
             error_icon = MDIconButton(
                 icon="alert-circle",
-                font_size="120dp",
+                font_size=dp(120),  # Use dp() and pass a number, not a string
                 theme_text_color="Custom",
                 text_color=(1, 0, 0, 1),
                 pos_hint={"center_x": 0.5, "center_y": 0.6}
