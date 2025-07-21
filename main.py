@@ -38,6 +38,7 @@ from kivy.uix.scrollview import ScrollView
 from kivy.uix.anchorlayout import AnchorLayout
 from kivy.uix.widget import Widget
 from kivy.core.text import Label as CoreLabel
+from kivymd.uix.label import MDIcon
 
 
 # Global configuration variables
@@ -596,19 +597,19 @@ class MainApp(MDApp):
 
             self.nfc_dialog_container.clear_widgets()
 
-            refresh_icon = MDIconButton(
+            refresh_icon = MDIcon(
                 icon="refresh",
-                font_size=dp(200),
+                font_size=dp(120),
                 theme_text_color="Custom",
                 text_color=(0.2, 0.6, 1, 1),
                 size_hint=(None, None),
-                size=(dp(200), dp(200)),
+                size=(dp(120), dp(120)),
             )
 
             rotating = RotatingWidget(
                 refresh_icon,
                 size_hint=(None, None),
-                size=(dp(200), dp(200)),
+                size=(dp(120), dp(120)),
                 pos_hint={"center_x": 0.5, "center_y": 0.6}
             )
             self.nfc_dialog_container.add_widget(rotating)
