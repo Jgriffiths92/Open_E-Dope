@@ -172,12 +172,18 @@ class RotatingWidget(Widget):
         with self.canvas.after:
             self._pop = PopMatrix()
         self.bind(pos=self._update_origin, size=self._update_origin, angle=self._update_angle)
+        self.bind(size=self._center_child, pos=self._center_child)
 
     def _update_origin(self, *args):
         self._rotate.origin = self.center
 
     def _update_angle(self, *args):
         self._rotate.angle = self.angle
+
+    def _center_child(self, *args):
+        # Center the child widget inside this widget
+        if self.child:
+            self.child.center = self.center
 class SavedCardsScreen(Screen):
     def on_enter(self):
         try:
@@ -588,13 +594,20 @@ class MainApp(MDApp):
 
             refresh_icon = MDIconButton(
                 icon="refresh",
-                font_size=dp(120),  # Use dp() and pass a number, not a string
+                font_size=dp(120),
                 theme_text_color="Custom",
                 text_color=(0.2, 0.6, 1, 1),
-                pos_hint={"center_x": 0.5, "center_y": 0.6}
+                size_hint=(None, None),
+                size=(dp(120), dp(120)),
+                pos=(0, 0),  # Let the container handle positioning
             )
 
-            rotating = RotatingWidget(refresh_icon, size_hint=(None, None), size=(dp(140), dp(140)))
+            rotating = RotatingWidget(
+                refresh_icon,
+                size_hint=(None, None),
+                size=(dp(140), dp(140)),
+                pos_hint={"center_x": 0.5, "center_y": 0.6}
+            )
             self.nfc_dialog_container.add_widget(rotating)
             print("refresh_icon created")
 
