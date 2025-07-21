@@ -143,6 +143,21 @@ public class NfcHelper {
 
         int totalDataBytes = width0 * height0 / 8;
         int numFullChunks = totalDataBytes / CHUNK_SIZE;
+        int tailBytes = totalDataBytes % CHUNK_SIZE;
+
+        // --- Skip R buffer if this is a 2.9-inch display (detected by epd_init) ---
+        boolean is29Inch = false;
+        if (epd_init != null && epd_init.length > 0 && epd_init[0] != null) {
+            String epdInit0 = epd_init[0].replaceAll("\\s+", "").toUpperCase();
+            if (epdInit0.startsWith("F0DB000067A006012000800128A4010C")) {
+                is29Inch = true;
+            }
+        }
+        int totalChunks = numFullChunks + (tailBytes > 0 ? 1 : 0);
+        if (!is29Inch) {
+            totalChunks *= 2; // BW + R
+        }
+        int chunkIndex = 0;
 
         // Send BW buffer
         Log.d(TAG, "Sending BW buffer...");
@@ -156,16 +171,15 @@ public class NfcHelper {
             System.arraycopy(image_buffer, i * CHUNK_SIZE, cmd, 5, CHUNK_SIZE);
             transceiveWithRetry(nfcTech, cmd, "BW_CHUNK_" + i, listener);
 
+            chunkIndex++;
             if (listener != null) {
-                // Progress based on full chunks of BW buffer
-                int percent = (int) (((i + 1) * 100.0) / numFullChunks);
+                int percent = (int) (((chunkIndex) * 100.0) / totalChunks);
                 Log.d(TAG, "JAVA: Calling listener.onProgress (" + percent + "%). Listener: " + listener.hashCode());
                 listener.onProgress(percent);
             }
         }
 
         // Handle tail data for BW buffer (if any)
-        int tailBytes = totalDataBytes % CHUNK_SIZE;
         if (tailBytes != 0) {
             Log.d(TAG, "Sending BW tail (" + tailBytes + " bytes)...");
             cmd = new byte[5 + CHUNK_SIZE]; // Pad to full chunk_size for command structure
@@ -179,19 +193,16 @@ public class NfcHelper {
                 cmd[j + 5] = 0; // Zero-pad the rest of the chunk
             }
             transceiveWithRetry(nfcTech, cmd, "BW_TAIL", listener);
-        }
-
-        // --- Skip R buffer if this is a 2.9-inch display (detected by epd_init) ---
-        boolean is29Inch = false;
-        if (epd_init != null && epd_init.length > 0 && epd_init[0] != null) {
-            // Match the actual prefix used in Python EPD_INIT_MAP for 2.9-inch
-            String epdInit0 = epd_init[0].replaceAll("\\s+", "").toUpperCase();
-            // Use the first 32 hex chars of your actual init string
-            if (epdInit0.startsWith("F0DB000067A006012000800128A4010C")) {
-                is29Inch = true;
+            
+            chunkIndex++;
+            if (listener != null) {
+                int percent = (int) (((chunkIndex) * 100.0) / totalChunks);
+                Log.d(TAG, "JAVA: Calling listener.onProgress (" + percent + "%). Listener: " + listener.hashCode());
+                listener.onProgress(percent);
             }
         }
 
+        
         if (!is29Inch) {
             // Send R buffer (inverted)
             Log.d(TAG, "Sending R buffer (inverted)...");
@@ -206,6 +217,13 @@ public class NfcHelper {
                     cmd[j + 5] = (byte) ~image_buffer[j + i * CHUNK_SIZE];
                 }
                 transceiveWithRetry(nfcTech, cmd, "R_CHUNK_" + i, listener);
+
+                chunkIndex++;
+                if (listener != null) {
+                    int percent = (int) (((chunkIndex) * 100.0) / totalChunks);
+                    Log.d(TAG, "JAVA: Calling listener.onProgress (" + percent + "%). Listener: " + listener.hashCode());
+                    listener.onProgress(percent);
+                }
             }
 
             // Handle tail data for R buffer (if any)
@@ -224,6 +242,13 @@ public class NfcHelper {
                     cmd[j + 5] = 0; // Zero-pad the rest
                 }
                 transceiveWithRetry(nfcTech, cmd, "R_TAIL", listener);
+
+                chunkIndex++;
+                if (listener != null) {
+                    int percent = (int) (((chunkIndex) * 100.0) / totalChunks);
+                    Log.d(TAG, "JAVA: Calling listener.onProgress (" + percent + "%). Listener: " + listener.hashCode());
+                    listener.onProgress(percent);
+                }
             }
         } else {
             Log.d(TAG, "Skipping R buffer for 2.9-inch display (detected by epd_init).");
@@ -235,12 +260,18 @@ public class NfcHelper {
         Log.d(TAG, "Refresh command response: " + hexToString(response));
         if (isSuccessResponse(response)) {
             Log.i(TAG, "Refresh command success (9000).");
-            if (listener != null && numFullChunks == 0 && tailBytes > 0) { // If only tail was sent
-                 Log.d(TAG, "JAVA: Calling listener.onProgress (100% - tail only). Listener: " + listener.hashCode());
-                 listener.onProgress(100); // Ensure 100% if only a tail was sent
+            if (listener != null && chunkIndex < totalChunks) {
+                // Ensure 100% if only a tail was sent or if not already at 100%
+                listener.onProgress(100);
+            }
+            if (listener != null) {
+                listener.onRefreshSuccess();
             }
         } else {
             Log.w(TAG, "Refresh command possibly failed or no 9000 status.");
+            if (listener != null) {
+                listener.onRefreshError("Refresh command failed (no 9000 status).");
+            }
         }
     }
 

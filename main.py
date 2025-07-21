@@ -38,6 +38,8 @@ from kivy.uix.scrollview import ScrollView
 from kivy.uix.anchorlayout import AnchorLayout
 from kivy.uix.widget import Widget
 from kivy.core.text import Label as CoreLabel
+from kivymd.uix.label import MDIcon
+from kivy.uix.image import Image
 
 
 # Global configuration variables
@@ -69,7 +71,6 @@ except ImportError:
     MifareClassic = None
     MifareUltralight = None
 
-
 def is_android():
     """Check if the app is running on an Android device."""
     try:
@@ -81,7 +82,6 @@ def is_android():
         return True
     except ImportError:
         return False
-
 
 # Import the nfc module if not running on Android
 if not is_android():
@@ -154,12 +154,42 @@ Builder.load_string('''
     FileChooserListView
 ''')
 
-
 # Define Screens
 class HomeScreen(Screen):
     pass
+from kivy.uix.widget import Widget
+from kivy.properties import NumericProperty
+from kivy.graphics import PushMatrix, PopMatrix, Rotate
 
+class RotatingWidget(Widget):
+    angle = NumericProperty(0)
 
+    def __init__(self, child, **kwargs):
+        super().__init__(**kwargs)
+        self.child = child
+        self.add_widget(child)
+        with self.canvas.before:
+            self._push = PushMatrix()
+            self._rotate = Rotate(angle=self.angle, origin=self.center)
+        with self.canvas.after:
+            self._pop = PopMatrix()
+        self.bind(pos=self._update_origin, size=self._update_origin, angle=self._update_angle)
+        self.bind(size=self._center_child, pos=self._center_child)
+
+    def _update_origin(self, *args):
+        self._rotate.origin = self.center
+        if self.child:
+            self.child.center = self.center  # Ensure child is always centered
+
+    def _update_angle(self, *args):
+        self._rotate.angle = self.angle
+
+    def _center_child(self, *args):
+        if self.child:
+            print("RotatingWidget center:", self.center)
+            print("Child before:", self.child.center)
+            self.child.center = self.center
+            print("Child after:", self.child.center)
 class SavedCardsScreen(Screen):
     def on_enter(self):
         try:
@@ -212,6 +242,7 @@ class CustomSwipeFileItem(MDCardSwipe):
         if self.swipe_disabled:
             return False  # Prevent swipe gesture
         return super().on_touch_move(touch)
+
 class ManageDataScreen(Screen):
     delete_option_label = StringProperty("Delete Folders After")  # Default text
     def on_enter(self):
@@ -255,6 +286,7 @@ class ManageDataScreen(Screen):
             ],
         )
         dialog.open()
+
     def open_delete_option_menu(self, caller):
         options = [
             {"text": "After 1 week", "on_release": lambda: self.set_delete_option("week")},
@@ -377,6 +409,20 @@ if is_android():
             else:
                 print("Error: NfcProgressListener.app is None or lacks 'update_nfc_progress' method.")
 
+        @java_method('()V')
+        def onRefreshSuccess(self):
+            print("PYTHON: onRefreshSuccess called from Java")
+            if self.app and hasattr(self.app, 'on_refresh_success'):
+                from kivy.clock import Clock
+                Clock.schedule_once(lambda dt: self.app.on_refresh_success())
+
+        @java_method('(Ljava/lang/String;)V')
+        def onRefreshError(self, message):
+            print(f"PYTHON: onRefreshError called from Java with message: {message}")
+            if self.app and hasattr(self.app, 'show_refresh_error_in_nfc_dialog'):
+                from kivy.clock import Clock
+                Clock.schedule_once(lambda dt: self.app.show_refresh_error_in_nfc_dialog(message))
+                
         @java_method('(Ljava/lang/String;)V')
         def onError(self, message):
             print(f"NFC Error from Java: {message}")
@@ -406,13 +452,12 @@ if is_android():
                     # Trigger your logic here, e.g.:
                     # self.app.on_keyboard_hidden()
 
-    def setup_keyboard_listener(self):
+    def setup_keyboard_listener():
         activity = mActivity
         root_view = activity.getWindow().getDecorView()
         listener = GlobalLayoutListener(self)
         root_view.getViewTreeObserver().addOnGlobalLayoutListener(listener)
         print("Android keyboard listener set up.")
-
 
 class MainApp(MDApp):
     search_text = ""
@@ -434,9 +479,11 @@ class MainApp(MDApp):
             "F0DA000003F00120", # Screen Cut
         ],
     }
+
     def get_basename(self, path):
         import os
         return os.path.basename(path)
+    
     def on_nfc_button_press(self, *args):
         print("NFC button pressed!")
         # Add manual data first if any manual fields are filled
@@ -465,12 +512,10 @@ class MainApp(MDApp):
             try:
                 Context = autoclass('android.content.Context')
                 vibrator = mActivity.getSystemService(Context.VIBRATOR_SERVICE)
-                # Try to use VibrationEffect if available, otherwise use legacy API
                 try:
                     VibrationEffect = autoclass('android.os.VibrationEffect')
-                    effect = VibrationEffect.createOneShot(500, Vibration)
+                    effect = VibrationEffect.create
                     vibrator.vibrate(effect)
-                   
                 except Exception:
                     vibrator.vibrate(500)
                     print("Vibrating with legacy API")
@@ -479,13 +524,15 @@ class MainApp(MDApp):
 
         if hasattr(self, "nfc_progress_dialog") and self.nfc_progress_dialog:
             self.nfc_progress_dialog.dismiss()
+
         from kivy.uix.floatlayout import FloatLayout
         from kivy.uix.label import Label
 
-        # Use FloatLayout to allow centering
-        box = FloatLayout(size_hint_y=None, height="200dp")
+        # Create a persistent container for dialog content
+        self.nfc_dialog_container = FloatLayout(size_hint=(None, None), size=(dp(240), dp(200)))
 
-        # Create a new CoreLabel for each progress bar instance
+        # Progress bar
+        from kivy.core.text import Label as CoreLabel
         progress_label = CoreLabel(text="{}%", font_size=40)
         self.nfc_progress_bar = CircularProgressBar(
             size_hint=(None, None),
@@ -497,11 +544,11 @@ class MainApp(MDApp):
             color=(0.2, 0.6, 1, 1),
             label_color=(0.2, 0.6, 1, 1),
             background_color=(0.9, 0.9, 0.9, 1),
-            label=progress_label,  # <-- Always pass a new label!
+            label=progress_label,
         )
-        box.add_widget(self.nfc_progress_bar)
+        self.nfc_dialog_container.clear_widgets()
+        self.nfc_dialog_container.add_widget(self.nfc_progress_bar)
 
-        # Add the label below the progress bar, also centered
         self.nfc_progress_label = Label(
             text=message,
             size_hint=(None, None),
@@ -512,17 +559,12 @@ class MainApp(MDApp):
             color=(0, 0, 0, 1),
         )
         self.nfc_progress_label.bind(size=self.nfc_progress_label.setter('text_size'))
-        box.add_widget(self.nfc_progress_label)
-        # Reset progress bar and label
-        self.nfc_progress_bar.value = 0
-        self.nfc_progress_bar._refresh_text()
-        self.nfc_progress_label.text = message
-        self.nfc_progress_label.color = (0, 0, 0, 1)
+        self.nfc_dialog_container.add_widget(self.nfc_progress_label)
 
         self.nfc_progress_dialog = MDDialog(
             title="NFC Transfer",
             type="custom",
-            content_cls=box,
+            content_cls=self.nfc_dialog_container,
             auto_dismiss=False,
         )
         self.nfc_progress_dialog.open()
@@ -542,6 +584,113 @@ class MainApp(MDApp):
                 print("Failed to generate bitmap.")
         except Exception as e:
             print(f"Error generating bitmap: {e}")
+            
+    def show_refreshing_in_nfc_dialog(self):
+        from kivy.clock import Clock
+        Clock.schedule_once(lambda dt: self._show_refreshing_in_nfc_dialog_ui(), 0)
+
+    def _show_refreshing_in_nfc_dialog_ui(self):
+        print("DEBUG: Showing refreshing screen in NFC dialog")
+        if hasattr(self, "nfc_progress_dialog") and self.nfc_progress_dialog and hasattr(self, "nfc_dialog_container"):
+            from kivy.uix.label import Label
+            from kivymd.uix.button import MDIconButton
+            from kivy.animation import Animation
+
+            self.nfc_dialog_container.clear_widgets()
+
+            refresh_icon = Image(
+                source="assets/images/refresh_icon.png",  # Use your own PNG/SVG path here
+                size_hint=(None, None),
+                size=(dp(120), dp(120)),      # Adjust size as needed
+                allow_stretch=True,
+                keep_ratio=True,
+            )
+
+            rotating = RotatingWidget(
+                refresh_icon,
+                size_hint=(None, None),
+                size=(dp(120), dp(120)),
+                pos_hint={"center_x": 0.5, "center_y": 0.6}
+            )
+            self.nfc_dialog_container.add_widget(rotating)
+            # Force position and size after layout
+            def fix_center(*args):
+                rotating.center = self.nfc_dialog_container.center
+                refresh_icon.center = rotating.center
+            Clock.schedule_once(fix_center, 0)
+
+            # Animate the rotation (counter-clockwise, like the demo)
+            rotating.angle = 0
+            anim = Animation(angle=-360, duration=1)
+            anim += Animation(angle=0, duration=0)
+            anim.repeat = True
+            anim.start(rotating)
+
+            label = Label(
+                text="Refreshing screen...",
+                size_hint=(1, None),
+                height=40,
+                pos_hint={"center_x": 0.5, "y": 0.05},
+                halign="center",
+                valign="middle",
+                color=(0, 0, 0.7, 1),
+            )
+            label.bind(size=label.setter('text_size'))
+            self.nfc_dialog_container.add_widget(label)
+
+            self.nfc_progress_dialog.title = "Refreshing"
+            self.nfc_progress_dialog.auto_dismiss = False
+            # If the dialog is not open, open it
+            if not self.nfc_progress_dialog._window:
+                self.nfc_progress_dialog.open()
+
+    def on_refresh_success(self):
+        print("PYTHON: on_refresh_success running")
+        # Wait 2 seconds before hiding dialog and clearing table
+        def delayed_clear(dt):
+            print("DEBUG: Hiding NFC progress dialog after refresh icon shown")
+            self.hide_nfc_progress_dialog()
+            Clock.schedule_once(lambda dt: self.clear_table_data(), 0.5)
+
+        from kivy.clock import Clock
+        Clock.schedule_once(delayed_clear, 2.5)
+
+    def show_refresh_error_in_nfc_dialog(self, error_message="Refresh failed!"):
+        print("DEBUG: Showing refresh error in NFC dialog")
+        if hasattr(self, "nfc_progress_dialog") and self.nfc_progress_dialog and hasattr(self, "nfc_dialog_container"):
+            from kivy.uix.label import Label
+            from kivymd.uix.button import MDIconButton
+
+            self.nfc_dialog_container.clear_widgets()
+
+            error_icon = Image(
+                source="assets/images/warning_icon.png",  # Use your own PNG/SVG path here
+                size_hint=(None, None),
+                size=(dp(120), dp(120)),      # Adjust size as needed
+                allow_stretch=True,
+                keep_ratio=True,
+            )
+            self.nfc_dialog_container.add_widget(error_icon)
+            label = Label(
+                text=error_message,
+                size_hint=(1, None),
+                height=40,
+                pos_hint={"center_x": 0.5, "y": 0.05},
+                halign="center",
+                valign="middle",
+                color=(1, 0, 0, 1),
+            )
+            label.bind(size=label.setter('text_size'))
+            self.nfc_dialog_container.add_widget(label)
+            self.nfc_progress_dialog.title = "Error"
+            self.nfc_progress_dialog.auto_dismiss = False
+
+            # Add a 2-second delay before closing and clearing
+            def delayed_clear(dt):
+                self.hide_nfc_progress_dialog()
+            from kivy.clock import Clock
+            Clock.schedule_once(delayed_clear, 2.5)
+
     def on_permissions_result(self, permissions, grant_results):
         """Handle the result of the permission request."""
         for permission, granted in zip(permissions, grant_results):
@@ -684,9 +833,10 @@ class MainApp(MDApp):
         for i, s in enumerate(epd_init):
             epd_init_java_array[i] = String(s)
         # Create the progress listener
-        listener = NfcProgressListener(self)
-        # Call the ByteBuffer method
-        NfcHelper.processNfcIntentByteBufferAsync(intent, width, height, image_buffer_bb, epd_init_java_array, listener)
+        self.nfc_progress_listener = NfcProgressListener(self)
+        print("Listener type:", type(self.nfc_progress_listener))
+        NfcHelper.processNfcIntentByteBufferAsync(intent, width, height, image_buffer_bb, epd_init_java_array, self.nfc_progress_listener)
+    
     def on_pause(self):
         print("on_pause CALLED")
         return True
@@ -732,10 +882,6 @@ class MainApp(MDApp):
         # Only act if HomeScreen is current
         if self.root.ids.screen_manager.current != "home":
             return False
-    def global_key_handler(self, window, key, scancode, codepoint, modifiers):
-        # Only act if HomeScreen is current
-        if self.root.ids.screen_manager.current != "home":
-            return False
         # Only act if a text field is focused
         focused = [w for w in self.get_all_homepage_fields() if getattr(w, 'focus', False)]
         if not focused:
@@ -767,7 +913,6 @@ class MainApp(MDApp):
         if hasattr(home_screen.ids, "stage_notes_field"):
             all_fields.append(home_screen.ids.stage_notes_field)
         return all_fields
-
 
     def on_resume(self):
         print("on_resume CALLED")
@@ -802,6 +947,7 @@ class MainApp(MDApp):
                 print("Requested BAL exemption.")
             except Exception as e:
                 print(f"Error requesting BAL exemption: {e}")
+    
     def delete_old_folders(self):
         """Delete folders in assets/CSV older than the selected threshold."""
         thresholds = {
@@ -826,8 +972,8 @@ class MainApp(MDApp):
                         print(f"Deleted old folder: {folder_path}")
                     except Exception as e:
                         print(f"Error deleting folder {folder_path}: {e}")
+    
     def build(self):
-
         """Build the app's UI and initialize settings."""
         # Set the theme to Light
         self.theme_cls.theme_style = "Light"
@@ -951,8 +1097,6 @@ class MainApp(MDApp):
                 except Exception as e:
                     print(f"Error extracting stage notes: {e}")
             print(f"Selected: {selected_path}")  # Log the selected file or folder
-
-
 
             # Check if the selected file is a CSV
             if selected_path.endswith(".csv"):
@@ -1333,8 +1477,8 @@ class MainApp(MDApp):
                     ),
                 ],
             )
-
         self.dialog.open()
+
     def handle_save_dialog(self, text_input):
         home_screen = self.root.ids.home_screen
         table_container = home_screen.ids.table_container
@@ -1473,6 +1617,7 @@ class MainApp(MDApp):
         self.available_fields["Lead"]["show"] = show_lead
         self.available_fields["Range"]["show"] = show_range
         self.available_fields["Wnd2"]["show"] = show_2_wind_holds
+
     def find_max_font_size(self, draw, headers_text, row_texts, notes_text, image_width, image_height, font_path, min_font=8, max_font=32):
         for font_size in range(max_font, min_font - 1, -1):
             font = ImageFont.truetype(font_path, font_size)
@@ -1497,6 +1642,7 @@ class MainApp(MDApp):
                 y += notes_height
                 return font_size
         return min_font
+    
     def csv_to_bitmap(self, csv_data, output_path=None):
         """Convert CSV data to a bitmap image, dynamically maximizing font size to fit all data."""
         try:
@@ -1618,7 +1764,7 @@ class MainApp(MDApp):
                             col_widths.append(max_width + 12)
                         table_width = sum(col_widths)
                         if table_width < base_width - 2: # 1px margin each side
-                            return font_size
+                          return font_size
                 return min_font
 
             font_size = find_max_font_size()
@@ -1659,7 +1805,8 @@ class MainApp(MDApp):
                 col_widths.append(max_width + 12)  # Add padding
 
             table_width = sum(col_widths)
-            table_margin = 2  # Reduce left/right margin to 2px
+            table_margin = 2   # Reduce left/right margin to 2px
+            table_left = (base_width - table_width) // 2
             table_left = (base_width - table_width) // 2
             if table_left < table_margin:
                 table_left = table_margin
@@ -1675,6 +1822,7 @@ class MainApp(MDApp):
                 col_x += col_widths[col_idx]
 
             # Draw solid vertical lines at column boundaries
+
             col_x = table_left
             for col_idx in range(1, n_cols):  # Start at 1, stop before n_cols
                 col_x += col_widths[col_idx - 1]
@@ -2168,6 +2316,10 @@ class MainApp(MDApp):
 
             # Navigate to the Home Screen
             self.root.ids.screen_manager.current = "home"
+            self.display_table(processed_data)
+
+            # Navigate to the Home Screen
+            self.root.ids.screen_manager.current = "home"
             print(f"Processed received CSV: {file_path_or_uri}")
         except Exception as e:
             print(f"Error processing received CSV: {e}")
@@ -2263,7 +2415,6 @@ class MainApp(MDApp):
             return None
         
     def delete_file_or_folder(self, path):
-        """Delete the selected file or folder and refresh the file list."""
         try:
             base_dir = os.path.abspath(self.get_private_storage_path())
             abs_path = os.path.abspath(path)
@@ -2294,7 +2445,6 @@ class MainApp(MDApp):
                 print(f"Path does not exist: {abs_path}")
         except Exception as e:
             print(f"Error deleting file or folder: {e}")
-
 
     def populate_swipe_file_list(self, target_dir=None, sort_by=None, reverse=None):
         saved_cards_screen = self.root.ids.screen_manager.get_screen("saved_cards")
@@ -2406,7 +2556,6 @@ SwipeFileItem:
         main_layout.add_widget(buttons_layout)
 
         # --- ADD THIS SPACER WIDGET FOR EXTRA SPACE ABOVE THE KEYBOARD ---
-        from kivy.uix.widget import Widget
         main_layout.add_widget(Widget(size_hint_y=None, height=dp(80)))  # Adjust dp(80) as needed
 
         # Add the main layout to the table container
@@ -2463,11 +2612,13 @@ SwipeFileItem:
         # Scroll to bottom after next frame
         if hasattr(self, "manual_scrollview"):
             Clock.schedule_once(lambda dt: setattr(self.manual_scrollview, "scroll_y", 0), 0)
+
     def scroll_manual_input_to_buttons(self):
         """Scroll the manual data input ScrollView so the button row is visible."""
         if hasattr(self, "manual_scrollview") and self.manual_scrollview:
             # Scroll to bottom (0 = bottom, 1 = top)
             Clock.schedule_once(lambda dt: setattr(self.manual_scrollview, "scroll_y", 0), 0)
+
     def delete_last_row(self, rows_layout=None):
         if rows_layout is None:
             rows_layout = self.manual_rows_layout
@@ -2481,6 +2632,9 @@ SwipeFileItem:
             last_row = data_rows[0]
             for widget in last_row.children:
                 if isinstance(widget, MDTextField):
+                    widget.text = ""
+            # Also clear the corresponding manual_data_rows entry if you want
+            if hasattr(self, "manual_data_rows") and self.manual_data_rows:
                     widget.text = ""
             # Also clear the corresponding manual_data_rows entry if you want
             if hasattr(self, "manual_data_rows") and self.manual_data_rows:
@@ -2551,6 +2705,7 @@ SwipeFileItem:
                     return orig_handler(instance, *args)
                 return _on_key_down
             tf.keyboard_on_key_down = make_keyboard_on_key_down(i, tf._orig_keyboard_on_key_down)
+            
     def add_manual_data(self):
         try:
             for row_fields in self.manual_data_rows:
@@ -2686,11 +2841,11 @@ SwipeFileItem:
         if hasattr(self, "nfc_progress_dialog") and self.nfc_progress_dialog:
             self.nfc_progress_dialog.dismiss()
             self.nfc_progress_dialog = None
+
     def update_nfc_progress(self, percent):
         if hasattr(self, "nfc_progress_bar") and self.nfc_progress_bar:
-            # If percent is 100, delay the update by 3 seconds
             if percent >= 100:
-                Clock.schedule_once(lambda dt: self._finish_nfc_progress(), 3)
+                self._finish_nfc_progress()
             else:
                 self.nfc_progress_bar.value = percent
 
@@ -2699,12 +2854,11 @@ SwipeFileItem:
             self.nfc_progress_bar.value = 100
         if hasattr(self, "nfc_progress_label"):
             self.nfc_progress_label.text = "Transfer successful!"
-            self.nfc_progress_label.color = (0, 0.6, 0, 1)
-        Clock.schedule_once(lambda dt: self.hide_nfc_progress_dialog(), 2.5)
-        self.image_buffer = None
-        self.nfc_transfer_in_progress = False
-        Clock.schedule_once(lambda dt: self.clear_table_data())  # This will clear the table and show manual data input
-    
+            self.nfc_progress_label.color = (0, 0.6, 0, 1)  # Green for success
+         # Show the refreshing dialog after a short delay (optional)
+        from kivy.clock import Clock
+        Clock.schedule_once(lambda dt: self.show_refreshing_in_nfc_dialog(), 1.0)
+
     def on_nfc_transfer_error(self, message):
             """Handle NFC transfer errors (including tag disconnect)."""
             print(f"NFC transfer error: {message}")
@@ -2764,6 +2918,10 @@ def pack_image_column_major(img):
     for x in range(width-1, -1, -1):  # right-to-left to match demo
         for y_block in range(0, height, 8):
             byte = 0
+            for bit in range(8):
+                y = y_block + bit
+                if y >= height:
+                    continue
             for bit in range(8):
                 y = y_block + bit
                 if y >= height:
