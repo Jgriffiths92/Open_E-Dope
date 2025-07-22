@@ -2178,9 +2178,6 @@ class MainApp(MDApp):
                     if (
                         hasattr(self, "manual_data_rows")
                         and self.manual_data_rows
-                        and table_container.children
-                        and isinstance(table_container.children[0], BoxLayout)  # manual input is a BoxLayout
-                        and any(isinstance(child, MDTextField) for child in table_container.children[0].children)
                         and any(
                             any(field.text.strip() for field in row_fields.values())
                             for row_fields in self.manual_data_rows
