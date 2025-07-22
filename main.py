@@ -2729,12 +2729,9 @@ SwipeFileItem:
             
     def add_manual_data(self):
         try:
-            required_keys = {"Target", "Range", "Elv", "Wnd1", "Wnd2", "Lead"}
             for row_fields in self.manual_data_rows:
-                # Always include all required keys, even if not shown
-                manual_data = {key: "0" for key in required_keys}
-                for key in row_fields:
-                    field = row_fields[key]
+                manual_data = {key: "0" for key in self.available_fields.keys()}
+                for key, field in row_fields.items():
                     manual_data[key] = field.text if field.text.strip() else "0"
 
                 # Only add if at least one field is non-empty (not all zeros)
@@ -2745,6 +2742,11 @@ SwipeFileItem:
                     print("Target is required.")
                     toast("Target is required.")
                     return
+                    
+                required_keys = {"Target", "Range", "Elv", "Wnd1", "Wnd2", "Lead"}
+                for k in required_keys:
+                    if k not in manual_data:
+                        manual_data[k] = "0"
 
                 if not hasattr(self, "current_data") or not self.current_data:
                     self.current_data = []
@@ -2753,6 +2755,16 @@ SwipeFileItem:
                 if manual_data not in self.current_data:
                     self.current_data.append(manual_data)
 
+            # Do NOT call self.display_table(self.current_data) here!
+            # Just clear manual input fields after adding data
+            #for row_fields in self.manual_data_rows:
+            #    for field in row_fields.values():
+            #        field.text = ""
+            # Also clear the corresponding manual_data_rows entry if you want
+            if hasattr(self, "manual_data_rows") and self.manual_data_rows:
+                for row_fields in self.manual_data_rows:
+                    for field in row_fields.values():
+                        field.text = ""
             print("Manual data added:", self.current_data)
         except Exception as e:
             print(f"Error adding manual data: {e}")
