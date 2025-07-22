@@ -1745,7 +1745,7 @@ class MainApp(MDApp):
                     y += row_height * len(filtered_data)
 
                     # Notes section
-                    y += 20  # spacing before notes
+                    y += 10  # spacing before notes
                     y += font.getbbox("Stage Notes:")[3] - font.getbbox("Stage Notes:")[1] + 5
                     y += 10  # line under notes label
 
@@ -1850,7 +1850,7 @@ class MainApp(MDApp):
                     draw.text((cell_x, cell_y), cell_text, fill="black", font=font)
                     col_x += col_widths[col_idx]
 
-            y = table_top + row_height * n_rows + 20
+            y = table_top + row_height * n_rows + 10
 
             # --- Centered Notes section (only if notes exist) ---
             if stage_notes.strip():
@@ -1908,8 +1908,8 @@ class MainApp(MDApp):
         self.populate_swipe_file_list()
 
     def limit_stage_notes(self, text_field):
-        """Limit the stage notes to 2 lines."""
-        max_lines = 2
+        """Limit the stage notes to 3 lines."""
+        max_lines = 3
         lines = text_field.text.split("\n")
         if len(lines) > max_lines:
             # Trim the text to the first 2 lines
