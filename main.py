@@ -537,7 +537,7 @@ class MainApp(MDApp):
         self.nfc_progress_bar = CircularProgressBar(
             size_hint=(None, None),
             size=(120, 120),
-            pos_hint={"center_x": 0.5, "center_y": 0.6},
+            pos_hint={"center_x": 0.5, "center_y": 0.5},
             max=100,
             value=0,
             thickness=15,
@@ -610,7 +610,7 @@ class MainApp(MDApp):
                 refresh_icon,
                 size_hint=(None, None),
                 size=(dp(120), dp(120)),
-                pos_hint={"center_x": 0.5, "center_y": 0.6}
+                pos_hint={"center_x": 0.5, "center_y": 0.5}
             )
             self.nfc_dialog_container.add_widget(rotating)
             # Force position and size after layout
@@ -669,6 +669,7 @@ class MainApp(MDApp):
                 size=(dp(120), dp(120)),      # Adjust size as needed
                 allow_stretch=True,
                 keep_ratio=True,
+                pos_hint={"center_x": 0.5, "center_y": 0.5},
             )
             self.nfc_dialog_container.add_widget(error_icon)
             label = Label(
