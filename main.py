@@ -651,6 +651,11 @@ class MainApp(MDApp):
             print("DEBUG: Hiding NFC progress dialog after refresh icon shown")
             self.hide_nfc_progress_dialog()
             Clock.schedule_once(lambda dt: self.clear_table_data(), 0.5)
+            # Now clear manual input fields if present
+            if hasattr(self, "manual_data_rows"):
+                for row_fields in self.manual_data_rows:
+                    for field in row_fields.values():
+                        field.text = ""
 
         from kivy.clock import Clock
         Clock.schedule_once(delayed_clear, 2.5)
@@ -1799,6 +1804,9 @@ class MainApp(MDApp):
             col_widths = []
             for header in headers:
                 max_width = draw.textbbox((0, 0), "Tgt" if header == "Target" else "Rng" if header == "Range" else header, font=font)[2]
+
+
+
                 for row in filtered_data:
                     cell_text = str(row.get(header, ""))
                     cell_width = draw.textbbox((0, 0), cell_text, font=font)[2]
@@ -2166,7 +2174,14 @@ class MainApp(MDApp):
                         Clock.schedule_once(lambda dt: self.show_nfc_progress_dialog("Transferring data to NFC tag..."), 0.01)
                         Clock.schedule_once(lambda dt: self.send_csv_bitmap_via_nfc(intent), 0.05)
 
-                    if table_container.children and hasattr(self, "manual_data_rows") and self.manual_data_rows:
+                    # Only add manual data if manual input is visible (manual layout is present)
+                    if (
+                        hasattr(self, "manual_data_rows")
+                        and self.manual_data_rows
+                        and table_container.children
+                        and isinstance(table_container.children[0], BoxLayout)  # manual input is a BoxLayout
+                        and any(isinstance(child, MDTextField) for child in table_container.children[0].children)
+                    ):
                         print("Manual data input detected, adding manual data before NFC transfer.")
                         self.add_manual_data()
                     perform_nfc_transfer()
@@ -2735,14 +2750,15 @@ SwipeFileItem:
                 if manual_data not in self.current_data:
                     self.current_data.append(manual_data)
 
-            self.display_table(self.current_data)
-            # Clear manual input fields after adding data
-            for row_fields in self.manual_data_rows:
-                for field in row_fields.values():
-                    field.text = ""
-            print("Manual data added and input fields cleared:", self.current_data)
+            # Do NOT call self.display_table(self.current_data) here!
+            # Just clear manual input fields after adding data
+            #for row_fields in self.manual_data_rows:
+            #    for field in row_fields.values():
+            #        field.text = ""
+            print("Manual data added:", self.current_data)
         except Exception as e:
             print(f"Error adding manual data: {e}")
+        
     def copy_directory_from_assets(self, asset_manager, source_path, dest_path):
         """Recursively copy a directory from the assets folder to the destination."""
         try:
