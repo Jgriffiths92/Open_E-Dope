@@ -2181,6 +2181,10 @@ class MainApp(MDApp):
                         and table_container.children
                         and isinstance(table_container.children[0], BoxLayout)  # manual input is a BoxLayout
                         and any(isinstance(child, MDTextField) for child in table_container.children[0].children)
+                        and any(
+                            any(field.text.strip() for field in row_fields.values())
+                            for row_fields in self.manual_data_rows
+                        )
                     ):
                         print("Manual data input detected, adding manual data before NFC transfer.")
                         self.add_manual_data()
@@ -2650,8 +2654,9 @@ SwipeFileItem:
                 if isinstance(widget, MDTextField):
                     widget.text = ""
             # Also clear the corresponding manual_data_rows entry if you want
-            if hasattr(self, "manual_data_rows") and self.manual_data_rows:
-                    widget.text = ""
+            #for row_fields in self.manual_data_rows:
+            #    for field in row_fields.values():
+            #        field.text = ""
             # Also clear the corresponding manual_data_rows entry if you want
             if hasattr(self, "manual_data_rows") and self.manual_data_rows:
                 self.manual_data_rows[0] = {k: v for k, v in self.manual_data_rows[0].items()}
@@ -2737,7 +2742,7 @@ SwipeFileItem:
                     print("Target is required.")
                     toast("Target is required.")
                     return
-
+                    
                 required_keys = {"Target", "Range", "Elv", "Wnd1", "Wnd2", "Lead"}
                 for k in required_keys:
                     if k not in manual_data:
