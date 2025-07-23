@@ -965,10 +965,6 @@ class MainApp(MDApp):
         self.nfc_progress_listener = NfcProgressListener(self)
         print("Listener type:", type(self.nfc_progress_listener))
         NfcHelper.processNfcIntentByteBufferAsync(intent, width, height, image_buffer_bb, epd_init_java_array, self.nfc_progress_listener)
-    
-    # =========================
-    # UI & Screen Management
-    # =========================
 
     # =========================
     # UI & Screen Management
@@ -4271,7 +4267,7 @@ SwipeFileItem:
         if hasattr(self, "nfc_progress_label"):
             self.nfc_progress_label = None
         if hasattr(self, "nfc_progress_dialog") and self.nfc_progress_dialog:
-            self.nfc_progress_.dismiss()
+            self.nfc_progress_dialog.dismiss()
             self.nfc_progress_dialog = None
 
     def update_nfc_progress(self, percent):
