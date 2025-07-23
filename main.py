@@ -274,7 +274,7 @@ class ManageDataScreen(Screen):
         )
         
         content_label = MDLabel(
-            text="Here you can manage and delete your saved data cards and folders.\nUse With Caution: deleted data cannot be recovered.",
+            text="Here you can manage and delete your saved data cards and folders.\n\nUse With Caution: deleted data cannot be recovered.",
             text_color=(0, 0, 0, 1),
             halign="center",
             valign="middle",
@@ -303,6 +303,7 @@ class ManageDataScreen(Screen):
             ],
         )
         dialog.open()
+
 
     def open_delete_option_menu(self, caller):
         options = [
@@ -477,9 +478,6 @@ if is_android():
         print("Android keyboard listener set up.")
 
 class MainApp(MDApp):
-    # =========================
-    # Class Variables & Constants
-    # =========================
     search_text = ""
     delete_option_label = StringProperty("Delete Folders After")  # Default text
     EPD_INIT_MAP = {
@@ -488,7 +486,7 @@ class MainApp(MDApp):
             "F0DB00005EA006512000F001A0A4010CA502000AA40108A502000AA4010CA502000AA40108A502000AA4010CA502000AA40108A502000AA4010CA502000AA40103A102001FA10104A40103A3021013A20112A502000AA40103A20102A40103A20207A5", # Main Init
             "F0DA000003F05120", # Screen Cut
         ],
-        # Good Display 4.2-inch B&W (SSD1680, 400x300) - Monochrome Mode
+         # Good Display 4.2-inch B&W (SSD1680, 400x300) - Monochrome Mode
         "Good Display 4.2-inch": [
             "F0DB000063A00603300190012CA4010CA502000AA40108A502000AA4010CA502000AA40102A10112A40102A104012B0101A1021101A103440031A105452B010000A1023C01A1021880A1024E00A1034F2B01A3022426A20222F7A20120A40102A2021001A502000A", # Main Init - B&W Mode
             "F0DA000003F00330", # Screen Cut
@@ -500,130 +498,6 @@ class MainApp(MDApp):
         ],
     }
 
-    # =========================
-    # Initialization & App Lifecycle
-    # =========================
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.config_parser = ConfigParser()  # Initialize ConfigParser
-        self.current_data = [] # Initialize current_data to store CSV data
-        private_storage_path = self.get_private_storage_path() # Get the private storage path
-        self.config_file = os.path.join(private_storage_path, "settings.ini")  # Path to the settings file
-        self.standalone_mode_enabled = False  # Default to standalone mode being disabled
-        self.selected_display = "Good Display 3.7-inch"  # Default selected display
-        self.selected_resolution = (240, 416)  # Default resolution for 3.7-inch display
-        self.selected_orientation = "Portrait"  # Default orientation
-        self.selected_save_folder = None  # Store the selected folder for saving CSV files
-        self.detected_tag = None  # Initialize the detected_tag attribute
-        self.sort_type = "date"   # Default sort type
-        self.sort_order = "asc"   # Default sort order
-        self.available_fields = {
-            "Target": {"hint_text": "Target", "show": True},
-            "Range": {"hint_text": "Range", "show": False},
-            "Elv": {"hint_text": "Elv", "show": True},
-            "Wnd1": {"hint_text": "Wnd1", "show": True},
-            "Wnd2": {"hint_text": "Wnd2", "show": True},
-            "Lead": {"hint_text": "Lead", "show": False},
-        }  # Default fields with their visibility
-        self.load_settings()
-    dialog = None  # Store the dialog instance
-
-    def build(self):
-        """Build the app's UI and initialize settings."""
-        # Set the theme to Light
-        self.theme_cls.theme_style = "Light"
-
-        # Load saved settings
-        self.load_settings()
-
-        # Request permissions on Android
-        if is_android():
-            request_permissions([
-                Permission.NFC,
-                Permission.READ_EXTERNAL_STORAGE,
-                Permission.WRITE_EXTERNAL_STORAGE,
-                Permission.VIBRATE,
-            ], self.on_permissions_result)
-            if self.initialize_nfc():
-                print("NFC initialized successfully.")
-            from android import activity
-            activity.bind(on_new_intent=self.on_new_intent)
-
-        # Dynamically set the rootpath for the FileChooserListView
-        self.root = Builder.load_file("layout.kv")  # Load the root widget from the KV file
-        saved_cards_screen = self.root.ids.screen_manager.get_screen("saved_cards")
-        csv_directory = self.ensure_csv_directory()
-
-        # Handle the intent if the app was opened via an intent
-        if is_android():
-            try:
-                PythonActivity = autoclass('org.kivy.android.PythonActivity')
-                intent = PythonActivity.mActivity.getIntent()
-                print(f"Scheduling on_new_intent for action: {intent.getAction()}")
-                Clock.schedule_once(lambda dt: self.on_new_intent(intent), 0)
-            except Exception as e:
-                print(f"Error handling startup intent: {e}")
-        
-        # Initialize the dropdown menus
-        self.display_menu = None
-        self.orientation_menu = None
-
-        # Set the default text for the display and orientation dropdown buttons
-        self.root.ids.settings_screen.ids.display_dropdown_button.text = self.selected_display
-        self.root.ids.settings_screen.ids.orientation_dropdown_button.text = self.selected_orientation
-
-        # Hide the NFC button if on Android
-        self.hide_nfc_button()
-
-        # Delay check for empty table and show manual input if needed
-        def check_and_show_manual_input(dt):
-            # Only show manual input if there is no data loaded
-            if not hasattr(self, "current_data") or not self.current_data:
-                print("No data found after UI load, showing manual data input.")
-                self.show_manual_data_input()
-
-        Clock.schedule_once(check_and_show_manual_input, 0.5)  # Delay to ensure UI is loaded
-
-        return self.root
-
-    def on_start(self):
-        # Bind global key handler for Tab/Enter navigation
-        from kivy.core.window import Window
-
-        # Apply to the stage name field
-        stage_name_field = self.root.ids.home_screen.ids.stage_name_field
-        stage_name_field.bind(text=self.auto_capitalize)
-
-        # Apply to the stage notes field
-        stage_notes_field = self.root.ids.home_screen.ids.stage_notes_field
-        stage_notes_field.bind(text=self.auto_capitalize)
-
-        Window.bind(on_key_down=self.global_key_handler)
-
-    def on_pause(self):
-        print("on_pause CALLED")
-        return True
-
-    def on_resume(self):
-        print("on_resume CALLED")
-        if is_android() and autoclass:
-            try:
-                Intent = autoclass('android.content.Intent')
-                PythonActivity = autoclass('org.kivy.android.PythonActivity')
-                context = PythonActivity.mActivity.getApplicationContext()
-                package = context.getPackageName()
-                pm = context.getPackageManager()
-                intent = pm.getLaunchIntentForPackage(package)
-                intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK)
-                context.startActivity(intent)
-            except Exception as e:
-                print(f"Error resuming app: {e}")
-        else:
-            print("Not running on Android, cannot resume app.")
-
-    # =========================
-    # Miscellaneous/Utility
-    # =========================
     def get_basename(self, path):
         import os
         return os.path.basename(path)
@@ -861,9 +735,30 @@ class MainApp(MDApp):
                 else:
                     print("Write external storage permission denied.")
 
-    # =========================
-    # NFC & Android Integration
-    # =========================
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.config_parser = ConfigParser()  # Initialize ConfigParser
+        self.current_data = [] # Initialize current_data to store CSV data
+        private_storage_path = self.get_private_storage_path() # Get the private storage path
+        self.config_file = os.path.join(private_storage_path, "settings.ini")  # Path to the settings file
+        self.standalone_mode_enabled = False  # Default to standalone mode being disabled
+        self.selected_display = "Good Display 3.7-inch"  # Default selected display
+        self.selected_resolution = (240, 416)  # Default resolution for 3.7-inch display
+        self.selected_orientation = "Portrait"  # Default orientation
+        self.selected_save_folder = None  # Store the selected folder for saving CSV files
+        self.detected_tag = None  # Initialize the detected_tag attribute
+        self.sort_type = "date"   # Default sort type
+        self.sort_order = "asc"   # Default sort order
+        self.available_fields = {
+            "Target": {"hint_text": "Target", "show": True},
+            "Range": {"hint_text": "Range", "show": False},
+            "Elv": {"hint_text": "Elv", "show": True},
+            "Wnd1": {"hint_text": "Wnd1", "show": True},
+            "Wnd2": {"hint_text": "Wnd2", "show": True},
+            "Lead": {"hint_text": "Lead", "show": False},
+        }  # Default fields with their visibility
+        self.load_settings()
+    dialog = None  # Store the dialog instance
 
     def send_csv_bitmap_via_nfc(self, intent):
         self.image_buffer = None
@@ -965,558 +860,24 @@ class MainApp(MDApp):
         self.nfc_progress_listener = NfcProgressListener(self)
         print("Listener type:", type(self.nfc_progress_listener))
         NfcHelper.processNfcIntentByteBufferAsync(intent, width, height, image_buffer_bb, epd_init_java_array, self.nfc_progress_listener)
-
-    # =========================
-    # UI & Screen Management
-    # =========================
-    def clear_table_data(self):
-        """Clear the data in the table and update the UI."""
-        self.current_data = []
-        if hasattr(self, "manual_data_rows"):
-            self.manual_data_rows = []
-        self.manual_data_fields = []
-        home_screen = self.root.ids.home_screen
-        table_container = home_screen.ids.table_container
-        table_container.clear_widgets()
-        # Clear the stage name and stage notes fields
-        try:
-            home_screen.ids.stage_name_field.text = ""
-            home_screen.ids.stage_notes_field.text = ""
-            print("Stage name and stage notes fields cleared.")
-        except Exception as e:
-            print(f"Error clearing stage name or notes: {e}")
-        print("Data table cleared.")
-        self.show_manual_data_input()  # Show manual data input fields again
-
-    def display_table(self, data):
-        from kivy.uix.scrollview import ScrollView
-        from kivy.uix.gridlayout import GridLayout
-        from kivy.uix.label import Label
-        from kivy.metrics import dp
-
-        global show_range
-        if not data:
-            print("No data to display.")
-            return
-
-        data = self.preprocess_data(data)
-
-        # --- Filter out rows where all values after "Target" are "---" ---
-        if data:
-            header = data[0]
-            filtered_data = [header]
-            for row in data[1:]:
-                values_after_target = [v for k, v in row.items() if k != "Target"]
-                if not all(str(v).strip() == "---" for v in values_after_target):
-                    filtered_data.append(row)
-            data = filtered_data
-
-        # --- Filter out rows where all values are "0" ---
-        if data:
-            header = data[0]
-            filtered_data_zeros = [header]
-            for row in data[1:]:
-                if not all(str(v).strip() == "0" for v in row.values()):
-                    filtered_data_zeros.append(row)
-            data = filtered_data_zeros
-
-        if data and list(data[0].keys())[0] == "Range":
-            show_range = True
-            print("Range is in column 0, setting show_range = True")
-
-        static_headers = ["Target", "Range", "Elv", "Wnd1", "Wnd2", "Lead"]
-        headers = ["Elv", "Wnd1"]
-        target_present = any(row.get("Target") for row in data)
-        if target_present:
-            headers.insert(0, "Target")
-        if show_range:
-            if not target_present:
-                headers.insert(0, "Range")
-            else:
-                headers.insert(1, "Range")
-        if show_2_wind_holds:
-            headers.append("Wnd2")
-        if show_lead:
-            headers.append("Lead")
-
-        # Prepare data for table
-        row_data = [
-            [str(row.get(header, "")) for header in headers] for row in data
-        ]
-
-        # Clear previous widgets
-        home_screen = self.root.ids.home_screen
-        table_container = home_screen.ids.table_container
-        table_container.clear_widgets()
-        self.manual_data_fields = []  # <-- Add this line to clear manual fields when showing table
-
-        # Create the GridLayout for the table
-        table = GridLayout(
-            cols=len(headers),
-            size_hint_y=None,
-            row_default_height=dp(36),
-            spacing=dp(1),
-            padding=dp(2),
-        )
-        table.bind(minimum_height=table.setter('height'))
-
-        # Add header row
-        for header in headers:
-            display_header = "Tgt" if header == "Target" else "Rng" if header == "Range" else header
-            table.add_widget(Label(
-                text=f"[b]{display_header}[/b]",
-                markup=True,
-                size_hint_y=None,
-                height=dp(36),
-                color=(0, 0, 0, 1),
-                halign="center",
-                valign="middle",
-                font_size=dp(16),
-                bold=True,
-            ))
-
-        # Add data rows
-        for row in row_data:
-            for cell in row:
-                table.add_widget(Label(
-                    text=cell,
-                    size_hint_y=None,
-                    height=dp(36),
-                    color=(0, 0, 0, 1),
-                    halign="center",
-                    valign="middle",
-                    font_size=dp(15),
-                ))
-
-        # Put the table in a ScrollView
-        scroll = ScrollView(size_hint=(1, 1))
-        scroll.add_widget(table)
-        table_container.add_widget(scroll)
-
-    def show_manual_data_input(self):
-        """Display manual data input fields in the CSV data table location based on filtered display options."""
-        from kivy.uix.scrollview import ScrollView
-        from kivy.uix.gridlayout import GridLayout
-        from kivymd.uix.textfield import MDTextField
-        from kivymd.uix.button import MDIconButton
-        from kivy.uix.boxlayout import BoxLayout
-        from kivy.metrics import dp
-
-        # Filter fields based on visibility
-        visible_fields = [
-            field for field, info in self.available_fields.items() if info["show"]
-        ]
-
-        home_screen = self.root.ids.home_screen
-        table_container = home_screen.ids.table_container
-        table_container.clear_widgets()
-
-        # Create a scroll view for manual data input
-        scroll = ScrollView()
-        main_layout = BoxLayout(
-            orientation="vertical",
-            size_hint_y=None,
-            spacing=dp(10),
-            padding=dp(10),
-        )
-        main_layout.bind(minimum_height=main_layout.setter('height'))
-
-        # Create the rows layout (for data entry)
-        rows_layout = GridLayout(
-            cols=len(visible_fields),
-            size_hint_y=None,
-            spacing=dp(5),
-            padding=dp(5),
-        )
-        rows_layout.bind(minimum_height=rows_layout.setter('height'))
-
-        # Add headers
-        for field in visible_fields:
-            header_label = MDTextField(
-                text=field,
-                font_size=dp(12),
-                size_hint_y=None,
-                height=dp(40),
-                disabled=True,
-                theme_text_color="Secondary",
-            )
-            rows_layout.add_widget(header_label)
-
-        # Initialize the manual data fields list
-        self.manual_data_fields = []
-        self.manual_data_rows = []
-
-        # Add the first row of data fields
-        self.add_data_row(rows_layout, focus_row=False)
-
-        # Add the rows layout to the main layout
-        main_layout.add_widget(rows_layout)
-
-        # Create the button row layout
-        button_layout = BoxLayout(
-            orientation="horizontal",
-            size_hint_y=None,
-            height=dp(50),
-            spacing=dp(10),
-        )
-
-        # Add Row button
-        add_button = MDIconButton(
-            icon="plus",
-            theme_icon_color="Custom",
-            icon_color=(0, 0.4, 1, 1),
-            on_release=lambda x: self.add_data_row(rows_layout),
-        )
-        button_layout.add_widget(add_button)
-
-        # Delete Row button
-        delete_button = MDIconButton(
-            icon="minus",
-            theme_icon_color="Custom",
-            icon_color=(1, 0.2, 0.2, 1),
-            on_release=lambda x: self.delete_last_row(rows_layout),
-        )
-        button_layout.add_widget(delete_button)
-
-        # Add the button layout to the main layout
-        main_layout.add_widget(button_layout)
-
-        # Add the main layout to the scroll view
-        scroll.add_widget(main_layout)
-
-        # Add the scroll view to the table container
-        table_container.add_widget(scroll)
-
-        # Enable navigation after adding all widgets
-        Clock.schedule_once(lambda dt: self.enable_next_navigation_on_homepage(), 0.1)
-
-    def add_data_row(self, rows_layout, focus_row=True):
-        """Add a new row of data fields directly underneath the existing rows, with Next/Tab navigation."""
-        from kivymd.uix.textfield import MDTextField
-        from kivy.metrics import dp
-
-        # Filter fields based on visibility
-        visible_fields = [
-            field for field, info in self.available_fields.items() if info["show"]
-        ]
-
-        row_fields = {}
-        for field in visible_fields:
-            text_field = MDTextField(
-                hint_text=self.available_fields[field]["hint_text"],
-                size_hint_y=None,
-                height=dp(40),
-                multiline=False,
-                font_size=dp(14),
-            )
-            # Apply auto-capitalization for specific fields (if needed)
-            if field in ["Target", "Notes"]:  # Customize as needed
-                text_field.bind(text=self.auto_capitalize)
-
-            # Store reference for navigation
-            self.manual_data_fields.append(text_field)
-            row_fields[field] = text_field
-            rows_layout.add_widget(text_field)
-
-        # Store the row for later reference
-        if not hasattr(self, "manual_data_rows"):
-            self.manual_data_rows = []
-        self.manual_data_rows.append(row_fields)
-
-        # Focus on the first field of the new row if requested
-        if focus_row and visible_fields:
-            first_field = row_fields[visible_fields[0]]
-            Clock.schedule_once(lambda dt: setattr(first_field, 'focus', True), 0.1)
-
-        # Scroll to show the buttons
-        Clock.schedule_once(lambda dt: self.scroll_manual_input_to_buttons(), 0.1)
-
-        # Update navigation after layout changes
-        Clock.schedule_once(lambda dt: self.enable_next_navigation_on_homepage(), 0.1)
-
-    def delete_last_row(self, rows_layout=None):
-        if hasattr(self, "manual_data_rows") and self.manual_data_rows:
-            # Get the last row
-            last_row = self.manual_data_rows.pop()
-
-            # Remove the text fields from the layout
-            for field in last_row.values():
-                if field in self.manual_data_fields:
-                    self.manual_data_fields.remove(field)
-                if rows_layout and field in rows_layout.children:
-                    rows_layout.remove_widget(field)
-
-            # Update navigation after layout changes
-            Clock.schedule_once(lambda dt: self.enable_next_navigation_on_homepage(), 0.1)
-
-            print(f"Deleted last row. Remaining rows: {len(self.manual_data_rows)}")
-        else:
-            print("No rows to delete.")
-
-    def scroll_manual_input_to_buttons(self):
-        """Scroll the manual data input ScrollView so the button row is visible."""
-        home_screen = self.root.ids.home_screen
-        table_container = home_screen.ids.table_container
-        if table_container.children:
-            scroll = table_container.children[0]  # Get the ScrollView
-            if hasattr(scroll, 'scroll_y'):
-                scroll.scroll_y = 0  # Scroll to the bottom to show buttons
-
-    def enable_next_navigation_on_homepage(self):
-        """Enable Next/Tab navigation for all MDTextField inputs on the homepage, including manual rows."""
-        all_fields = self.get_all_homepage_fields()
-
-        # Clear any existing navigation bindings to avoid conflicts
-        for field in all_fields:
-            field.unbind(on_text_validate=getattr(field, '_custom_on_text_validate', lambda *args: None))
-
-        for idx, field in enumerate(all_fields):
-            # Create a closure to capture the current index
-            def make_on_text_validate(idx):
-                def _on_text_validate(instance):
-                    if idx + 1 < len(all_fields):
-                        all_fields[idx + 1].focus = True
-                return _on_text_validate
-
-            # Bind the custom validation function
-            custom_func = make_on_text_validate(idx)
-            field._custom_on_text_validate = custom_func
-            field.bind(on_text_validate=custom_func)
-
-            # Also handle keyboard navigation for cases where on_text_validate doesn't fire
-            def make_keyboard_on_key_down(idx, orig_handler):
-                def _on_key_down(instance, *args):
-                    # Call original handler first
-                    if orig_handler:
-                        result = orig_handler(*args)
-                        if result:
-                            return result
-                    # Handle Tab key (key code 9)
-                    if len(args) >= 4 and args[0] == 9:  # Tab key
-                        if idx + 1 < len(all_fields):
-                            all_fields[idx + 1].focus = True
-                            return True
-                    return False
-                return _on_key_down
-
-            orig_handler = getattr(field, 'keyboard_on_key_down', None)
-            field.keyboard_on_key_down = make_keyboard_on_key_down(idx, orig_handler)
-
-    def navigate_to_home(self):
-        """Navigate back to the home screen."""
-        self.root.ids.screen_manager.current = "home"
-
-    def on_dots_press(self, instance):
-        global show_lead, show_range, show_2_wind_holds
-
-        # Dismiss the existing menu if it exists
-        if hasattr(self, "menu") and self.menu:
-            self.menu.dismiss()
-
-        # Update the "Show Lead" menu item dynamically
-        if show_lead:
-            lead_menu = {"text": "Hide Lead",
-                         "on_release": lambda: (self.menu_callback("Hide Lead"), self.menu.dismiss())}
-        else:
-            lead_menu = {"text": "Show Lead",
-                         "on_release": lambda: (self.menu_callback("Show Lead"), self.menu.dismiss())}
-        # Update the "Show Range" menu item dynamically
-        if show_range:
-            range_menu = {"text": "Hide Range",
-                          "on_release": lambda: (self.menu_callback("Hide Range"), self.menu.dismiss())}
-        else:
-            range_menu = {"text": "Show Range",
-                          "on_release": lambda: (self.menu_callback("Show Range"), self.menu.dismiss())}
-        # Update the "Show 2 Wind Holds" menu item dynamically
-        if show_2_wind_holds:
-            wind_holds_menu = {"text": "Show 1 Wind Hold",
-                               "on_release": lambda: (self.menu_callback("Show 1 Wind Hold"), self.menu.dismiss())}
-        else:
-            wind_holds_menu = {"text": "Show 2 Wind Holds",
-                               "on_release": lambda: (self.menu_callback("Show 2 Wind Holds"), self.menu.dismiss())}
-
-        # Define menu items
-        menu_items = [
-            {"text": "Settings", "on_release": lambda: self.menu_callback("Settings")},
-            lead_menu,
-            range_menu,
-            wind_holds_menu,
-        ]
-
-        # Create the dropdown menu
-        self.menu = MDDropdownMenu(
-            caller=instance,
-            items=menu_items,
-        )
-        self.menu.open()
-
-    def menu_callback(self, option):
-        global show_lead, show_range, show_2_wind_holds
-
-        # Track if we changed a setting
-        changed = False
-
-        # Handle the selected option
-        if option == "Hide Lead":
-            show_lead = False
-            changed = True
-        elif option == "Show Lead":
-            show_lead = True
-            changed = True
-        if option == "Hide Range":
-            show_range = False
-            changed = True
-        elif option == "Show Range":
-            show_range = True
-            changed = True
-        if option == "Show 1 Wind Hold":
-            show_2_wind_holds = False
-            changed = True
-        elif option == "Show 2 Wind Holds":
-            show_2_wind_holds = True
-            changed = True
-        elif option == "Settings":
-            # Navigate to the settings screen
-            self.root.ids.screen_manager.current = "settings"
-            # Close the dots menu
-            if hasattr(self, "menu") and self.menu:
-                self.menu.dismiss()
-            # Do NOT save settings here
-            changed = False
-
-        # --- PATCH: Update available_fields visibility based on menu options ---
-        self.available_fields["Lead"]["show"] = show_lead
-        self.available_fields["Range"]["show"] = show_range
-        self.available_fields["Wnd2"]["show"] = show_2_wind_holds
-
-        # Save settings if any menu option except "Settings" was selected
-        if changed:
-            self.save_settings()
-
-        # Regenerate the manual data input fields if they are visible
-        home_screen = self.root.ids.home_screen
-        table_container = home_screen.ids.table_container
-        if table_container.children:  # Check if manual data input fields are displayed
-            self.show_manual_data_input()
-
-        # Regenerate the table with updated columns
-        if hasattr(self, "current_data"):  # Check if data is already loaded
-            self.display_table(self.current_data)
-
-    def on_fab_press(self):
-        """Handle the floating action button press."""
-        # Get the stage name from the text field
-        stage_name = self.root.ids.home_screen.ids.stage_name_field.text.strip()
-        if not stage_name:
-            toast("Stage Name required for Save")
-            return  # Do not open the save dialog
-
-        if not self.dialog:
-            # Get the list of folders in the assets/CSV directory
-            csv_directory = self.ensure_csv_directory()
-            folders = [f for f in os.listdir(csv_directory) if os.path.isdir(os.path.join(csv_directory, f))]
-
-            # Create a BoxLayout to hold the dropdown button and text input
-            content_layout = BoxLayout(
-                orientation="vertical",
-                spacing="10dp",  # Add spacing between the button and text field
-                size_hint=(1, None),
-                height="120dp",  # Adjust height to fit both widgets
-            )
-
-            # Add the dropdown button to the layout
-            dropdown_button = MDFlatButton(
-                id="dropdown_button",
-                text="Select Event",
-                size_hint=(1, None),
-                height="48dp",
-                pos_hint={"center_x": 0.5},
-            )
-
-            # Define the function to handle menu item selection
-            def update_selected_folder(selected_option):
-                dropdown_button.text = selected_option  # Update the button text to display the selected option
-                dropdown_menu.dismiss()  # Close the dropdown menu
-                if selected_option == "New Event...":
-                    text_input.opacity = 1  # Make the text input visible
-                    text_input.disabled = False  # Enable the text input
-                    self.selected_save_folder = None  # Clear the selected folder
-                else:
-                    text_input.opacity = 0  # Hide the text input
-                    text_input.disabled = True  # Disable it
-                    self.selected_save_folder = os.path.join(csv_directory, selected_option)
-
-            # Create the dropdown menu
-            dropdown_menu = MDDropdownMenu(
-                caller=dropdown_button,
-                items=[{"text": "New Event...", "on_release": lambda: update_selected_folder("New Event...")}] +
-                      [{"text": folder,
-                        "on_release": lambda selected_folder=folder: update_selected_folder(selected_folder)}
-                       for folder in folders],
-                position="center",
-            )
-
-            # Assign the menu to the button's on_release callback
-            dropdown_button.on_release = lambda: dropdown_menu.open()
-
-            # Add the text input field to the layout, initially hidden
-            text_input = MDTextField(
-                hint_text="Event Name",
-                size_hint=(1, None),
-                height="48dp",
-                multiline=False,
-                opacity=0,  # Make it invisible initially
-                disabled=True,  # Disable it initially
-                halign="center",  # Center the text horizontally
-            )
-
-            # Add both widgets to the layout
-            content_layout.add_widget(dropdown_button)
-            content_layout.add_widget(text_input)
-
-            # Add the layout to the dialog
-            self.dialog = MDDialog(
-                title="Save Data",
-                text="Select an event folder or create a new one.",
-                type="custom",
-                content_cls=content_layout,
-                buttons=[
-                    MDFlatButton(
-                        text="CANCEL",
-                        on_release=lambda x: self.dialog.dismiss()
-                    ),
-                    MDFlatButton(
-                        text="SAVE",
-                        on_release=lambda x: (
-                            self.handle_save_dialog(text_input),
-                            self.dialog.dismiss()  # Automatically close the dialog after saving
-                        ),
-                        theme_text_color="Custom",          # Make the text color custom
-                        text_color=(0, 0.4, 1, 1)           # Blue color for SAVE button
-                    ),
-                ],
-            )
-        self.dialog.open()
-
-    def handle_save_dialog(self, text_input):
-        home_screen = self.root.ids.home_screen
-        table_container = home_screen.ids.table_container
     
-        # Add manual data if any manual fields are filled
-        if (
-            table_container.children
-            and hasattr(self, "manual_data_rows")
-            and self.manual_data_rows
-            and any(
-                any(field.text.strip() for field in row_fields.values())
-                for row_fields in self.manual_data_rows
-            )
-        ):
-            print("Manual data input detected, adding manual data before saving.")
-            self.add_manual_data()
-    
-        self.save_data(new_event_name=text_input.text.strip() if text_input.text.strip() else None)
-        self.dialog.dismiss()
+    def on_pause(self):
+        print("on_pause CALLED")
+        return True
+
+    def on_start(self):
+        # Bind global key handler for Tab/Enter navigation
+        from kivy.core.window import Window
+
+        # Apply to the stage name field
+        stage_name_field = self.root.ids.home_screen.ids.stage_name_field
+        stage_name_field.bind(text=self.auto_capitalize)
+
+        # Apply to the stage notes field
+        stage_notes_field = self.root.ids.home_screen.ids.stage_notes_field
+        stage_notes_field.bind(text=self.auto_capitalize)
+
+        Window.bind(on_key_down=self.global_key_handler)
 
     def auto_capitalize(self, instance, value):
         """
@@ -1577,369 +938,40 @@ class MainApp(MDApp):
             all_fields.append(home_screen.ids.stage_notes_field)
         return all_fields
 
-    def on_search_entered(self, search_text):
-        """Filter the swipe-to-delete file list based on the search input."""
-        if hasattr(self, "search_text"):
-            self.search_text = search_text.lower()
-        self.populate_swipe_file_list()
-
-    def limit_stage_notes(self, text_field):
-        """Limit the stage notes to 3 lines."""
-        lines = text_field.text.split('\n')
-        if len(lines) > 3:
-            text_field.text = '\n'.join(lines[:3])
-
-    # =========================
-    # File & Data Management
-    # =========================
-    # =========================
-    # File & Data Management  
-    # =========================
-    def ensure_csv_directory(self):
-        """Ensure the assets/CSV directory exists and is accessible."""
-        if is_android():
-            # Copy assets/CSV to internal storage on Android
-            return self.copy_assets_to_internal_storage()
-        else:
-            # Use the local assets/CSV folder on non-Android platforms
-            csv_directory = os.path.join(os.path.dirname(__file__), "assets", "CSV")
-            if not os.path.exists(csv_directory):
-                os.makedirs(csv_directory)
-            return csv_directory
-
-    def on_file_selected(self, selection):
-        """Handle the file or folder selected in the FileChooserListView."""
-         # Clear current data and table before loading new file
-        self.current_data = []
-        self.clear_table_data()
-        if selection:
-            selected_path = selection[0]
-            if os.path.isdir(selected_path):
-                # If it's a folder, show its contents
-                self.populate_swipe_file_list(selected_path)
-                return
-            # Extract the file name and set it to the stage_name_field
-            file_name = os.path.basename(selected_path)
-            self.root.ids.home_screen.ids.stage_name_field.text = os.path.splitext(file_name)[0]
-            # If the selected file is a CSV, extract the stage notes footer and display it in the stage_notes_field
-            if selected_path.endswith(".csv"):
-                try:
-                    with open(selected_path, mode="r", encoding="utf-8") as csv_file:
-                        lines = csv_file.readlines()
-                        # Look for the "Stage Notes:" footer and extract all lines after it
-                        for i, line in enumerate(lines):
-                            if line.strip().lower() == "stage notes:":
-                                # Collect all lines after "Stage Notes:" until end of file or next header
-                                stage_notes_lines = []
-                                for note_line in lines[i + 1:]:
-                                    stage_notes_lines.append(note_line.rstrip('\n'))
-                                stage_notes = "\n".join(stage_notes_lines).strip()
-                                # Remove leading/trailing quotes if present
-                                if stage_notes.startswith('"') and stage_notes.endswith('"'):
-                                    stage_notes = stage_notes[1:-1]
-                                self.root.ids.home_screen.ids.stage_notes_field.text = stage_notes
-                                break
-                except Exception as e:
-                    print(f"Error extracting stage notes: {e}")
-            print(f"Selected: {selected_path}")  # Log the selected file or folder
-
-            # Check if the selected file is a CSV
-            if selected_path.endswith(".csv"):
-                try:
-                    # Read the CSV file and convert it to a dictionary
-                    data = self.read_csv_to_dict(selected_path)
-                    self.current_data = data  # Store the data for filtering or other operations
-
-                    # Preprocess the data
-                    processed_data = self.preprocess_data(data)
-
-                    # Display the data as a table on the Home Screen
-                    self.display_table(processed_data)
-
-                    # Reset the FileChooserListView to its rootpath
-                    saved_cards_screen = self.root.ids.screen_manager.get_screen("saved_cards")
-
-                    # Navigate back to the Home Screen
-                    self.root.ids.screen_manager.current = "home"  # Reference the Home Screen by its name in layout.kv
-
-                    print(f"CSV loaded: {os.path.basename(selected_path)}")
-                except Exception as e:
-                    print(f"Error reading CSV: {e}")
-            else:
-                print("Please select a valid CSV file.")
-        else:
-            print("No file selected")
-
-    def read_csv_to_dict(self, file_or_path):
-        """Reads a CSV file or file-like object and maps it to static column names, ignoring the headers and skipping the first 6 lines."""
-        static_columns = ["Target", "Range", "Elv", "Wnd1", "Wnd2", "Lead"]  # Static column names
-        data = []
-        try:
-            print(f"Reading CSV: {file_or_path}")
-            # Detect if file_or_path is a path or file-like object
-            if isinstance(file_or_path, str):
-                csv_file = open(file_or_path, mode="r", encoding="latin-1")
-                close_after = True
-            else:
-                csv_file = file_or_path
-                close_after = False
-
-            reader = csv.reader(csv_file)
-            # Skip the first 6 lines
-            for _ in range(6):
-                next(reader, None)
-            for index, row in enumerate(reader, start=1):
-                if not row:
-                    continue
-                if row[0].strip().lower() == "stage notes:":
-                    break
-                mapped_row = {static_columns[i]: row[i] if i < len(row) else "" for i in range(len(static_columns))}
-                data.append(mapped_row)
-            if close_after:
-                csv_file.close()
-            print(f"CSV data read successfully: {data}")
-        except Exception as e:
-            print(f"Error reading CSV file: {e}")
-        return data
-
-    def preprocess_data(self, data):
-        """Shift columns to the right by one if 'Target' contains a number."""
-        processed_data = []
-        for row in data:
-            target_value = row.get("Target", "")
-            # Check if the "Target" column contains a number
+    def on_resume(self):
+        print("on_resume CALLED")
+        if is_android() and autoclass:
             try:
-                float(target_value)
-                is_number = float(target_value) > 40
-            except (ValueError, TypeError):
-                is_number = False
-
-            if is_number:
-                # Shift the columns across to the right by one
-                shifted_row = {}
-                keys = list(row.keys())
-                for i in range(len(keys) - 1):
-                    shifted_row[keys[i + 1]] = row[keys[i]]
-                shifted_row[keys[0]] = ""  # Set the first column to empty
-                processed_data.append(shifted_row)
-            else:
-                # Keep the row as is if "Target" is not a number
-                processed_data.append(row)
-        return processed_data
-
-    def save_data(self, new_event_name=None):
-        if hasattr(self, "current_data") and self.current_data:
-            # Filter out rows where all values after "Target" are "---"
-            header = self.current_data[0]
-            filtered_data = [header]
-            for row in self.current_data[1:]:
-                values_after_target = [v for k, v in row.items() if k != "Target"]
-                if not all(str(v).strip() == "---" for v in values_after_target):
-                    filtered_data.append(row)
-            self.current_data = filtered_data
-            # Determine the private storage path
-            storage_path = self.get_private_storage_path()
-            if storage_path:
-                try:
-                    # Ensure the CSV folder exists
-                    csv_folder_path = os.path.join(storage_path, "CSV")
-                    if not os.path.exists(csv_folder_path):
-                        os.makedirs(csv_folder_path)
-
-                    # Construct the file name and path
-                    file_name = f"{self.root.ids.home_screen.ids.stage_name_field.text}.csv"
-                    if new_event_name:
-                        # Use the new event name to create a folder inside the CSV folder
-                        event_folder_path = os.path.join(csv_folder_path, new_event_name)
-                        if not os.path.exists(event_folder_path):
-                            os.makedirs(event_folder_path)
-                        file_path = os.path.join(event_folder_path, file_name)
-                    elif self.selected_save_folder:
-                        # Use the selected folder inside the CSV folder
-                        if not os.path.exists(self.selected_save_folder):
-                            os.makedirs(self.selected_save_folder)
-                        file_path = os.path.join(self.selected_save_folder, file_name)
-                    else:
-                        toast("No folder selected or created. Cannot save data.")
-                        return
-
-                    # Write the data to the CSV file
-                    with open(file_path, mode="w", encoding="utf-8", newline="") as csv_file:
-                        writer = csv.DictWriter(csv_file, fieldnames=["Target", "Range", "Elv", "Wnd1", "Wnd2", "Lead"])
-                        
-                        # Write 6 lines of headers as required
-                        for _ in range(6):
-                            csv_file.write(",,,,,\n")
-                        
-                        # Write the data
-                        for row in self.current_data:
-                            writer.writerow(row)
-                        
-                        # Write the stage notes footer
-                        stage_notes = self.root.ids.home_screen.ids.stage_notes_field.text
-                        if stage_notes.strip():
-                            csv_file.write("\nStage Notes:\n")
-                            csv_file.write(f'"{stage_notes}"\n')
-
-                    toast(f"Data saved to {file_name}")
-                    print(f"Data saved to: {file_path}")
-                except Exception as e:
-                    print(f"Error saving data to CSV: {e}")
-            else:
-                print("Private storage path is not available.")
-        else:
-            print("No data available to save.")
-
-    def read_csv_from_assets(self, file_name):
-        """Read a CSV file from the assets/CSV folder."""
-        try:
-            if is_android():
-                # Read from the app's internal storage on Android
-                private_storage_path = self.get_private_storage_path()
-                csv_internal_path = os.path.join(private_storage_path, "CSV")
-                file_path = os.path.join(csv_internal_path, file_name)
-                if os.path.exists(file_path):
-                    with open(file_path, mode="r", encoding="utf-8") as csv_file:
-                        return csv_file.read()
-                else:
-                    print(f"CSV file not found in internal storage: {file_path}")
-                    return None
-            else:
-                # Read from the local assets/CSV folder on non-Android platforms
-                csv_directory = os.path.join(os.path.dirname(__file__), "assets", "CSV")
-                file_path = os.path.join(csv_directory, file_name)
-                if os.path.exists(file_path):
-                    with open(file_path, mode="r", encoding="utf-8") as csv_file:
-                        return csv_file.read()
-                else:
-                    print(f"CSV file not found: {file_path}")
-                    return None
-        except Exception as e:
-            print(f"Error reading CSV file from assets: {e}")
-            return None
-
-    def copy_assets_to_internal_storage(self):
-        """Copy the assets/CSV folder to the app's private storage directory."""
-        private_storage_path = self.get_private_storage_path()
-        csv_internal_path = os.path.join(private_storage_path, "CSV")
-        
-        # Ensure the internal CSV directory exists
-        if not os.path.exists(csv_internal_path):
-            os.makedirs(csv_internal_path)
-        
-        if private_storage_path:
-            try:
-                print(f"Copying assets/CSV to internal storage: {csv_internal_path}")
-                
-                # Copy files and directories from assets/CSV to private storage
-                if is_android():
-                    AssetManager = autoclass('android.content.res.AssetManager')
-                    context = mActivity.getApplicationContext()
-                    asset_manager = context.getAssets()
-                    files = asset_manager.list("CSV")  # List files and directories in the assets/CSV folder
-
-                    for file_name in files:
-                        source_path = f"CSV/{file_name}"
-                        dest_path = os.path.join(csv_internal_path, file_name)
-
-                        if asset_manager.list(source_path):  # Check if it's a directory
-                            if not os.path.exists(dest_path):
-                                os.makedirs(dest_path)  # Create the directory if it doesn't exist
-                            # Recursively copy the directory
-                            self.copy_directory_from_assets(asset_manager, source_path, dest_path)
-                        else:
-                            # Copy a single file
-                            with asset_manager.open(source_path) as asset_file:
-                                with open(dest_path, "wb") as output_file:
-                                    output_file.write(asset_file.read())
-                            print(f"Copied file: {source_path} to {dest_path}")
-                else:
-                    # Copy files locally for non-Android platforms
-                    assets_csv_path = os.path.join(os.path.dirname(__file__), "assets", "CSV")
-                    for file_name in os.listdir(assets_csv_path):
-                        src_path = os.path.join(assets_csv_path, file_name)
-                        dest_path = os.path.join(csv_internal_path, file_name)
-                        if os.path.isdir(src_path):
-                            if not os.path.exists(dest_path):
-                                os.makedirs(dest_path)
-                            # Recursively copy the directory
-                            self.copy_directory_locally(src_path, dest_path)
-                        else:
-                            # Copy a single file
-                            with open(src_path, "rb") as src, open(dest_path, "wb") as dest:
-                                dest.write(src.read())
-                            print(f"Copied file: {src_path} to {dest_path}")
-
-                print("Assets copied to internal storage successfully.")
-                return csv_internal_path
+                Intent = autoclass('android.content.Intent')
+                PythonActivity = autoclass('org.kivy.android.PythonActivity')
+                context = PythonActivity.mActivity.getApplicationContext()
+                package = context.getPackageName()
+                pm = context.getPackageManager()
+                intent = pm.getLaunchIntentForPackage(package)
+                intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK)
+                context.startActivity(intent)
             except Exception as e:
-                print(f"Error copying assets to internal storage: {e}")
-                return None
+                print(f"Error resuming app: {e}")
         else:
-            print("Private storage path is not available.")
-            return None
+            print("Not running on Android, cannot resume app.")
 
-    def copy_directory_from_assets(self, asset_manager, source_path, dest_path):
-        """Recursively copy a directory from the assets folder to the destination."""
-        try:
-            files = asset_manager.list(source_path)
-            for file_name in files:
-                src_file_path = f"{source_path}/{file_name}"
-                dest_file_path = os.path.join(dest_path, file_name)
+    def request_bal_exemption(self):
+        if is_android() and autoclass:
+            try:
+                ActivityCompat = autoclass('androidx.core.app.ActivityCompat')
+                PythonActivity = autoclass('org.kivy.android.PythonActivity')
+                activity = PythonActivity.mActivity
 
-                if asset_manager.list(src_file_path):  # Check if it's a directory
-                    if not os.path.exists(dest_file_path):
-                        os.makedirs(dest_file_path)
-                    # Recursively copy the subdirectory
-                    self.copy_directory_from_assets(asset_manager, src_file_path, dest_file_path)
-                else:
-                    # Copy a single file
-                    with asset_manager.open(src_file_path) as asset_file:
-                        with open(dest_file_path, "wb") as output_file:
-                            output_file.write(asset_file.read())
-                    print(f"Copied file: {src_file_path} to {dest_file_path}")
-        except Exception as e:
-            print(f"Error copying directory from assets: {e}")
-
-    def copy_directory_locally(self, src_path, dest_path):
-        """Recursively copy a directory locally."""
-        try:
-            for file_name in os.listdir(src_path):
-                src_file_path = os.path.join(src_path, file_name)
-                dest_file_path = os.path.join(dest_path, file_name)
-
-                if os.path.isdir(src_file_path):
-                    if not os.path.exists(dest_file_path):
-                        os.makedirs(dest_file_path)
-                    # Recursively copy the subdirectory
-                    self.copy_directory_locally(src_file_path, dest_file_path)
-                else:
-                    # Copy a single file
-                    with open(src_file_path, "rb") as src, open(dest_file_path, "wb") as dest:
-                        dest.write(src.read())
-                    print(f"Copied file: {src_file_path} to {dest_file_path}")
-        except Exception as e:
-            print(f"Error copying directory locally: {e}")
-
-    def delete_file_or_folder(self, path):
-        """Delete a file or folder."""
-        try:
-            if os.path.isfile(path):
-                os.remove(path)
-                print(f"Deleted file: {path}")
-            elif os.path.isdir(path):
-                shutil.rmtree(path)
-                print(f"Deleted folder: {path}")
-            else:
-                print(f"Path does not exist: {path}")
-        except Exception as e:
-            print(f"Error deleting {path}: {e}")
-
-    def populate_swipe_file_list(self, target_dir=None, sort_by=None, reverse=None):
-        """Populate the swipe-to-delete file list."""
-        # Implementation would go here
-        pass
-
+                # Request BAL exemption
+                ActivityCompat.requestPermissions(
+                    activity,
+                    ["android.permission.BAL_EXEMPTION"],
+                    0
+                )
+                print("Requested BAL exemption.")
+            except Exception as e:
+                print(f"Error requesting BAL exemption: {e}")
+    
     def delete_old_folders(self):
         """Delete folders in assets/CSV older than the selected threshold."""
         thresholds = {
@@ -1964,99 +996,85 @@ class MainApp(MDApp):
                         print(f"Deleted old folder: {folder_path}")
                     except Exception as e:
                         print(f"Error deleting folder {folder_path}: {e}")
+    
+    def build(self):
+        """Build the app's UI and initialize settings."""
+        # Set the theme to Light
+        self.theme_cls.theme_style = "Light"
 
-    def process_received_csv(self, file_path_or_uri):
-        """Process the received CSV file or CSV text."""
-        # Implementation would go here
-        pass
+        # Load saved settings
+        self.load_settings()
 
-    def add_manual_data(self):
-        """Add manual data entered by the user to the current_data."""
-        if hasattr(self, "manual_data_rows") and self.manual_data_rows:
-            for row_fields in self.manual_data_rows:
-                # Check if any field in this row has data
-                row_data = {}
-                has_data = False
-                for field, text_field in row_fields.items():
-                    value = text_field.text.strip()
-                    row_data[field] = value
-                    if value:
-                        has_data = True
+        # Request permissions on Android
+        if is_android():
+            request_permissions([
+                Permission.NFC,
+                Permission.READ_EXTERNAL_STORAGE,
+                Permission.WRITE_EXTERNAL_STORAGE,
+                Permission.VIBRATE,
+            ], self.on_permissions_result)
+            if self.initialize_nfc():
+                print("NFC initialized successfully.")
+            from android import activity
+            activity.bind(on_new_intent=self.on_new_intent)
 
-                # Only add the row if it has some data
-                if has_data:
-                    # Ensure all expected keys are present
-                    for key in ["Target", "Range", "Elv", "Wnd1", "Wnd2", "Lead"]:
-                        if key not in row_data:
-                            row_data[key] = ""
-                    
-                    self.current_data.append(row_data)
-                    print(f"Added manual data row: {row_data}")
+        # Dynamically set the rootpath for the FileChooserListView
+        self.root = Builder.load_file("layout.kv")  # Load the root widget from the KV file
+        saved_cards_screen = self.root.ids.screen_manager.get_screen("saved_cards")
+        csv_directory = self.ensure_csv_directory()
 
-    def get_external_storage_path(self):
-        """Retrieve the external storage path using mActivity or default to assets/CSV."""
-        if is_android() and mActivity:
+        # Handle the intent if the app was opened via an intent
+        if is_android():
             try:
-                # Try to get the external storage directory
-                context = mActivity.getApplicationContext()
-                external_storage_dir = context.getExternalFilesDir(None)
-                if external_storage_dir:
-                    external_path = external_storage_dir.getAbsolutePath()
-                    print(f"External storage path: {external_path}")
-                    return external_path
-                else:
-                    print("External storage not available, using internal storage.")
-                    return self.get_private_storage_path()
+                PythonActivity = autoclass('org.kivy.android.PythonActivity')
+                intent = PythonActivity.mActivity.getIntent()
+                print(f"Scheduling on_new_intent for action: {intent.getAction()}")
+                Clock.schedule_once(lambda dt: self.on_new_intent(intent), 0)
             except Exception as e:
-                print(f"Error getting external storage path: {e}")
-                return self.get_private_storage_path()
-        else:
-            # Default to local assets/CSV for non-Android platforms
-            csv_directory = os.path.join(os.path.dirname(__file__), "assets", "CSV")
-            if not os.path.exists(csv_directory):
-                os.makedirs(csv_directory)
-            return csv_directory
+                print(f"Error handling startup intent: {e}")
+        
+        # Initialize the dropdown menus
+        self.display_menu = None
+        self.orientation_menu = None
 
-    def get_private_storage_path(self):
-        """Retrieve the app's private storage path."""
-        if is_android() and mActivity:
-            try:
-                context = mActivity.getApplicationContext()
-                files_dir = context.getFilesDir()
-                if files_dir:
-                    private_path = files_dir.getAbsolutePath()
-                    print(f"Private storage path: {private_path}")
-                    return private_path
-                else:
-                    print("Private storage not available.")
-                    return None
-            except Exception as e:
-                print(f"Error getting private storage path: {e}")
-                return None
-        else:
-            # Default to local directory for non-Android platforms
-            return os.path.dirname(__file__)
+        # Set the default text for the display and orientation dropdown buttons
+        self.root.ids.settings_screen.ids.display_dropdown_button.text = self.selected_display
+        self.root.ids.settings_screen.ids.orientation_dropdown_button.text = self.selected_orientation
 
-    def save_to_external_storage(self, file_name, content):
-        """Save a file to the external storage directory or assets/CSV."""
-        external_path = self.get_external_storage_path()
-        if external_path:
-            file_path = os.path.join(external_path, file_name)
-            try:
-                with open(file_path, "w", encoding="utf-8") as file:
-                    file.write(content)
-                print(f"File saved to external storage: {file_path}")
-                return file_path
-            except Exception as e:
-                print(f"Error saving file to external storage: {e}")
-                return None
-        else:
-            print("External storage path is not available.")
-            return None
+        # Hide the NFC button if on Android
+        self.hide_nfc_button()
 
-    # =========================
-    # Settings & Preferences
-    # =========================
+        # Delay check for empty table and show manual input if needed
+        def check_and_show_manual_input(dt):
+            # Only show manual input if there is no data loaded
+            if not hasattr(self, "current_data") or not self.current_data:
+                print("No data found after UI load, showing manual data input.")
+                self.show_manual_data_input()
+
+        Clock.schedule_once(check_and_show_manual_input, 0.5)  # Delay to ensure UI is loaded
+
+        return self.root
+
+    def clear_table_data(self):
+        """Clear the data in the table and update the UI."""
+        self.current_data = []
+        if hasattr(self, "manual_data_rows"):
+            self.manual_data_rows = []
+        self.manual_data_fields = []
+        home_screen = self.root.ids.home_screen
+        table_container = home_screen.ids.table_container
+        table_container.clear_widgets()
+        # Clear the stage name and stage notes fields
+        try:
+            home_screen.ids.stage_name_field.text = ""
+            home_screen.ids.stage_notes_field.text = ""
+            print("Stage name and stage notes fields cleared.")
+        except Exception as e:
+            print(f"Error clearing stage name or notes: {e}")
+        print("Data table cleared.")
+        self.show_manual_data_input()  # Show manual data input fields again
+        
+    def ensure_csv_directory(self):
         """Ensure the assets/CSV directory exists and is accessible."""
         if is_android():
             # Copy assets/CSV to internal storage on Android
@@ -2580,9 +1598,6 @@ class MainApp(MDApp):
         else:
             print("No data available to save.")
 
-    # =========================
-    # Settings & Preferences
-    # =========================
     def save_settings(self):
         """Save the selected settings to a configuration file."""
         try:
@@ -2627,408 +1642,7 @@ class MainApp(MDApp):
         self.available_fields["Range"]["show"] = show_range
         self.available_fields["Wnd2"]["show"] = show_2_wind_holds
 
-    def open_display_dropdown(self, button):
-        """Open the dropdown menu for selecting a display model."""
-        # Define the available display models and their resolutions
-        display_options = [
-            {"text": "Good Display 3.7-inch", "on_release": lambda: self.set_display_model("Good Display 3.7-inch", (240, 416))},
-            {"text": "Good Display 4.2-inch", "on_release": lambda: self.set_display_model("Good Display 4.2-inch", (300, 400))},
-            {"text": "Good Display 2.9-inch", "on_release": lambda: self.set_display_model("Good Display 2.9-inch", (128, 296))},
-        ]
-
-        # Create the dropdown menu if it doesn't exist
-        if not hasattr(self, "display_menu") or not self.display_menu:
-            self.display_menu = MDDropdownMenu(
-                caller=button,
-                items=display_options,
-            )
-
-        # Open the dropdown menu
-        self.display_menu.open()
-
-    def set_display_model(self, model, resolution):
-        self.selected_display = model
-        self.native_resolution = resolution  # Always portrait, e.g., (128, 296)
-        self.selected_resolution = resolution  # Always portrait
-        self.root.ids.settings_screen.ids.display_dropdown_button.text = f"{model}"
-        print(f"Selected display model: {model} with native resolution {self.selected_resolution}")
-        self.save_settings()
-        if self.display_menu:
-            self.display_menu.dismiss()
-
-    def open_orientation_dropdown(self, button):
-        """Open the dropdown menu for selecting orientation."""
-        # Define the available orientations
-        orientation_options = [
-            {"text": "Portrait", "on_release": lambda: self.set_orientation("Portrait")},
-            {"text": "Landscape", "on_release": lambda: self.set_orientation("Landscape")},
-        ]
-
-        # Create the dropdown menu if it doesn't exist
-        if not hasattr(self, "orientation_menu") or not self.orientation_menu:
-            self.orientation_menu = MDDropdownMenu(
-                caller=button,
-                items=orientation_options,
-            )
-
-        # Open the dropdown menu
-        self.orientation_menu.open()
-
-    def set_orientation(self, orientation):
-        self.selected_orientation = orientation
-        self.root.ids.settings_screen.ids.orientation_dropdown_button.text = orientation
-        print(f"Selected orientation: {orientation}")
-        # Always keep selected_resolution as portrait
-        display_resolutions = {
-            "Good Display 3.7-inch": (240, 416),
-            "Good Display 4.2-inch": (300, 400),
-            "Good Display 2.9-inch": (128, 296),
-        }
-        if not hasattr(self, "native_resolution") or self.native_resolution is None:
-            self.native_resolution = display_resolutions.get(self.selected_display, (240, 416))
-        self.selected_resolution = self.native_resolution  # Always portrait
-        self.save_settings()
-        if self.orientation_menu:
-            self.orientation_menu.dismiss()
-
-    def on_standalone_mode_toggle(self, active):
-        """Handle the Stand Alone Mode toggle."""
-        self.standalone_mode_enabled = active
-        if active:
-            print("Stand Alone Mode enabled")
-            # Implement any standalone mode-specific logic here
-        else:
-            print("Stand Alone Mode disabled")
-        self.save_settings()
-
-    def on_broom_button_press(self):
-        """Handle the broom button press."""
-        # Check if we have any data to delete
-        csv_directory = self.ensure_csv_directory()
-        if os.path.exists(csv_directory) and os.listdir(csv_directory):
-            print("Broom button pressed - showing manage data dialog")
-            self.delete_all_csv_files()
-        else:
-            toast("No data to manage")
-
-    # =========================
-    # CSV/Bitmap Generation
-    # =========================
-        """Save the selected settings to a configuration file."""
-        try:
-            # Add a section for settings if it doesn't exist
-            if not self.config_parser.has_section("Settings"):
-                self.config_parser.add_section("Settings")
-            self.config_parser.set("Settings", "display_model", self.selected_display)
-            self.config_parser.set("Settings", "orientation", self.selected_orientation)
-            self.config_parser.set("Settings", "standalone_mode", str(self.standalone_mode_enabled))
-            # Save show/hide preferences
-            self.config_parser.set("Settings", "show_lead", str(show_lead))
-            self.config_parser.set("Settings", "show_range", str(show_range))
-            self.config_parser.set("Settings", "show_2_wind_holds", str(show_2_wind_holds))
-            # Save sort settings
-            self.config_parser.set("Settings", "sort_type", getattr(self, "sort_type", "date"))
-            self.config_parser.set("Settings", "sort_order", getattr(self, "sort_order", "asc"))
-            self.config_parser.set("Settings", "delete_folders_after", getattr(self, "delete_folders_after", "never"))
-            self.config_parser.set("Settings", "manage_data_dialog_shown", str(getattr(self, "manage_data_dialog_shown", False)))
-            with open(self.config_file, "w") as config_file:
-                self.config_parser.write(config_file)
-            print("Settings saved successfully.")
-        except Exception as e:
-            print(f"Error saving settings: {e}")
-
-    def load_settings(self):
-        global show_lead, show_range, show_2_wind_holds
-        if os.path.exists(self.config_file):
-            self.config_parser.read(self.config_file)
-            settings = self.config_parser["Settings"]
-            show_lead = settings.getboolean("show_lead", True)
-            show_range = settings.getboolean("show_range", True)
-            show_2_wind_holds = settings.getboolean("show_2_wind_holds", True)
-            self.selected_display = settings.get("display_model", "Good Display 3.7-inch")
-            self.selected_orientation = settings.get("orientation", "Portrait")
-            self.sort_type = settings.get("sort_type", "date")
-            self.sort_order = settings.get("sort_order", "asc")
-        else:
-            self.sort_type = "date"
-            self.sort_order = "asc"
-        # Update available_fields visibility after loading settings
-        self.available_fields["Lead"]["show"] = show_lead
-        self.available_fields["Range"]["show"] = show_range
-        self.available_fields["Wnd2"]["show"] = show_2_wind_holds
-
-    # =========================
-    # CSV/Bitmap Generation
-    # =========================
     def find_max_font_size(self, draw, headers_text, row_texts, notes_text, image_width, image_height, font_path, min_font=8, max_font=32):
-        for font_size in range(max_font, min_font - 1, -1):
-            font = ImageFont.truetype(font_path, font_size)
-            y = 10  # Start below stage name
-            # Stage name
-            y += font_size + 10  # Stage name + spacing
-            y += 10  # line under stage name
-            # Headers
-            y += font_size + 5
-            # Rows
-            y += len(row_texts) * (font_size + 2)
-            # Notes section
-            if stage_notes.strip():
-                y += 20  # spacing before notes
-                y += font.getbbox("Stage Notes:")[3] - font.getbbox("Stage Notes:")[1] + 5
-                y += 10  # line under notes label
-                 # Wrapped notes
-                notes_max_width = base_width - 8  # 4px margin each side
-                wrapped_lines = wrap_text(stage_notes, font, notes_max_width)
-                notes_line_height = font.getbbox("A")[3] - font.getbbox("A")[1] + 2
-                notes_height = len(wrapped_lines) * notes_line_height
-                y += notes_height
-                return font_size
-        return min_font
-    
-    def csv_to_bitmap(self, csv_data, output_path=None):
-        """Convert CSV data to a bitmap image, dynamically maximizing font size to fit all data."""
-        try:
-            from PIL import Image, ImageDraw, ImageFont
-
-            # Set the default output path to the assets/bitmap folder
-            bitmap_directory = os.path.join(os.path.dirname(__file__), "assets", "bitmap")
-            if not os.path.exists(bitmap_directory):
-                os.makedirs(bitmap_directory)
-            if output_path is None:
-                output_path = os.path.join(bitmap_directory, "output.bmp")
-            
-            base_width, base_height = self.selected_resolution
-            # Load the font file
-            font_path = os.path.join(os.path.dirname(__file__), "assets", "fonts", "RobotoMono-Regular.ttf")
-
-            # Prepare data for measurement
-            stage_name = self.root.ids.home_screen.ids.stage_name_field.text
-            stage_notes = self.root.ids.home_screen.ids.stage_notes_field.text
-
-            processed_data = self.preprocess_data(csv_data)
-            # Filter out rows where all values after "Target" are "---"
-            if processed_data:
-                header = processed_data[0]
-                filtered_data = [header]
-                for row in processed_data[1:]:
-                    values_after_target = [v for k, v in row.items() if k != "Target"]
-                    if not all(str(v).strip() == "---" for v in values_after_target):
-                        filtered_data.append(row)
-                processed_data = filtered_data
-            # Filter out rows where all values are "0"
-            if processed_data:
-                header = processed_data[0]
-                filtered_data_zeros = [header]
-                for row in processed_data[1:]:
-                    if not all(str(v).strip() == "0" for v in row.values()):
-                        filtered_data_zeros.append(row)
-                processed_data = filtered_data_zeros
-
-            static_headers = ["Target", "Range", "Elv", "Wnd1", "Wnd2", "Lead"]
-            headers = ["Elv", "Wnd1"]
-            target_present = any(row.get("Target") for row in processed_data)
-            if target_present:
-                headers.insert(0, "Target")
-            if show_range:
-                if not target_present:
-                    headers.insert(0, "Range")
-                else:
-                    headers.insert(1, "Range")
-            if show_2_wind_holds:
-                headers.append("Wnd2")
-            if show_lead:
-                headers.append("Lead")
-
-            filtered_data = [
-                {header: row.get(header, "") for header in headers} for row in processed_data
-            ]
-
-            # --- Dynamic font size calculation with stage notes wrapping ---
-            def wrap_text(text, font, max_width):
-                """Wrap text to fit within max_width using the given font."""
-                lines = []
-                words = text.split()
-                current_line = ""
-                
-                for word in words:
-                    test_line = current_line + (" " if current_line else "") + word
-                    text_bbox = font.getbbox(test_line)
-                    text_width = text_bbox[2] - text_bbox[0]
-                    
-                    if text_width <= max_width:
-                        current_line = test_line
-                    else:
-                        if current_line:
-                            lines.append(current_line)
-                        current_line = word
-                
-                if current_line:
-                    lines.append(current_line)
-                
-                return lines
-
-            def find_max_font_size():
-                for font_size in range(32, 7, -1):  # Start from 32 and go down to 8
-                    font = ImageFont.truetype(font_path, font_size)
-                    
-                    # Calculate total height needed
-                    y = 10  # Top margin
-                    
-                    # Stage name height
-                    stage_bbox = font.getbbox(stage_name)
-                    y += (stage_bbox[3] - stage_bbox[1]) + 10  # text height + spacing
-                    y += 10  # line under stage name
-                    
-                    # Table setup
-                    n_rows = len(filtered_data) + 1  # +1 for header
-                    row_height = font_size + 8
-                    y += n_rows * row_height + 10  # table + spacing
-                    
-                    # Stage notes if present
-                    if stage_notes.strip():
-                        y += 20  # spacing before notes
-                        notes_label_bbox = font.getbbox("Stage Notes:")
-                        y += (notes_label_bbox[3] - notes_label_bbox[1]) + 5  # label height + spacing
-                        y += 10  # line under notes label
-                        
-                        # Calculate wrapped notes height
-                        notes_max_width = base_width - 8  # 4px margin each side
-                        wrapped_lines = wrap_text(stage_notes, font, notes_max_width)
-                        notes_line_height = font.getbbox("A")[3] - font.getbbox("A")[1] + 2
-                        y += len(wrapped_lines) * notes_line_height
-                    
-                    # Check if everything fits
-                    if y <= base_height - 10:  # Leave 10px bottom margin
-                        return font_size
-                
-                return 8  # Minimum font size
-
-            font_size = find_max_font_size()
-            font = ImageFont.truetype(font_path, font_size)
-
-            # --- Draw everything with vertical lines and a header underline ---
-            image = Image.new("RGB", (base_width, base_height), "white")
-            draw = ImageDraw.Draw(image)
-            y = 10
-
-            row_height = font.size + 8
-
-            # Stage name
-            text_bbox = draw.textbbox((0, 0), stage_name, font=font)
-            text_width = text_bbox[2] - text_bbox[0]
-            x = (base_width - text_width) // 2
-            draw.text((x, y), stage_name, fill="black", font=font)
-            draw.text((x+1, y), stage_name, fill="black", font=font)  # Simulate bold
-            y += text_bbox[3] - text_bbox[1] + 10
-
-            # Line under stage name
-            draw.line((2, y, base_width - 2, y), fill="black", width=1)
-            y += 10
-            table_top = y
-
-            # --- Table grid setup ---
-            n_cols = len(headers)
-            n_rows = len(filtered_data) + 1  # +1 for header row
-
-            # Calculate column widths
-            col_widths = []
-            for header in headers:
-                max_width = 0
-                text_bbox = draw.textbbox((0, 0), header, font=font)
-                header_width = text_bbox[2] - text_bbox[0]
-                max_width = max(max_width, header_width)
-                
-                for row in filtered_data:
-                    cell_text = str(row.get(header, ""))
-                    text_bbox = draw.textbbox((0, 0), cell_text, font=font)
-                    cell_width = text_bbox[2] - text_bbox[0]
-                    max_width = max(max_width, cell_width)
-                
-                col_widths.append(max_width + 10)  # Add padding
-
-            table_width = sum(col_widths)
-            table_margin = 2   # Reduce left/right margin to 2px
-            table_left = (base_width - table_width) // 2
-            table_left = (base_width - table_width) // 2
-            if table_left < table_margin:
-                table_left = table_margin
-
-            # Draw header row (bold)
-            col_x = table_left
-            for col_idx, header in enumerate(headers):
-                text_bbox = draw.textbbox((0, 0), header, font=font)
-                text_width = text_bbox[2] - text_bbox[0]
-                text_x = col_x + (col_widths[col_idx] - text_width) // 2
-                text_y = table_top + (row_height - (text_bbox[3] - text_bbox[1])) // 2
-                draw.text((text_x, text_y), header, fill="black", font=font)
-                draw.text((text_x + 1, text_y), header, fill="black", font=font)  # Bold effect
-                col_x += col_widths[col_idx]
-
-            # Draw solid vertical lines at column boundaries
-
-            col_x = table_left
-            for col_idx in range(1, n_cols):
-                col_x += col_widths[col_idx - 1]
-                draw.line((col_x, table_top, col_x, table_top + row_height * n_rows), fill="black", width=1)
-
-            # Draw a solid horizontal line under the headers
-            draw.line((2, table_top + row_height, base_width - 2, table_top + row_height), fill="black", width=1)
-
-            # Draw data rows (no boxes)
-            for row_idx, row in enumerate(filtered_data):
-                row_y = table_top + (row_idx + 1) * row_height
-                col_x = table_left
-                for col_idx, header in enumerate(headers):
-                    cell_text = str(row.get(header, ""))
-                    text_bbox = draw.textbbox((0, 0), cell_text, font=font)
-                    text_width = text_bbox[2] - text_bbox[0]
-                    text_x = col_x + (col_widths[col_idx] - text_width) // 2
-                    text_y = row_y + (row_height - (text_bbox[3] - text_bbox[1])) // 2
-                    draw.text((text_x, text_y), cell_text, fill="black", font=font)
-                    col_x += col_widths[col_idx]
-
-            y = table_top + row_height * n_rows + 10
-
-            # Stage notes section
-            if stage_notes.strip():
-                y += 10  # Additional spacing before notes
-
-                # "Stage Notes:" label
-                notes_label = "Stage Notes:"
-                text_bbox = draw.textbbox((0, 0), notes_label, font=font)
-                text_width = text_bbox[2] - text_bbox[0]
-                x = (base_width - text_width) // 2
-                draw.text((x, y), notes_label, fill="black", font=font)
-                draw.text((x+1, y), notes_label, fill="black", font=font)  # Bold effect
-                y += text_bbox[3] - text_bbox[1] + 5
-
-                # Line under "Stage Notes:"
-                draw.line((2, y, base_width - 2, y), fill="black", width=1)
-                y += 10
-
-                # Wrapped notes text
-                notes_max_width = base_width - 8  # 4px margin each side
-                wrapped_lines = wrap_text(stage_notes, font, notes_max_width)
-                
-                for line in wrapped_lines:
-                    text_bbox = draw.textbbox((0, 0), line, font=font)
-                    text_width = text_bbox[2] - text_bbox[0]
-                    text_x = (base_width - text_width) // 2
-                    draw.text((text_x, y), line, fill="black", font=font)
-                    y += text_bbox[3] - text_bbox[1] + 2  # Line spacing
-
-            # Save the image
-            image.save(output_path, "BMP")
-            print(f"Bitmap saved to: {output_path}")
-            return output_path
-
-        except Exception as e:
-            print(f"Error generating bitmap: {e}")
-            return None
-
-    # =========================
-    # Remaining Methods
-    # =========================
         for font_size in range(max_font, min_font - 1, -1):
             font = ImageFont.truetype(font_path, font_size)
             y = 10  # Start below stage name
