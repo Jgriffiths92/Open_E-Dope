@@ -274,7 +274,7 @@ class ManageDataScreen(Screen):
         )
         
         content_label = MDLabel(
-            text="Here you can manage and delete your saved data cards and folders.\n\nUse With Caution: deleted data cannot be recovered.",
+            text="Here you can manage and delete your saved data cards and folders.\nUse With Caution: deleted data cannot be recovered.",
             text_color=(0, 0, 0, 1),
             halign="center",
             valign="middle",
