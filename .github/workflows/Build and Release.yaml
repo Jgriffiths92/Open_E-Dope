@@ -8,7 +8,7 @@ on:
 
 jobs:
   build-apk:
-    runs-on: ubuntu-22.04  # Use Ubuntu 22.04 for better compatibility
+    runs-on: ubuntu-22.04
     
     steps:
     - name: Checkout code
@@ -19,15 +19,41 @@ jobs:
       with:
         python-version: '3.9'
         
-    - name: Set up Java 17  # Use Java 17 as required by Android SDK
+    - name: Set up Java 17
       uses: actions/setup-java@v4
       with:
         distribution: 'temurin'
         java-version: '17'
         
-    - name: Setup Android SDK
-      uses: android-actions/setup-android@v3
-      
+    - name: Setup Android SDK with manual license acceptance
+      run: |
+        # Download and setup Android SDK manually
+        mkdir -p $HOME/android-sdk/cmdline-tools
+        cd $HOME/android-sdk/cmdline-tools
+        wget https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
+        unzip commandlinetools-linux-*.zip
+        mv cmdline-tools latest
+        
+        # Set environment variables
+        export ANDROID_SDK_ROOT=$HOME/android-sdk
+        export ANDROID_HOME=$HOME/android-sdk
+        export PATH=$PATH:$ANDROID_SDK_ROOT/cmdline-tools/latest/bin
+        export PATH=$PATH:$ANDROID_SDK_ROOT/platform-tools
+        export PATH=$PATH:$ANDROID_SDK_ROOT/build-tools/34.0.0
+        
+        # Accept all licenses automatically
+        yes | sdkmanager --licenses
+        
+        # Install required SDK components
+        sdkmanager "platform-tools" "platforms;android-33" "build-tools;34.0.0"
+        
+        # Add to GitHub environment for subsequent steps
+        echo "ANDROID_SDK_ROOT=$HOME/android-sdk" >> $GITHUB_ENV
+        echo "ANDROID_HOME=$HOME/android-sdk" >> $GITHUB_ENV
+        echo "$HOME/android-sdk/cmdline-tools/latest/bin" >> $GITHUB_PATH
+        echo "$HOME/android-sdk/platform-tools" >> $GITHUB_PATH
+        echo "$HOME/android-sdk/build-tools/34.0.0" >> $GITHUB_PATH
+        
     - name: Install system dependencies
       run: |
         sudo apt update
@@ -49,10 +75,6 @@ jobs:
       with:
         path: .buildozer
         key: buildozer-${{ hashFiles('buildozer.spec') }}
-        
-    - name: Make buildozer executable
-      run: |
-        export PATH=$PATH:~/.local/bin
         
     - name: Build APK with Buildozer
       run: |
