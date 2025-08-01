@@ -1,0 +1,116 @@
+name: Build and Release APK
+
+on:
+  push:
+    tags:
+      - 'v*'  # Triggers on version tags like v1.0.0
+  workflow_dispatch:  # Allows manual triggering
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+        
+    - name: Set up Java 17
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'temurin'
+        java-version: '17'
+        
+    - name: Setup Android SDK
+      uses: android-actions/setup-android@v3
+      
+    - name: Install system dependencies
+      run: |
+        sudo apt update
+        sudo apt install -y git zip unzip openjdk-17-jdk python3-pip autoconf libtool pkg-config zlib1g-dev libncurses5-dev libncursesw5-dev libtinfo5 cmake libffi-dev libssl-dev
+        
+    - name: Install Python dependencies
+      run: |
+        pip install buildozer cython
+        
+    - name: Cache Buildozer global directory
+      uses: actions/cache@v3
+      with:
+        path: .buildozer_global
+        key: buildozer-global-${{ hashFiles('buildozer.spec') }}
+        
+    - name: Cache Buildozer directory
+      uses: actions/cache@v3
+      with:
+        path: .buildozer
+        key: buildozer-${{ hashFiles('buildozer.spec') }}
+        
+    - name: Build APK with Buildozer
+      run: |
+        buildozer android debug
+        
+    - name: Get APK path and info
+      id: apk-info
+      run: |
+        APK_PATH=$(find bin -name "*.apk" | head -1)
+        if [ -z "$APK_PATH" ]; then
+          echo "No APK found!"
+          exit 1
+        fi
+        echo "apk_path=$APK_PATH" >> $GITHUB_OUTPUT
+        echo "Found APK at: $APK_PATH"
+        
+        # Extract version from tag
+        VERSION=${GITHUB_REF#refs/tags/}
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+        echo "Version: $VERSION"
+        
+    - name: Create Release
+      id: create_release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ steps.apk-info.outputs.version }}
+        release_name: Open E-Dope ${{ steps.apk-info.outputs.version }}
+        body: |
+          ## 🎯 Open E-Dope - NFC E-Paper Display App
+          
+          ### What's New in ${{ steps.apk-info.outputs.version }}
+          - ✅ Fixed 2.9-inch B&W display refresh command
+          - ✅ Corrected EPD initialization strings for all display types  
+          - ✅ Improved NFC communication protocol
+          - ✅ Added proper screen cut commands for SSD1680 displays
+          
+          ### Supported E-Paper Displays
+          - **Good Display 2.9-inch B&W** (SSD1680, 296×128)
+          - **Good Display 3.7-inch** (UC8171, 240×416)
+          - **Good Display 4.2-inch B&W** (SSD1680, 400×300)
+          
+          ### Installation
+          1. Download the APK file below
+          2. Enable "Install from Unknown Sources" on your Android device
+          3. Install the APK
+          4. Grant NFC permissions when prompted
+          
+          ### Usage
+          - Create or import CSV data cards
+          - Hold your NFC e-paper display near your phone
+          - The app will automatically transfer and refresh the display
+          
+        draft: false
+        prerelease: false
+        
+    - name: Upload APK to Release
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ${{ steps.apk-info.outputs.apk_path }}
+        asset_name: Open-E-Dope-${{ steps.apk-info.outputs.version }}.apk
+        asset_content_type: application/vnd.android.package-archive
