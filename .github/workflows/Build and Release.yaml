@@ -8,7 +8,7 @@ on:
 
 jobs:
   build-apk:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04  # Use Ubuntu 22.04 instead of latest (24.04)
     
     steps:
     - name: Checkout code
@@ -19,11 +19,11 @@ jobs:
       with:
         python-version: '3.9'
         
-    - name: Set up Java 17
+    - name: Set up Java 11  # Use Java 11 instead of 17 for better compatibility
       uses: actions/setup-java@v4
       with:
         distribution: 'temurin'
-        java-version: '17'
+        java-version: '11'
         
     - name: Setup Android SDK
       uses: android-actions/setup-android@v3
@@ -31,11 +31,12 @@ jobs:
     - name: Install system dependencies
       run: |
         sudo apt update
-        sudo apt install -y git zip unzip openjdk-17-jdk python3-pip autoconf libtool pkg-config zlib1g-dev libncurses5-dev libncursesw5-dev libtinfo5 cmake libffi-dev libssl-dev
+        sudo apt install -y git zip unzip openjdk-11-jdk python3-pip autoconf libtool pkg-config zlib1g-dev libncurses5-dev libncursesw5-dev libtinfo5 cmake libffi-dev libssl-dev build-essential
         
     - name: Install Python dependencies
       run: |
-        pip install buildozer cython
+        pip install --upgrade pip
+        pip install buildozer cython==0.29.33
         
     - name: Cache Buildozer global directory
       uses: actions/cache@v3
@@ -49,8 +50,13 @@ jobs:
         path: .buildozer
         key: buildozer-${{ hashFiles('buildozer.spec') }}
         
+    - name: Make buildozer executable
+      run: |
+        export PATH=$PATH:~/.local/bin
+        
     - name: Build APK with Buildozer
       run: |
+        export PATH=$PATH:~/.local/bin
         buildozer android debug
         
     - name: Get APK path and info
@@ -58,25 +64,31 @@ jobs:
       run: |
         APK_PATH=$(find bin -name "*.apk" | head -1)
         if [ -z "$APK_PATH" ]; then
-          echo "No APK found!"
+          echo "No APK found in bin directory!"
+          echo "Contents of current directory:"
+          ls -la
+          echo "Looking for APK files recursively:"
+          find . -name "*.apk" -type f
           exit 1
         fi
         echo "apk_path=$APK_PATH" >> $GITHUB_OUTPUT
         echo "Found APK at: $APK_PATH"
         
-        # Extract version from tag
-        VERSION=${GITHUB_REF#refs/tags/}
+        # Extract version from tag or use manual trigger
+        if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          VERSION="manual-$(date +%Y%m%d-%H%M%S)"
+        else
+          VERSION=${GITHUB_REF#refs/tags/}
+        fi
         echo "version=$VERSION" >> $GITHUB_OUTPUT
         echo "Version: $VERSION"
         
     - name: Create Release
       id: create_release
-      uses: actions/create-release@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      uses: softprops/action-gh-release@v1
       with:
         tag_name: ${{ steps.apk-info.outputs.version }}
-        release_name: Open E-Dope ${{ steps.apk-info.outputs.version }}
+        name: Open E-Dope ${{ steps.apk-info.outputs.version }}
         body: |
           ## 🎯 Open E-Dope - NFC E-Paper Display App
           
@@ -101,16 +113,8 @@ jobs:
           - Create or import CSV data cards
           - Hold your NFC e-paper display near your phone
           - The app will automatically transfer and refresh the display
-          
         draft: false
         prerelease: false
-        
-    - name: Upload APK to Release
-      uses: actions/upload-release-asset@v1
+        files: ${{ steps.apk-info.outputs.apk_path }}
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ${{ steps.apk-info.outputs.apk_path }}
-        asset_name: Open-E-Dope-${{ steps.apk-info.outputs.version }}.apk
-        asset_content_type: application/vnd.android.package-archive
