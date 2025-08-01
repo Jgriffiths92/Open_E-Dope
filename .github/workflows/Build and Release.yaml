@@ -8,7 +8,7 @@ on:
 
 jobs:
   build-apk:
-    runs-on: ubuntu-22.04  # Use Ubuntu 22.04 instead of latest (24.04)
+    runs-on: ubuntu-22.04  # Use Ubuntu 22.04 for better compatibility
     
     steps:
     - name: Checkout code
@@ -19,11 +19,11 @@ jobs:
       with:
         python-version: '3.9'
         
-    - name: Set up Java 11  # Use Java 11 instead of 17 for better compatibility
+    - name: Set up Java 17  # Use Java 17 as required by Android SDK
       uses: actions/setup-java@v4
       with:
         distribution: 'temurin'
-        java-version: '11'
+        java-version: '17'
         
     - name: Setup Android SDK
       uses: android-actions/setup-android@v3
@@ -31,7 +31,7 @@ jobs:
     - name: Install system dependencies
       run: |
         sudo apt update
-        sudo apt install -y git zip unzip openjdk-11-jdk python3-pip autoconf libtool pkg-config zlib1g-dev libncurses5-dev libncursesw5-dev libtinfo5 cmake libffi-dev libssl-dev build-essential
+        sudo apt install -y git zip unzip python3-pip autoconf libtool pkg-config zlib1g-dev libncurses5-dev libncursesw5-dev cmake libffi-dev libssl-dev build-essential
         
     - name: Install Python dependencies
       run: |
