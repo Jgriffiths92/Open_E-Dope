@@ -1061,6 +1061,7 @@ class MainApp(MDApp):
 
         return self.root
 
+    # --- Table / Data Handling ---
     def clear_table_data(self):
         """Clear the data in the table and update the UI."""
         self.current_data = []
@@ -1080,6 +1081,7 @@ class MainApp(MDApp):
         print("Data table cleared.")
         self.show_manual_data_input()  # Show manual data input fields again
         
+    # --- CSV File Loading / Parsing ---
     def ensure_csv_directory(self):
         """Ensure the assets/CSV directory exists and is accessible."""
         if is_android():
@@ -1317,6 +1319,7 @@ class MainApp(MDApp):
         scroll.add_widget(table)
         table_container.add_widget(scroll)
 
+    # --- UI Controls / Menus ---
     def on_dots_press(self, instance):
         global show_lead, show_range, show_2_wind_holds
 
@@ -1604,6 +1607,7 @@ class MainApp(MDApp):
         else:
             print("No data available to save.")
 
+    # --- Settings / Configuration ---
     def save_settings(self):
         """Save the selected settings to a configuration file."""
         try:
@@ -1648,6 +1652,7 @@ class MainApp(MDApp):
         self.available_fields["Range"]["show"] = show_range
         self.available_fields["Wnd2"]["show"] = show_2_wind_holds
 
+    # --- Bitmap Generation ---
     def find_max_font_size(self, draw, headers_text, row_texts, notes_text, image_width, image_height, font_path, min_font=8, max_font=32):
         for font_size in range(max_font, min_font - 1, -1):
             font = ImageFont.truetype(font_path, font_size)
@@ -1925,7 +1930,7 @@ class MainApp(MDApp):
         """Navigate back to the home screen."""
         self.root.ids.screen_manager.current = "home"
 
-    # search functionality below
+    # --- UI Controls / Settings ---
     def on_search_entered(self, search_text):
         """Filter the swipe-to-delete file list based on the search input."""
         self.search_text = search_text.strip().lower() if search_text else ""
@@ -1940,6 +1945,7 @@ class MainApp(MDApp):
             text_field.text = "\n".join(lines[:max_lines])
             text_field.cursor = (len(text_field.text), 0)  # Reset the cursor position
 
+    # --- Display / Orientation Settings ---
     def open_display_dropdown(self, button):
         """Open the dropdown menu for selecting a display model."""
         # Define the available display models with their resolutions (always portrait)
@@ -2035,6 +2041,7 @@ class MainApp(MDApp):
         print("Broom button pressed. Performing cleanup...")
         # Add your cleanup logic here
 
+    # --- Storage Path Helpers ---
     def get_external_storage_path(self):
         """Retrieve the external storage path using mActivity or default to assets/CSV."""
         if is_android():
@@ -2165,6 +2172,7 @@ class MainApp(MDApp):
             except Exception as e:
                 print(f"Error enabling NFC foreground dispatch: {e}")
 
+    # --- NFC / Intent Handling ---
     def on_new_intent(self, intent):
         print("on_new_intent called")
         """Handle new intents, including shared data and NFC tags."""
@@ -2938,15 +2946,6 @@ SwipeFileItem:
 
 # === Storage / Utility Helpers ===
 # Top-level helper functions for service and image packing.
-
-def setup_keyboard_listener(app):
-    """Create an Android global layout listener for keyboard visibility changes."""
-    activity = mActivity
-    root_view = activity.getWindow().getDecorView()
-    listener = GlobalLayoutListener(app)
-    root_view.getViewTreeObserver().addOnGlobalLayoutListener(listener)
-    print("Android keyboard listener set up.")
-
 
 def start_foreground_service():
     """Start a foreground service with a persistent notification."""
