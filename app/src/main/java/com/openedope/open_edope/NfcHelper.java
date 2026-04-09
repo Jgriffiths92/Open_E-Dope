@@ -12,21 +12,22 @@ import java.io.IOException;
 public class NfcHelper {
     private static final String TAG = "NfcHelper";
 
-    // Command constants
+    // Device protocol command bytes used by the e-paper tag.
     private static final byte CMD_PREFIX_F0 = (byte) 0xF0;
     private static final byte CMD_DIY_DB = (byte) 0xDB;
     private static final byte CMD_SEND_DATA_D2 = (byte) 0xD2;
     private static final byte CMD_REFRESH_D4 = (byte) 0xD4;
 
+    // Buffer selectors expected by the display firmware.
     private static final byte IDX_BW_BUFFER = 0x00;
     private static final byte IDX_R_BUFFER = 0x01;
 
-    // Config
+    // Transfer settings chosen to stay within the tag's transceive limits.
     private static final int CHUNK_SIZE = 250; // Max data bytes per transceive for image
     private static final int MAX_RETRIES = 3;
     private static final int NFC_TIMEOUT_MS = 60000;
 
-    // --- Overloads for backward compatibility (no listener) ---
+    // Convenience overloads so older callers can keep using this helper without wiring a progress listener.
 
     public static void processNfcIntentByteBufferAsync(final Intent intent, final int width0, final int height0, final java.nio.ByteBuffer buffer, final String[] epd_init) {
         processNfcIntentByteBufferAsync(intent, width0, height0, buffer, epd_init, null);
@@ -40,8 +41,9 @@ public class NfcHelper {
         processNfcIntent(intent, width0, height0, image_buffer, epd_init, null);
     }
 
-    // --- Main methods with listener support ---
+    // Main entry points used by the app when an NFC tag is discovered.
 
+    // Runs the NFC write on a background thread so the UI thread is not blocked during transfer.
     public static void processNfcIntentByteBufferAsync(final Intent intent, final int width0, final int height0, final java.nio.ByteBuffer buffer, final String[] epd_init, final NfcProgressListener listener) {
         new Thread(new Runnable() {
             @Override
@@ -53,10 +55,12 @@ public class NfcHelper {
 
     public static void processNfcIntentByteBuffer(Intent intent, int width0, int height0, java.nio.ByteBuffer buffer, String[] epd_init, NfcProgressListener listener) {
         Log.d(TAG, "JAVA: processNfcIntentByteBuffer entered. Listener: " + (listener != null ? listener.hashCode() : "null"));
+        // Copy into a plain byte[] because the NFC write path expects contiguous image bytes.
         buffer.rewind(); // Always reset position before reading
         byte[] image_buffer = new byte[buffer.remaining()];
         buffer.get(image_buffer);
 
+        // The display is 1 bit per pixel, so the image payload must be width * height / 8 bytes.
         int expectedSize = width0 * height0 / 8;
         if (image_buffer == null || epd_init == null || epd_init.length < 2) {
             Log.e(TAG, "Null or invalid arguments!");
@@ -81,6 +85,7 @@ public class NfcHelper {
         Log.d(TAG, "JAVA: processNfcIntent CALLED. Listener: " + (listener != null ? listener.hashCode() : "null"));
         Log.d(TAG, "image_buffer length in processNfcIntent: " + image_buffer.length);
 
+        // Android delivers the scanned NFC tag inside the launch intent.
         Parcelable p = intent.getParcelableExtra(NfcAdapter.EXTRA_TAG);
         if (p == null) {
             Log.e(TAG, "No NFC tag found in intent!");
@@ -90,6 +95,7 @@ public class NfcHelper {
         Tag tag = (Tag) p;
         Log.d(TAG, "JAVA: Tag obtained: " + tag.toString() + ", ID: " + hexToString(tag.getId()));
 
+        // Some tags expose IsoDep, others only NfcA, so we negotiate the best supported tech here.
         Object nfcTech = IsoDep.get(tag);
         String techType = "IsoDep";
         if (nfcTech == null) {
@@ -107,6 +113,10 @@ public class NfcHelper {
         Log.d(TAG, "Using " + techType);
 
         try {
+            // Once connected, the tag is written in three phases:
+            // 1. Send setup commands.
+            // 2. Upload the image planes in chunks.
+            // 3. Trigger a display refresh.
             connectToTag(nfcTech);
             setTagTimeout(nfcTech, NFC_TIMEOUT_MS);
             executeWriteProtocol(nfcTech, width0, height0, image_buffer, epd_init, listener);
@@ -122,12 +132,12 @@ public class NfcHelper {
     }
 
     private static void executeWriteProtocol(Object nfcTech, int width0, int height0, byte[] image_buffer, String[] epd_init, NfcProgressListener listener) throws IOException {
-        // Send DIY command before init
+        // The protocol starts with a short "DIY" handshake before display-specific init commands.
         byte[] diyCmd = hexStringToBytes("F0DB020000"); // Consider making "F0DB020000" a constant
         byte[] response = transceiveWithRetry(nfcTech, diyCmd, "DIY_CMD", listener);
         Log.d(TAG, "DIY command response: " + hexToString(response));
 
-        // Send main init command
+        // The init array comes from the selected panel profile and primes the controller for writes.
         byte[] cmd = hexStringToBytes(epd_init[0]);
         response = transceiveWithRetry(nfcTech, cmd, "EPD_INIT_0", listener);
         Log.d(TAG, "EPD Init [0] response: " + hexToString(response));
@@ -145,7 +155,7 @@ public class NfcHelper {
         int numFullChunks = totalDataBytes / CHUNK_SIZE;
         int tailBytes = totalDataBytes % CHUNK_SIZE;
 
-        // --- Skip R buffer if this is a 2.9-inch display (detected by epd_init) ---
+        // Some 2.9-inch panels only expect a single BW plane, so skip the second pass for them.
         boolean is29Inch = false;
         if (epd_init != null && epd_init.length > 0 && epd_init[0] != null) {
             String epdInit0 = epd_init[0].replaceAll("\\s+", "").toUpperCase();
@@ -159,7 +169,7 @@ public class NfcHelper {
         }
         int chunkIndex = 0;
 
-        // Send BW buffer
+        // First send the main black/white plane exactly as provided by the caller.
         Log.d(TAG, "Sending BW buffer...");
         for (int i = 0; i < numFullChunks; i++) {
             cmd = new byte[5 + CHUNK_SIZE];
@@ -173,13 +183,14 @@ public class NfcHelper {
 
             chunkIndex++;
             if (listener != null) {
+                // Progress is reported per transmitted chunk, not per byte.
                 int percent = (int) (((chunkIndex) * 100.0) / totalChunks);
                 Log.d(TAG, "JAVA: Calling listener.onProgress (" + percent + "%). Listener: " + listener.hashCode());
                 listener.onProgress(percent);
             }
         }
 
-        // Handle tail data for BW buffer (if any)
+        // The protocol still expects a full-size packet for the last partial chunk, so we zero-pad it.
         if (tailBytes != 0) {
             Log.d(TAG, "Sending BW tail (" + tailBytes + " bytes)...");
             cmd = new byte[5 + CHUNK_SIZE]; // Pad to full chunk_size for command structure
@@ -196,6 +207,7 @@ public class NfcHelper {
             
             chunkIndex++;
             if (listener != null) {
+                // Tail chunks count as a full transfer step from the UI's perspective.
                 int percent = (int) (((chunkIndex) * 100.0) / totalChunks);
                 Log.d(TAG, "JAVA: Calling listener.onProgress (" + percent + "%). Listener: " + listener.hashCode());
                 listener.onProgress(percent);
@@ -204,7 +216,7 @@ public class NfcHelper {
 
         
         if (!is29Inch) {
-            // Send R buffer (inverted)
+            // The second plane is sent as the bitwise inverse of the source image for red-capable panels.
             Log.d(TAG, "Sending R buffer (inverted)...");
             for (int i = 0; i < numFullChunks; i++) {
                 cmd = new byte[5 + CHUNK_SIZE];
@@ -254,7 +266,7 @@ public class NfcHelper {
             Log.d(TAG, "Skipping R buffer for 2.9-inch display (detected by epd_init).");
         }
 
-        // Send refresh command
+        // A final refresh tells the panel to apply the staged buffers to the display.
         byte[] refreshCmd = new byte[]{CMD_PREFIX_F0, CMD_REFRESH_D4, (byte) 0x05, (byte) 0x80, (byte) 0x00};
         response = transceiveWithRetry(nfcTech, refreshCmd, "REFRESH", listener);
         Log.d(TAG, "Refresh command response: " + hexToString(response));
@@ -277,6 +289,7 @@ public class NfcHelper {
 
     private static byte[] transceiveWithRetry(Object nfcTech, byte[] cmd, String cmdName, NfcProgressListener listener) throws IOException {
         byte[] response = null;
+        // Brief retries smooth over transient NFC timing failures without aborting the whole write.
         for (int attempt = 0; attempt < MAX_RETRIES; attempt++) {
             try {
                 Log.v(TAG, "JAVA: Attempting " + cmdName + ", try " + (attempt + 1) + ". Tech: " + nfcTech.getClass().getSimpleName());
@@ -297,15 +310,17 @@ public class NfcHelper {
     }
 
     private static boolean isSuccessResponse(byte[] response) {
+        // Most commands acknowledge success with the standard 0x9000 status word at the end.
         return response != null && response.length >= 2 &&
                response[response.length - 2] == (byte) 0x90 &&
                response[response.length - 1] == (byte) 0x00;
     }
 
-    // --- Tag Technology Abstraction Helpers ---
+    // These helpers hide the small API differences between IsoDep and NfcA.
 
     private static void connectToTag(Object tech) throws IOException {
         Log.d(TAG, "JAVA: Connecting to tag. Tech: " + tech.getClass().getSimpleName());
+        // Keep the rest of the class agnostic to whether the tag came in as IsoDep or NfcA.
         if (tech instanceof IsoDep) {
             ((IsoDep) tech).connect();
         } else if (tech instanceof NfcA) {
@@ -332,6 +347,7 @@ public class NfcHelper {
     }
 
     private static void setTagTimeout(Object tech, int timeoutMs) {
+        // Large image transfers can take several seconds, so we increase the default timeout.
         if (tech instanceof IsoDep) {
             Log.d(TAG, "JAVA: Setting IsoDep timeout to " + timeoutMs + "ms");
             ((IsoDep) tech).setTimeout(timeoutMs);
@@ -354,6 +370,7 @@ public class NfcHelper {
     // --- Utility methods ---
 
     public static byte[] hexStringToBytes(String hexString) {
+        // Commands are stored as hex strings in config and converted just before transmission.
         int len = hexString.length();
         byte[] data = new byte[len / 2];
         for (int i = 0; i < len; i += 2) {
@@ -364,6 +381,7 @@ public class NfcHelper {
     }
 
     public static String hexToString(byte[] bytes) {
+        // Used only for readable logging when inspecting raw NFC payloads.
         StringBuilder sb = new StringBuilder();
         for (byte b : bytes) {
             sb.append(String.format("%02X ", b));
