@@ -782,7 +782,7 @@ class MainApp(MDApp):
     def send_csv_bitmap_via_nfc(self, intent):
         self.image_buffer = None
         self.nfc_transfer_in_progress = False
-        # Step 1: Validate self.current_data before generating bitmap
+        # Validate current_data before bitmap generation and NFC transfer.
         required_keys = {"Target", "Range", "Elv", "Wnd1", "Wnd2", "Lead"}
         if (
             not self.current_data
@@ -865,6 +865,7 @@ class MainApp(MDApp):
             print(f"WARNING: Image buffer size ({len(image_buffer)}) does not match expected size ({expected_size}) for {width}x{height} display.")
             toast("Critical error: Image buffer size mismatch.")
             return
+        # Wrap the Python byte buffer as a Java ByteBuffer for the native NFC helper
         NfcHelper = autoclass('com.openedope.open_edope.NfcHelper')
         ByteBuffer = autoclass('java.nio.ByteBuffer')
         image_buffer_bb = ByteBuffer.wrap(image_buffer)
@@ -1926,8 +1927,6 @@ class MainApp(MDApp):
             col_widths = []
             for header in headers:
                 max_width = draw.textbbox((0, 0), "Tgt" if header == "Target" else "Rng" if header == "Range" else header, font=font)[2]
-
-
 
                 for row in filtered_data:
                     cell_text = str(row.get(header, ""))
