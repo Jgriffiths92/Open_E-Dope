@@ -435,11 +435,6 @@ Status: Active Development
 - App is Android-only (iOS support is not currently planned for future versions).
 - Color displays are supported but rendering may vary by model.
 
-### Screen Recording
-
-To demonstrate app features (e.g., CSV import or NFC transfer), view this GIF demo:
-
-![App Demo](images/app_demo.gif)
 
 
 
