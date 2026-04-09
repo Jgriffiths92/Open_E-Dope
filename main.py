@@ -42,6 +42,9 @@ from kivymd.uix.label import MDIcon
 from kivy.uix.image import Image
 
 
+# === Imports & Global Setup ===
+# Kivy/KivyMD imports, PIL, Android compatibility, and global state flags.
+
 # Global configuration variables
 show_lead = False # Default to not showing the Lead field
 show_range = False  # Default to not showing the Range field
@@ -90,6 +93,8 @@ if not is_android():
     except ImportError:
         nfc = None  # Handle cases where the nfc module is not available
 
+# === KV Builder / UI Customization ===
+# Custom FileChooser styling and layout definitions.
 # Change color of the filechooser
 Builder.load_string('''
 
@@ -154,6 +159,8 @@ Builder.load_string('''
     FileChooserListView
 ''')
 
+# === Screen / Widget Classes ===
+# Screen definitions and custom widgets used by the app UI.
 # Define Screens
 class HomeScreen(Screen):
     pass
@@ -405,6 +412,8 @@ class CustomFileChooserListView(FileChooserListView):
         return sorted(files, key=key, reverse=reverse)
 
 
+# === NFC Progress Listener ===
+# Java callback wrapper for NFC progress, refresh, and error events.
 if is_android():
     from jnius import PythonJavaClass, java_method, cast
 
@@ -470,13 +479,10 @@ if is_android():
                     # Trigger your logic here, e.g.:
                     # self.app.on_keyboard_hidden()
 
-    def setup_keyboard_listener():
-        activity = mActivity
-        root_view = activity.getWindow().getDecorView()
-        listener = GlobalLayoutListener(self)
-        root_view.getViewTreeObserver().addOnGlobalLayoutListener(listener)
-        print("Android keyboard listener set up.")
 
+
+# === MainApp Class ===
+# The main application class: lifecycle, UI, data, settings, and NFC.
 class MainApp(MDApp):
     search_text = ""
     delete_option_label = StringProperty("Delete Folders After")  # Default text
@@ -2929,7 +2935,20 @@ SwipeFileItem:
             with open(dest_file, "r", encoding="utf-8") as file:
                 print(file.read())
 
-def start_foreground_service(self):
+
+# === Storage / Utility Helpers ===
+# Top-level helper functions for service and image packing.
+
+def setup_keyboard_listener(app):
+    """Create an Android global layout listener for keyboard visibility changes."""
+    activity = mActivity
+    root_view = activity.getWindow().getDecorView()
+    listener = GlobalLayoutListener(app)
+    root_view.getViewTreeObserver().addOnGlobalLayoutListener(listener)
+    print("Android keyboard listener set up.")
+
+
+def start_foreground_service():
     """Start a foreground service with a persistent notification."""
     if is_android():
         try:
