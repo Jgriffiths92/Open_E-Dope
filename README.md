@@ -151,9 +151,8 @@ adb install bin/open_edope-0.1-debug.apk
    - Bitmap will render to match selected orientation
 
 4. Test Connection:
-   - In app, go to Home screen or load a CSV file directly from Ketr
    - Load a CSV file or enter manual data
-   - Tap "Send to NFC Tag"
+   - Hold device near NFC tag (1-2 cm)
    - Monitor progress dialog
    - Success: Display updates with rangecard data
 
@@ -179,10 +178,10 @@ adb install bin/open_edope-0.1-debug.apk
 
 ### Writing Rangecard Data
 
-1. Load CSV file in app directly from AB Quantum or Kestrel Link via the export funtionality or Manually enter data
+1. Load CSV file in app directly from AB Quantum or Kestrel Link via the export functionality or manually enter data
 2. Hold Android device near NFC tag (1-2 cm)
-4. Wait for "Transfer Complete" message and "Refreshing" Dialoge to close
-5. Data is now on the tag
+3. Wait for "Transfer Complete" message and "Refreshing" dialog to close
+4. Data is now on the tag
 
 ---
 
@@ -238,7 +237,7 @@ Q: Do I need internet connection?
 A: No. App works fully offline after initial install.
 
 Q: Can I modify the CSV before exporting to NFC?
-A: Yes! Use the manual data input form or edit CSV in text editor before importing(but NOT recommended).
+A: Yes! Use the manual data input form or edit CSV in text editor before importing (but NOT recommended).
 
 Q: How often should I update my rangecard?
 A: Depends on environmental changes. Typically per event/location change.
@@ -247,7 +246,7 @@ Q: Can I export bitmap to file?
 A: Yes, bitmaps are saved to [storage]/assets/bitmap/ folder.
 
 Q: What's the maximum rangecard size?
-A: Depends on display and font size, typically 1-10 rows of data the font is resize to match your display automaticlly.
+A: Depends on display and font size, typically 1-10 rows of data. The font is resized to match your display automatically.
 
 ---
 
