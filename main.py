@@ -743,18 +743,31 @@ class MainApp(MDApp):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        # Initialize config parser for reading/writing settings to disk
         self.config_parser = ConfigParser()  # Initialize ConfigParser
+        # Store the current CSV data in memory; populated when user loads or enters data
         self.current_data = [] # Initialize current_data to store CSV data
+        # Determine the private storage path (Android-specific or local fallback)
         private_storage_path = self.get_private_storage_path() # Get the private storage path
+        # Build the config file path for persisting user settings
         self.config_file = os.path.join(private_storage_path, "settings.ini")  # Path to the settings file
+        # Tracks whether standalone (manual input) mode is enabled
         self.standalone_mode_enabled = False  # Default to standalone mode being disabled
+        # The selected display model from the settings dropdown
         self.selected_display = "Good Display 3.7-inch"  # Default selected display
+        # Resolution (width, height) of the selected display
         self.selected_resolution = (240, 416)  # Default resolution for 3.7-inch display
+        # Portrait vs Landscape orientation preference
         self.selected_orientation = "Portrait"  # Default orientation
+        # Folder where CSV files will be saved when user chooses an event
         self.selected_save_folder = None  # Store the selected folder for saving CSV files
+        # The NFC tag detected from an intent (used during NFC operations)
         self.detected_tag = None  # Initialize the detected_tag attribute
+        # User preference: sort swipe file list by date, name, or type
         self.sort_type = "date"   # Default sort type
+        # Sort order: ascending or descending
         self.sort_order = "asc"   # Default sort order
+        # Controls which columns are shown in the table/form (Target, Range, Lead, etc.)
         self.available_fields = {
             "Target": {"hint_text": "Target", "show": True},
             "Range": {"hint_text": "Range", "show": False},
@@ -1064,12 +1077,18 @@ class MainApp(MDApp):
     # --- Table / Data Handling ---
     def clear_table_data(self):
         """Clear the data in the table and update the UI."""
+        # Empty the in-memory CSV data
         self.current_data = []
+        # Reset manual data rows if any exist
         if hasattr(self, "manual_data_rows"):
             self.manual_data_rows = []
+        # Clear any lingering field references
         self.manual_data_fields = []
+        # Get reference to the home screen widget
         home_screen = self.root.ids.home_screen
+        # The container where the table or manual input form is displayed
         table_container = home_screen.ids.table_container
+        # Remove all child widgets (table and buttons)
         table_container.clear_widgets()
         # Clear the stage name and stage notes fields
         try:
@@ -1084,6 +1103,8 @@ class MainApp(MDApp):
     # --- CSV File Loading / Parsing ---
     def ensure_csv_directory(self):
         """Ensure the assets/CSV directory exists and is accessible."""
+        # On Android, copy assets to internal storage (can't read directly from APK)
+        # On desktop, use a local assets/CSV folder
         if is_android():
             # Copy assets/CSV to internal storage on Android
             return self.copy_assets_to_internal_storage()
@@ -1159,62 +1180,81 @@ class MainApp(MDApp):
 
     def read_csv_to_dict(self, file_or_path):
         """Reads a CSV file or file-like object and maps it to static column names, ignoring the headers and skipping the first 6 lines."""
-        static_columns = ["Target", "Range", "Elv", "Wnd1", "Wnd2", "Lead"]  # Static column names
+        # Rangecard exports always have the same 6 column structure; map dynamically
+        static_columns = ["Target", "Range", "Elv", "Wnd1", "Wnd2", "Lead"]  # Fixed columns in rangecard format
         data = []
         try:
             print(f"Reading CSV: {file_or_path}")
-            # Detect if file_or_path is a path or file-like object
+            # Handle both file paths (string) and file-like objects (StringIO, BytesIO)
+            # File-like objects come from shared intent or manual input; paths come from file chooser
             if isinstance(file_or_path, str):
+                # Open file from path with latin-1 encoding (handles extended ASCII from Excel exports)
                 csv_file = open(file_or_path, mode="r", encoding="latin-1")
                 close_after = True
             else:
+                # Use file-like object directly (already opened)
                 csv_file = file_or_path
                 close_after = False
 
             reader = csv.reader(csv_file)
-            # Skip the first 6 lines
+            # Skip the first 6 lines (metadata/headers in rangecard format)
             for _ in range(6):
                 next(reader, None)
+            
+            # Read data rows until we hit "Stage Notes:" marker (end of data)
             for index, row in enumerate(reader, start=1):
                 if not row:
                     continue
+                # Stop parsing when we reach the stage notes section
                 if row[0].strip().lower() == "stage notes:":
                     break
+                # Map CSV columns to our fixed column names (handles missing columns gracefully)
                 mapped_row = {static_columns[i]: row[i] if i < len(row) else "" for i in range(len(static_columns))}
                 data.append(mapped_row)
+            
+            # Close file only if we opened it (not for file-like objects)
             if close_after:
                 csv_file.close()
-            print(f"CSV data read successfully: {data}")
+            print(f"CSV data read successfully: {len(data)} rows")
         except Exception as e:
             print(f"Error reading CSV file: {e}")
         return data
 
     def preprocess_data(self, data):
         """Shift columns to the right by one if 'Target' contains a number."""
+        # Some rangecard exports have numeric data in the Target column due to export formatting issues
+        # This method realigns columns when numeric values are detected in the Target field
         processed_data = []
         for row in data:
             target_value = row.get("Target", "")
-            # Check if the "Target" column contains a number
+            # Check if the "Target" column contains a number (typical ranges are 40+ yards)
+            # If so, this indicates a misaligned export that needs column shifting
             try:
-                float(target_value)
-                is_number = float(target_value) > 40
+                float_value = float(target_value)
+                # Consider it a number if it's > 40 (typical minimum rifle range)
+                is_number = float_value > 40
             except (ValueError, TypeError):
+                # Non-numeric values stay as-is
                 is_number = False
 
             if is_number:
-                # Shift the columns across to the right by one
+                # Realign by shifting all columns one position to the right
+                # This moves numeric data from Target into Range, Range into Elv, etc.
                 shifted_row = {}
                 keys = list(row.keys())
                 for i in range(len(keys) - 1):
+                    # Shift each key one position: Target ← Range, Range ← Elv, etc.
                     shifted_row[keys[i + 1]] = row[keys[i]]
-                shifted_row[keys[0]] = ""  # Set the first column to empty
+                # First column becomes empty after shift
+                shifted_row[keys[0]] = ""
                 processed_data.append(shifted_row)
             else:
-                # Keep the row as is if "Target" is not a number
+                # No shift needed; keep the row as-is
                 processed_data.append(row)
         return processed_data
 
     def display_table(self, data):
+        """Render CSV data as a formatted table in the home screen's table container."""
         from kivy.uix.scrollview import ScrollView
         from kivy.uix.gridlayout import GridLayout
         from kivy.uix.label import Label
@@ -1225,19 +1265,24 @@ class MainApp(MDApp):
             print("No data to display.")
             return
 
+        # Preprocess data to fix any column alignment issues
         data = self.preprocess_data(data)
 
         # --- Filter out rows where all values after "Target" are "---" ---
+        # (These are empty placeholder rows from the rangecard export)
         if data:
             header = data[0]
             filtered_data = [header]
             for row in data[1:]:
+                # Check all columns except Target for non-empty values
                 values_after_target = [v for k, v in row.items() if k != "Target"]
+                # Keep the row if any column has data
                 if not all(str(v).strip() == "---" for v in values_after_target):
                     filtered_data.append(row)
             data = filtered_data
 
         # --- Filter out rows where all values are "0" ---
+        # (These can occur from incorrect imports or blank stage sections)
         if data:
             header = data[0]
             filtered_data_zeros = [header]
@@ -1678,28 +1723,35 @@ class MainApp(MDApp):
                 return font_size
         return min_font
     
+    # --- Bitmap Generation ---
     def csv_to_bitmap(self, csv_data, output_path=None):
-        """Convert CSV data to a bitmap image, dynamically maximizing font size to fit all data."""
+        """Convert CSV data to a bitmap image for e-ink display, dynamically scaling font to fit all data."""
+        # This method generates a 1-bit (black/white) bitmap suitable for e-ink displays
+        # It automatically calculates the largest font size that fits all data
         try:
             from PIL import Image, ImageDraw, ImageFont
 
-            # Set the default output path to the assets/bitmap folder
+            # Ensure the output directory exists
             bitmap_directory = os.path.join(os.path.dirname(__file__), "assets", "bitmap")
             if not os.path.exists(bitmap_directory):
                 os.makedirs(bitmap_directory)
             if output_path is None:
                 output_path = os.path.join(bitmap_directory, "output.bmp")
             
+            # Get the target display resolution (width x height in pixels)
             base_width, base_height = self.selected_resolution
-            # Load the font file
+            
+            # Load the monospace font (using Roboto Mono for consistent character widths)
             font_path = os.path.join(os.path.dirname(__file__), "assets", "fonts", "RobotoMono-Regular.ttf")
 
-            # Prepare data for measurement
+            # Get stage metadata from the UI
             stage_name = self.root.ids.home_screen.ids.stage_name_field.text
             stage_notes = self.root.ids.home_screen.ids.stage_notes_field.text
 
+            # Preprocess data (handle column alignment issues from some CSV exports)
             processed_data = self.preprocess_data(csv_data)
-            # Filter out rows where all values after "Target" are "---"
+            
+            # Filter out empty rows (all "---" values)
             if processed_data:
                 header = processed_data[0]
                 filtered_data = [header]
@@ -1708,7 +1760,8 @@ class MainApp(MDApp):
                     if not all(str(v).strip() == "---" for v in values_after_target):
                         filtered_data.append(row)
                 processed_data = filtered_data
-            # Filter out rows where all values are "0"
+            
+            # Filter out rows with all zeros (common in malformed imports)
             if processed_data:
                 header = processed_data[0]
                 filtered_data_zeros = [header]
@@ -1717,21 +1770,32 @@ class MainApp(MDApp):
                         filtered_data_zeros.append(row)
                 processed_data = filtered_data_zeros
 
+            # Determine which columns to display based on user settings
+            # Always show Elv and Wnd1 (mandatory rangecard columns)
             static_headers = ["Target", "Range", "Elv", "Wnd1", "Wnd2", "Lead"]
             headers = ["Elv", "Wnd1"]
+            
+            # Check if Target column has data worth displaying
             target_present = any(row.get("Target") for row in processed_data)
             if target_present:
                 headers.insert(0, "Target")
+            
+            # Show Range column if configured
             if show_range:
                 if not target_present:
                     headers.insert(0, "Range")
                 else:
                     headers.insert(1, "Range")
+            
+            # Show wind hold 2 if configured
             if show_2_wind_holds:
                 headers.append("Wnd2")
+            
+            # Show lead/drift if configured
             if show_lead:
                 headers.append("Lead")
 
+            # Filter all rows to only the selected columns
             filtered_data = [
                 {header: row.get(header, "") for header in headers} for row in processed_data
             ]
@@ -2173,15 +2237,18 @@ class MainApp(MDApp):
                 print(f"Error enabling NFC foreground dispatch: {e}")
 
     # --- NFC / Intent Handling ---
+    # --- NFC / Intent Handling ---
     def on_new_intent(self, intent):
+        """Handle new intents from Android, including NFC tag detection and shared CSV data."""
         print("on_new_intent called")
-        """Handle new intents, including shared data and NFC tags."""
-        print(f"Intent: {intent}")
         if is_android() and autoclass:
             try:
+                # Get the intent action to determine what triggered this handler
+                # (NFC tag detection, app sharing, view intent, etc.)
                 action = intent.getAction()
                 print(f"Intent action: {action}")
 
+                # Log any extra data bundled with the intent for debugging
                 extras = intent.getExtras()
                 if extras:
                     print("Intent extras:")
@@ -2191,22 +2258,28 @@ class MainApp(MDApp):
                 else:
                     print("No extras in intent.")
 
+                # Check if this is an NFC tag detection event
+                # NFC tags arrive as a parcelable object with TAG extra
                 EXTRA_TAG = autoclass('android.nfc.NfcAdapter').EXTRA_TAG
                 tag = intent.getParcelableExtra(EXTRA_TAG)
                 if tag:
                     print("NFC tag detected (regardless of action)!")
+                    # Cast to Android Tag class and get supported technologies
                     tag = cast('android.nfc.Tag', tag)
-                    tech_list = tag.getTechList() # Optional: log tech list if needed for debuggingAdd commentMore actions
+                    tech_list = tag.getTechList()  # List of NFC tech types this tag supports
                     print("Tag technologies detected by Android:")
                     for tech in tech_list:
                         print(f" - {tech}")
                     table_container = self.root.ids.home_screen.ids.table_container
 
                     def perform_nfc_transfer():
+                        # Show progress dialog with cancel button
                         Clock.schedule_once(lambda dt: self.show_nfc_progress_dialog("Transferring data to NFC tag..."), 0.01)
+                        # Schedule the actual NFC write operation
                         Clock.schedule_once(lambda dt: self.send_csv_bitmap_via_nfc(intent), 0.05)
 
-                    # Only add manual data if manual input is visible (manual layout is present)
+                    # Check if user entered manual data in the current session
+                    # If so, add it to the dataset before NFC transfer
                     if (
                         hasattr(self, "manual_data_rows")
                         and self.manual_data_rows
@@ -2217,10 +2290,14 @@ class MainApp(MDApp):
                     ):
                         print("Manual data input detected, adding manual data before NFC transfer.")
                         self.add_manual_data()
+                    
+                    # Perform the NFC transfer
                     perform_nfc_transfer()
+                    # Clear the intent action to prevent reprocessing
                     intent.setAction("")
                     return
 
+                # Fallback: check for NFC discovery actions (older Android devices)
                 elif action in [
                     "android.nfc.action.TAG_DISCOVERED",
                     "android.nfc.action.NDEF_DISCOVERED",
@@ -2231,7 +2308,7 @@ class MainApp(MDApp):
                     intent.setAction("")
                     return
 
-                # Handle shared data (SEND/VIEW)
+                # Handle shared data (file or text shared from another app)
                 if action in ["android.intent.action.SEND", "android.intent.action.VIEW"]:
                     extras = intent.getExtras()
                     if extras and extras.containsKey("android.intent.extra.TEXT"):
@@ -2403,53 +2480,61 @@ class MainApp(MDApp):
                 print(f"Error reading CSV file: {e}")
                 return None
 
+    # --- Storage / File I/O ---
     def copy_assets_to_internal_storage(self):
-        """Copy the assets/CSV folder to the app's private storage directory."""
+        """Copy the assets/CSV folder to the app's private storage directory for Android access."""
+        # On Android, APK assets are not directly readable; copy them to writable private storage
         private_storage_path = self.get_private_storage_path()
        
         if private_storage_path:
             try:
                 csv_internal_path = os.path.join(private_storage_path, "CSV")
 
-                # Ensure the destination directory exists
+                # Create destination directory if it doesn't exist
                 if not os.path.exists(csv_internal_path):
                     os.makedirs(csv_internal_path)
 
-                # Copy files and directories from assets/CSV to private storage
+                # Copy files and directories from assets/CSV to private storage using platform-specific methods
                 if is_android():
+                    # Android: Use AssetManager to access files from APK
                     AssetManager = autoclass('android.content.res.AssetManager')
                     context = mActivity.getApplicationContext()
                     asset_manager = context.getAssets()
-                    files = asset_manager.list("CSV")  # List files and directories in the assets/CSV folder
+                    
+                    # List all items in assets/CSV folder
+                    files = asset_manager.list("CSV")
 
                     for file_name in files:
                         source_path = f"CSV/{file_name}"
                         dest_path = os.path.join(csv_internal_path, file_name)
 
-                        if asset_manager.list(source_path):  # Check if it's a directory
+                        # Check if item is a directory (can throw exception if it's a file)
+                        try:
+                            asset_manager.list(source_path)  # Will fail for files
+                            # It's a directory; create it and recursively copy contents
                             if not os.path.exists(dest_path):
-                                os.makedirs(dest_path)  # Create the directory if it doesn't exist
-                            # Recursively copy the directory
+                                os.makedirs(dest_path)
                             self.copy_directory_from_assets(asset_manager, source_path, dest_path)
-                        else:
-                            # Copy a single file
+                        except:
+                            # It's a file; copy directly
                             with asset_manager.open(source_path) as asset_file:
                                 with open(dest_path, "wb") as output_file:
                                     output_file.write(asset_file.read())
                             print(f"Copied file: {source_path} to {dest_path}")
                 else:
-                    # Copy files locally for non-Android platforms
+                    # Desktop: Copy from local assets/CSV folder
                     assets_csv_path = os.path.join(os.path.dirname(__file__), "assets", "CSV")
                     for file_name in os.listdir(assets_csv_path):
                         src_path = os.path.join(assets_csv_path, file_name)
                         dest_path = os.path.join(csv_internal_path, file_name)
+                        
                         if os.path.isdir(src_path):
+                            # Recursively copy directory
                             if not os.path.exists(dest_path):
                                 os.makedirs(dest_path)
-                            # Recursively copy the directory
                             self.copy_directory_locally(src_path, dest_path)
                         else:
-                            # Copy a single file
+                            # Copy single file
                             with open(src_path, "rb") as src, open(dest_path, "wb") as dest:
                                 dest.write(src.read())
                             print(f"Copied file: {src_path} to {dest_path}")
@@ -2547,67 +2632,71 @@ SwipeFileItem:
 ''')
             swipe_file_list.add_widget(item)
 
+    # --- Manual Data Input ---
     def show_manual_data_input(self):
-        """Display manual data input fields in the CSV data table location based on filtered display options."""
+        """Display dynamic manual data input fields with add/delete row functionality."""
+        # Initialize list to track manual input fields for later retrieval
         self.manual_data_fields = []
         home_screen = self.root.ids.home_screen
         table_container = home_screen.ids.table_container
 
-        # Clear any existing widgets in the table container
+        # Clear any existing widgets (previous state)
         table_container.clear_widgets()
 
-
-        # Create a BoxLayout to hold only the data rows (inside a ScrollView)
+        # Create a scrollable layout for data entry rows
+        # Use BoxLayout so rows grow dynamically and ScrollView can paginate
         rows_layout = BoxLayout(
                         orientation="vertical", 
-                        size_hint_y=1, padding=(dp(20), 0, dp(20), dp(20)))  # Take up 80% of the remaining space and add padding at the bottom
+                        size_hint_y=1, padding=(dp(20), 0, dp(20), dp(20)))
         rows_layout.bind(minimum_height=rows_layout.setter("height"))
         self.manual_rows_layout = rows_layout
 
-        # Add the first row of input fields
+        # Start with one empty row ready for input
         self.add_data_row(rows_layout, focus_row=False)
 
-        # Create ScrollView with appropriate size hint
-        scroll = ScrollView(size_hint_y=0.8)  # Take up 80% of the remaining space
+        # Wrap the rows layout in a ScrollView so user can scroll if many rows are added
+        scroll = ScrollView(size_hint_y=0.8)  # Take up 80% of vertical space
         scroll.add_widget(rows_layout)
         self.manual_scrollview = scroll
 
-        # Create the buttons layout with fixed height
+        # Create buttons for row management (add/delete rows)
         buttons_layout = BoxLayout(
             orientation="horizontal",
-            padding=(dp(20), 0, dp(10), 0), # Add padding to the buttons layout
+            padding=(dp(20), 0, dp(10), 0),
             spacing=dp(10),
             size_hint_y=None,
-            height=dp(20),  # Fixed height for buttons
-            pos_hint={"bottom": 1}  # Position buttons at the bottom
+            height=dp(20),  # Fixed height for button row
+            pos_hint={"bottom": 1}
         )
 
-        # Add buttons
+        # ADD ROW button: adds a new data entry row
         add_button = MDRaisedButton(
             text="ADD ROW",
             on_release=lambda x: self.add_data_row(rows_layout),
             size_hint=(0.5, None),
         )
+        
+        # DELETE ROW button: removes the last row (red to indicate danger)
         delete_button = MDRaisedButton(
             text="DELETE ROW",
             on_release=lambda x: self.delete_last_row(rows_layout),
-            md_bg_color=(1, 0, 0, 1),  # Red background for delete button
+            md_bg_color=(1, 0, 0, 1),  # Red background
             size_hint=(0.5, None),
         )
 
         buttons_layout.add_widget(add_button)
         buttons_layout.add_widget(delete_button)
 
-        # Create a BoxLayout to hold the ScrollView and buttons layout
-        main_layout = BoxLayout(orientation="vertical", size_hint_y=1, padding=(0, 0, 0, dp(20)))  # Add padding at the bottom
-        self.manual_main_layout = main_layout  # Store a reference for keyboard handling
+        # Create main layout structure: scroll area on top, buttons below
+        main_layout = BoxLayout(orientation="vertical", size_hint_y=1, padding=(0, 0, 0, dp(20)))
+        self.manual_main_layout = main_layout  # Store reference for keyboard handling
         main_layout.add_widget(scroll)
         main_layout.add_widget(buttons_layout)
 
-        # --- ADD THIS SPACER WIDGET FOR EXTRA SPACE ABOVE THE KEYBOARD ---
-        main_layout.add_widget(Widget(size_hint_y=None, height=dp(80)))  # Adjust dp(80) as needed
+        # Add spacer below buttons to prevent keyboard overlap on mobile
+        main_layout.add_widget(Widget(size_hint_y=None, height=dp(80)))
 
-        # Add the main layout to the table container
+        # Add completed layout to the home screen's table area
         table_container.add_widget(main_layout)
 
     def add_data_row(self, rows_layout, focus_row=True):
