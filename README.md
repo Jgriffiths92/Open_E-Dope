@@ -11,7 +11,7 @@ E-Paper Module 2.9 inch four-color E-ink screen 296x128 GoodDisplay® GDEY029F51
 
 E Ink display 2.9'' 4-color E-paper screen high solutionJD79667 384x168, GDEY029F51H https://www.good-display.com/product/464.html
 
-E-Paper Display Arduino 3.7 inch E-ink Screen 416x240 Pixels, Fast Update GDEY037T03 https://www.good-display.com/product/437.html
+E-Paper Display Arduino 3.7 inch E-ink Screen 416x240 Pixels, Fast Update GDEY037T03 https://www.good-display.com/product/437.html (recomended)
 
 E-Ink Monitor 3.7 Inch Color E Ink Tablet 416x240 E Paper Display, GDEY037Z03 https://www.good-display.com/product/413.html
 
