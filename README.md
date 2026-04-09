@@ -404,7 +404,7 @@ https://github.com/Jgriffiths92/Open_E-Dope/issues
 
 ## Changelog
 
-### Version 0.1.0 (Current)
+### Version 1.0.X (Current)
 - Initial release
 - CSV import from AB Quantum and Kestrel Link
 - NFC tag writing
@@ -413,7 +413,7 @@ https://github.com/Jgriffiths92/Open_E-Dope/issues
 - Manual data input
 - Bitmap generation for e-ink
 
-### Upcoming (v0.2.0)
+### Upcoming (v.2.0.0)
 - Color display support
 - Unit tests
 - Performance optimizations
