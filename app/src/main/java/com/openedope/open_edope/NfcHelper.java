@@ -28,6 +28,7 @@ public class NfcHelper {
     private static final int NFC_TIMEOUT_MS = 60000;
 
     // Convenience overloads so older callers can keep using this helper without wiring a progress listener.
+    // Each overload funnels into the listener-aware version to keep the NFC logic in one place.
 
     public static void processNfcIntentByteBufferAsync(final Intent intent, final int width0, final int height0, final java.nio.ByteBuffer buffer, final String[] epd_init) {
         processNfcIntentByteBufferAsync(intent, width0, height0, buffer, epd_init, null);
@@ -62,6 +63,7 @@ public class NfcHelper {
 
         // The display is 1 bit per pixel, so the image payload must be width * height / 8 bytes.
         int expectedSize = width0 * height0 / 8;
+        // Fail fast here so we never start an NFC session with malformed panel data.
         if (image_buffer == null || epd_init == null || epd_init.length < 2) {
             Log.e(TAG, "Null or invalid arguments!");
             if (listener != null) {
@@ -151,6 +153,7 @@ public class NfcHelper {
         response = transceiveWithRetry(nfcTech, cmd, "EPD_INIT_1", listener);
         Log.d(TAG, "EPD Init [1] response: " + hexToString(response));
 
+        // Break the 1bpp image into protocol-sized packets.
         int totalDataBytes = width0 * height0 / 8;
         int numFullChunks = totalDataBytes / CHUNK_SIZE;
         int tailBytes = totalDataBytes % CHUNK_SIZE;
@@ -167,6 +170,7 @@ public class NfcHelper {
         if (!is29Inch) {
             totalChunks *= 2; // BW + R
         }
+        // Used only for UI progress reporting across both planes.
         int chunkIndex = 0;
 
         // First send the main black/white plane exactly as provided by the caller.
@@ -263,6 +267,7 @@ public class NfcHelper {
                 }
             }
         } else {
+            // This profile only uses the primary plane, so refreshing after BW upload is enough.
             Log.d(TAG, "Skipping R buffer for 2.9-inch display (detected by epd_init).");
         }
 
@@ -277,11 +282,13 @@ public class NfcHelper {
                 listener.onProgress(100);
             }
             if (listener != null) {
+                // Surface completion separately from raw progress so the UI can stop spinners or show success state.
                 listener.onRefreshSuccess();
             }
         } else {
             Log.w(TAG, "Refresh command possibly failed or no 9000 status.");
             if (listener != null) {
+                // The data transfer may have succeeded even if the panel did not acknowledge the final refresh.
                 listener.onRefreshError("Refresh command failed (no 9000 status).");
             }
         }
@@ -359,6 +366,7 @@ public class NfcHelper {
 
     private static byte[] doTransceive(Object tech, byte[] data) throws IOException {
         Log.v(TAG, "JAVA: doTransceive. Tech: " + tech.getClass().getSimpleName() + ", Command: " + hexToString(data));
+        // Both techs expose a transceive API, so this is the last point where we branch on transport type.
         if (tech instanceof IsoDep) {
             return ((IsoDep) tech).transceive(data);
         } else if (tech instanceof NfcA) {
