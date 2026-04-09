@@ -21,5 +21,5 @@ E-Ink Technology 4.2 inch e-ink display high rate refresh 400x300 SPI, GDEY042T8
 
 E-paper display 4.2 inch tri-color e-ink epd display supporting monochrome partial update, GDEY042Z98 https://www.good-display.com/product/387.html
 
-At this stage color screens whilst still compatible will only display in black and white.
+At this stage color screens whilst still compatible will only display theoreticly in black and white.
 latest news and more info is available on Discord https://discord.gg/KrpdjWS8zw
