@@ -1654,23 +1654,35 @@ class MainApp(MDApp):
 
     # --- Settings / Configuration ---
     def save_settings(self):
-        """Save the selected settings to a configuration file."""
+        """Persist user preferences to disk for the next session."""
+        # Saves all configurable settings so they're restored when app restarts
         try:
-            # Add a section for settings if it doesn't exist
+            # Ensure Settings section exists in config file
             if not self.config_parser.has_section("Settings"):
                 self.config_parser.add_section("Settings")
+            
+            # Save display and orientation preferences
+            # These affect bitmap output resolution and layout
             self.config_parser.set("Settings", "display_model", self.selected_display)
             self.config_parser.set("Settings", "orientation", self.selected_orientation)
             self.config_parser.set("Settings", "standalone_mode", str(self.standalone_mode_enabled))
-            # Save show/hide preferences
+            
+            # Save column visibility preferences
+            # These determine which rangecard columns are shown/exported
             self.config_parser.set("Settings", "show_lead", str(show_lead))
             self.config_parser.set("Settings", "show_range", str(show_range))
             self.config_parser.set("Settings", "show_2_wind_holds", str(show_2_wind_holds))
-            # Save sort settings
+            
+            # Save file browser sorting preferences
+            # These affect how the file list is ordered
             self.config_parser.set("Settings", "sort_type", getattr(self, "sort_type", "date"))
             self.config_parser.set("Settings", "sort_order", getattr(self, "sort_order", "asc"))
+            
+            # Save additional app state preferences
             self.config_parser.set("Settings", "delete_folders_after", getattr(self, "delete_folders_after", "never"))
             self.config_parser.set("Settings", "manage_data_dialog_shown", str(getattr(self, "manage_data_dialog_shown", False)))
+            
+            # Write the updated config to disk
             with open(self.config_file, "w") as config_file:
                 self.config_parser.write(config_file)
             print("Settings saved successfully.")
@@ -1678,21 +1690,38 @@ class MainApp(MDApp):
             print(f"Error saving settings: {e}")
 
     def load_settings(self):
+        """Load persisted user preferences from the settings file."""
+        # This includes display model, orientation, sort preferences, and column visibility
         global show_lead, show_range, show_2_wind_holds
+        
+        # Check if settings file exists from previous session
         if os.path.exists(self.config_file):
+            # Parse the settings file
             self.config_parser.read(self.config_file)
             settings = self.config_parser["Settings"]
-            show_lead = settings.getboolean("show_lead", True)
-            show_range = settings.getboolean("show_range", True)
-            show_2_wind_holds = settings.getboolean("show_2_wind_holds", True)
+            
+            # Load display column visibility preferences
+            # These determine which rangecard columns are shown/exported
+            show_lead = settings.getboolean("show_lead", True)  # Show Lead/Drift column
+            show_range = settings.getboolean("show_range", True)  # Show Range column
+            show_2_wind_holds = settings.getboolean("show_2_wind_holds", True)  # Show Wnd2 (second wind hold)
+            
+            # Load display model (determines output image resolution)
             self.selected_display = settings.get("display_model", "Good Display 3.7-inch")
+            
+            # Load orientation preference (Portrait or Landscape)
             self.selected_orientation = settings.get("orientation", "Portrait")
-            self.sort_type = settings.get("sort_type", "date")
-            self.sort_order = settings.get("sort_order", "asc")
+            
+            # Load file list sorting preferences (how files are ordered in the browser)
+            self.sort_type = settings.get("sort_type", "date")  # Sort by: date, name, or type
+            self.sort_order = settings.get("sort_order", "asc")  # Order: ascending or descending
         else:
+            # Use sensible defaults if no settings file exists (first run)
             self.sort_type = "date"
             self.sort_order = "asc"
-        # Update available_fields visibility after loading settings
+        
+        # Update the available_fields dictionary to match loaded visibility settings
+        # This ensures the UI reflects user preferences
         self.available_fields["Lead"]["show"] = show_lead
         self.available_fields["Range"]["show"] = show_range
         self.available_fields["Wnd2"]["show"] = show_2_wind_holds
@@ -2549,30 +2578,36 @@ class MainApp(MDApp):
             return None
         
     def delete_file_or_folder(self, path):
+        """Delete a file or folder and refresh the file list view."""
+        # Provides user feedback and file system cleanup
         try:
             base_dir = os.path.abspath(self.get_private_storage_path())
             abs_path = os.path.abspath(path)
             saved_cards_screen = self.root.ids.screen_manager.get_screen("saved_cards")
 
-            # If deleting a folder or a non-csv file, always go to assets/CSV first
+            # If deleting a non-CSV item, navigate back to the main CSV directory after deletion
             if not abs_path.lower().endswith(".csv"):
                 csv_root = self.ensure_csv_directory()
                 self.populate_swipe_file_list()
 
+            # Perform the deletion
             if os.path.exists(abs_path):
                 if os.path.isdir(abs_path):
-                    shutil.rmtree(abs_path)  # Recursively delete folder and contents
+                    # Recursively delete directory and all contents
+                    shutil.rmtree(abs_path)
                     print(f"Deleted folder: {abs_path}")
                     toast("Folder deleted successfully.")
                 else:
+                    # Delete single file
                     os.remove(abs_path)
                     print(f"Deleted file: {abs_path}")
                     toast("File deleted successfully.")
 
-                # Refresh the swipe-to-delete file list
+                # Refresh the file list view to show updated contents
                 self.populate_swipe_file_list()
                 print("File and folder list refreshed.")
 
+                # Clear table data and return to file browser
                 self.clear_table_data()
                 self.root.ids.screen_manager.current = "saved_cards"
             else:
@@ -2581,14 +2616,18 @@ class MainApp(MDApp):
             print(f"Error deleting file or folder: {e}")
 
     def populate_swipe_file_list(self, target_dir=None, sort_by=None, reverse=None):
+        """Populate the swipe file list view with files and folders from the target directory."""
+        # Get the swipe file list widget from the saved_cards screen
         saved_cards_screen = self.root.ids.screen_manager.get_screen("saved_cards")
         swipe_file_list = saved_cards_screen.ids.swipe_file_list
         swipe_file_list.clear_widgets()
 
+        # Use the default CSV directory if none specified
         if target_dir is None:
             target_dir = self.ensure_csv_directory()
 
-        # Add parent directory entry if not at root
+        # Add a "Back" button if we're in a subdirectory
+        # This allows users to navigate up the directory tree
         root_dir = self.ensure_csv_directory()
         if os.path.abspath(target_dir) != os.path.abspath(root_dir):
             parent_dir = os.path.abspath(os.path.join(target_dir, ".."))
@@ -2602,27 +2641,38 @@ SwipeFileItem:
 ''')
             swipe_file_list.add_widget(item)
 
+        # Collect all files and folders in the directory
         entries = []
         for fname in os.listdir(target_dir):
+            # Skip hidden files/folders (starting with .)
             if fname.startswith('.'):
-                continue  # Skip hidden files/folders
-            # --- Filter by search_text ---
+                continue
+            
+            # Apply search filter if user entered search text
             if self.search_text and self.search_text not in fname.lower():
                 continue
+            
+            # Get file info for display
             fpath = os.path.abspath(os.path.join(target_dir, fname))
             is_dir = os.path.isdir(fpath)
+            # Directories show no size, files show their size in bytes
             size = "" if is_dir else str(os.path.getsize(fpath))
             icon = "folder" if is_dir else "file"
             entries.append((fpath, icon, size, fname))
 
-        # Sorting logic
+        # Sort entries based on user preferences
+        # Directories always appear first, then files
         if sort_by == "name":
+            # Sort by filename (case-insensitive)
             entries.sort(key=lambda x: (x[1] != "folder", x[3].lower()), reverse=reverse)
         elif sort_by == "date":
+            # Sort by modification time
             entries.sort(key=lambda x: (x[1] != "folder", os.path.getmtime(x[0])), reverse=reverse)
         elif sort_by == "type":
+            # Sort by file extension, then by name
             entries.sort(key=lambda x: (x[1] != "folder", os.path.splitext(x[3])[1].lower(), x[3].lower()), reverse=reverse)
 
+        # Add sorted items to the list view
         for fpath, icon, size, fname in entries:
             item = Builder.load_string(f'''
 SwipeFileItem:
@@ -2700,20 +2750,26 @@ SwipeFileItem:
         table_container.add_widget(main_layout)
 
     def add_data_row(self, rows_layout, focus_row=True):
-        """Add a new row of data fields directly underneath the existing rows, with Next/Tab navigation."""
+        """Create and add a new row of data input fields based on available_fields configuration."""
+        # This dynamically builds a row with one text field for each visible column
+        
+        # Create horizontal layout to hold all fields in this row
         row_layout = BoxLayout(orientation="horizontal", spacing="10dp", size_hint=(1, None))
-        row_layout.height = dp(50)  # Adjust height for a single row of text fields
+        row_layout.height = dp(50)  # Fixed height for single row of text fields
 
+        # Create text field for each visible column
         row_fields = {}
         manual_fields = []
         for field_name, field_options in self.available_fields.items():
+            # Only create fields that user has enabled for display
             if field_options["show"]:
                 text_field = MDTextField(
                     hint_text=field_options["hint_text"],
                     multiline=False,
                     size_hint_x=0.15
                 )
-                # Bind focus event to scroll to bottom when focused
+                # Scroll to button area when user focuses on this field
+                # (makes the buttons visible for adding/deleting rows)
                 text_field.bind(
                     on_focus=lambda instance, value: self.scroll_manual_input_to_buttons() if value else None
                 )
@@ -2721,33 +2777,27 @@ SwipeFileItem:
                 manual_fields.append(text_field)
                 row_layout.add_widget(text_field)
 
-        # Store the row fields for later use
+        # Store the row fields for retrieval when saving data
         if not hasattr(self, "manual_data_rows"):
             self.manual_data_rows = []
         self.manual_data_rows.append(row_fields)
 
-        # Store all manual fields in a flat list for navigation
+        # Maintain flat list of all fields for keyboard navigation
         if not hasattr(self, "manual_data_fields"):
             self.manual_data_fields = []
         self.manual_data_fields.extend(manual_fields)
 
-        # Find the correct index to insert the new row (above the button layouts)
-        button_index = 0
-        for i, child in enumerate(reversed(rows_layout.children)):
-            if isinstance(child, BoxLayout) and any(
-                isinstance(widget, MDRaisedButton) or isinstance(widget, MDFlatButton) for widget in child.children):
-                button_index = len(rows_layout.children) - i
-                break
-
-        rows_layout.add_widget(row_layout, index=button_index)
-        # --- Focus the first input in the new row ---
+        # Add the new row to the layout
+        rows_layout.add_widget(row_layout)
+        
+        # Auto-focus the first field in the new row to start typing immediately
         if manual_fields and focus_row:
             Clock.schedule_once(lambda dt: setattr(manual_fields[0], "focus", True), 0.1)
 
-            # Rebuild navigation for all homepage fields
+        # Update keyboard navigation for all fields on homepage
         self.enable_next_navigation_on_homepage()
 
-        # Scroll to bottom after next frame
+        # Scroll to bottom to show newly added row
         if hasattr(self, "manual_scrollview"):
             Clock.schedule_once(lambda dt: setattr(self.manual_scrollview, "scroll_y", 0), 0)
 
@@ -3061,12 +3111,20 @@ for i in range(0, len(s), 40):
     print(f"{i:03d}: {s[i:i+40]}")
 
 def pack_image_column_major(img):
+    """Pack a 1-bit PIL image into bytes using column-major order (right-to-left, top-to-bottom)."""
+    # This packing format is optimized for e-ink displays (like Waveshare) that update column-by-column
+    # Black pixels (value 0) are set to 1, white pixels (255) are set to 0 in the bit stream
+    
     pixels = img.load()
     width, height = img.size 
     packed = bytearray()
-    for x in range(width-1, -1, -1):  # right-to-left to match demo
+    
+    # Iterate columns from right to left (display scanning order for e-ink)
+    for x in range(width-1, -1, -1):
+        # Process each column in 8-pixel vertical chunks (one byte per 8 pixels)
         for y_block in range(0, height, 8):
             byte = 0
+            # Fill byte bits from MSB to LSB (bit 7 to bit 0)
             for bit in range(8):
                 y = y_block + bit
                 if y >= height:
@@ -3078,7 +3136,10 @@ def pack_image_column_major(img):
                 # In '1' mode, 0=black, 255=white
                 if pixels[x, y] == 0:
                     byte |= (1 << (7 - bit))
+                # Check if pixel is black (0) or white (255)
+                # Set bit to 1 for black, 0 for white
             packed.append(byte)
+
     return bytes(packed)
 
 if __name__ == "__main__":
