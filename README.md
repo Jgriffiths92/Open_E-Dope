@@ -187,8 +187,21 @@ adb install bin/open_edope-0.1-debug.apk
 
 ### App Features
 
-### Managing Saved Cards
+- CSV import from AB Quantum and Kestrel Link
+- Manual rangecard entry in Standalone Mode
+- Automatic stage notes extraction from CSV footer
+- Android NFC transfer using tag detection (the desktop NFC button is only for Windows testing)
+- Search saved cards and event folders by name
+- Swipe left to delete saved files and folders
+- Sort saved cards by name, date, or type
+- Save rangecards into event folders and create new event folders
+- Select display model for Good Display NFC-D3-029 compatible sizes
+- Choose Portrait or Landscape orientation
+- Toggle column visibility for Range, Lead, and second wind hold
+- Generate bitmap output for e-ink displays and save to `assets/bitmap/`
+- Works fully offline after installation
 
+### Managing Saved Cards
 - **Browse Files**: Navigate folders and select CSV files to load rangecard data.
 - **Search**: Use the search bar to filter files and folders by name.
 - **Swipe to Delete**: Swipe left on a saved file or folder to reveal delete/remove options. Confirm to delete permanently.
