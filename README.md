@@ -185,6 +185,43 @@ adb install bin/open_edope-0.1-debug.apk
 
 ---
 
+### App Features
+
+### Managing Saved Cards
+
+- **Browse Files**: Navigate folders and select CSV files to load rangecard data.
+- **Search**: Use the search bar to filter files and folders by name.
+- **Swipe to Delete**: Swipe left on a saved file or folder to reveal delete/remove options. Confirm to delete permanently.
+- **Sort**: Tap the sort button to reorder by name, date, or type.
+- **Save New Events**: Create folders for organizing rangecards by event/location.
+
+## Settings
+
+Access settings via the menu (three dots) on the home screen. Options include:
+
+- **Display Model**: Select your e-ink display size (e.g., 2.7", 2.9", 3.7", 4.2") for correct bitmap resolution.
+- **Orientation**: Choose Portrait or Landscape to match your display setup.
+- **Column Visibility**: Toggle display of columns like Lead, Range, or Wind2 in tables and exports.
+- **Standalone Mode**: Enable manual data entry without loading CSV files.
+- **Sort Preferences**: In Saved Cards, sort files by name, date, or type (ascending/descending).
+- **Delete Options**: Automatically remove old event folders (e.g., after 1 week, month, or year).
+
+Changes save automatically and apply to new sessions.
+
+### Manual Data Entry
+
+- Enable via Settings > Standalone Mode.
+- Add rows for custom rangecard data (Target, Range, Elv, Wind1/2, Lead).
+- Use Tab/Enter to navigate fields; scroll to access add/delete buttons.
+- Data saves to CSV when exporting or transferring to NFC.
+
+### Other Features
+
+- **NFC Transfer**: Tap "Send to NFC Tag" (desktop only; Android uses auto-detection) to write bitmap to tags.
+- **Bitmap Export**: Generated images save to `assets/bitmap/` for manual use.
+- **Keyboard Navigation**: Tab/Enter moves between fields for efficient input.
+---
+
 # Troubleshooting & FAQs
 
 ## General Issues
@@ -353,3 +390,24 @@ https://github.com/Jgriffiths92/Open_E-Dope/issues
 
 Last Updated: April 2026
 Status: Active Development
+
+---
+
+# Security & Privacy
+
+- All data processing happens locally on your device; no data is sent to external servers.
+- App permissions: NFC (for tag writing), Storage (for CSV/bitmap saving), and Vibrate (for feedback).
+
+### Known Limitations
+- NFC writing is one-way; data cannot be read back from the tag.
+- App is Android-only (iOS support is not currently planned for future versions).
+- Color displays are supported but rendering may vary by model.
+
+### Screen Recording
+
+To demonstrate app features (e.g., CSV import or NFC transfer), view this GIF demo:
+
+![App Demo](images/app_demo.gif)
+
+
+
