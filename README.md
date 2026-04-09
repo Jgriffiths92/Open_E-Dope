@@ -1,4 +1,5 @@
----
+[![Release](https://img.shields.io/github/v/release/Jgriffiths92/Open_E-Dope)](https://github.com/Jgriffiths92/Open_E-Dope/releases)
+[![License](https://img.shields.io/github/license/Jgriffiths92/Open_E-Dope)](LICENSE)
 
 # Quick Start Guide
 
@@ -10,6 +11,7 @@
 - Good Display NFC-D3-029 Driver Board (https://www.good-display.com/product/561.html)
 - Compatible e-ink display (2.7", 2.9", 3.7", or 4.2" - Mono or Color)
 - Ballistic rangecard CSV file from AB Quantum or Kestrel Link (can be directly exported for these applications into Open E-Dope)
+- Recommended devices: Pixel, Samsung Galaxy, and other NFC-enabled Android phones
 
 ### Installation
 1. Download the latest APK from the Releases page
@@ -22,8 +24,20 @@
 1. Load a CSV File: Tap "Choose File" to select your rangecard CSV export
 2. Review Data: The table will display all rows from your CSV
 3. Configure Display: Go to Settings to select your e-ink display model
-4. Transfer to NFC: Tap "Send to NFC Tag" and place your device near an NFC tag
+4. Transfer to NFC: Hold device near NFC tag (auto-detected on Android; desktop testing uses the "Send to NFC Tag" button)
 5. Monitor Progress: Watch the progress dialog until transfer completes
+
+### CSV Format Example
+- Expected CSV headers:
+  `Target,Range,El,Wind1,Wind2,Lead`
+- Example row:
+  `A,200,0.31U,0.15R,0.31R,0.12`
+- The app supports AB Quantum and Kestrel Link export formats. Metadata rows at the top of the file will be skipped during import.
+
+### Screen Recording
+To demonstrate app features (e.g., CSV import or NFC transfer), view this GIF demo:
+
+![App Demo](images/app_demo.gif)
 
 ---
 
@@ -229,10 +243,15 @@ Changes save automatically and apply to new sessions.
 - Data saves to CSV when exporting or transferring to NFC.
 
 ### Other Features
-
 - **NFC Transfer**: Tap "Send to NFC Tag" (desktop only; Android uses auto-detection) to write bitmap to tags.
-- **Bitmap Export**: Generated images save to `assets/bitmap/` for manual use.
+- **Bitmap Export**: Generated images save to `assets/bitmap/` under app storage on Android; use a file manager with storage permission to access them.
 - **Keyboard Navigation**: Tab/Enter moves between fields for efficient input.
+
+### Known Issues
+- NFC write may fail if the phone's NFC permission is denied or if the tag is moved too quickly.
+- Color display output may vary by Good Display model.
+- Search and swipe-to-delete actions are available in the Saved Cards screen only.
+
 ---
 
 # Troubleshooting & FAQs
