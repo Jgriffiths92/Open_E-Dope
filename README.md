@@ -1,6 +1,20 @@
 [![Release](https://img.shields.io/github/v/release/Jgriffiths92/Open_E-Dope)](https://github.com/Jgriffiths92/Open_E-Dope/releases)
 [![License](https://img.shields.io/github/license/Jgriffiths92/Open_E-Dope)](LICENSE)
 
+# Open e-Dope
+
+NFC-powered e-paper display system for transmitting structured data without a battery.
+
+---
+
+## 🚀 Overview
+
+Open e-Dope is a system that CSV data into a bitmap and transmits it via NFC to a passive e-paper display.
+Designed to communicate with both Kestrel Ballistics and AB Quantum (can easily be converted to recive data from other external applications for android devices).
+
+CSV → Processing → Bitmap → NFC → E-Paper Display
+
+Designed for low-power, real-world applications such as smart labels and embedded displays.
 # Quick Start Guide
 
 ## For End Users
@@ -38,7 +52,10 @@
 To demonstrate app features (e.g., CSV import or NFC transfer), view this GIF demo:
 
 ![App Demo](images/app_demo.gif)
-
+![App Demo](images/home_page.png)
+![App Demo](images/menu_bar.png)
+![App Demo](images/saved_cards.png)
+![App Demo](images/manage_data.png)
 ---
 
 # For Developers
