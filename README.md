@@ -10,7 +10,7 @@ NFC-powered e-paper display system for transmitting structured data without a ba
 ## 🚀 Overview
 
 Open e-Dope is a system that CSV data into a bitmap and transmits it via NFC to a passive e-paper display.
-Designed to communicate with both Kestrel Ballistics and AB Quantum (can easily be converted to recive data from other external applications for android devices).
+Designed to communicate with both Kestrel Ballistics and AB Quantum (can easily be converted to receive data from other external applications for android devices).
 
 CSV → Processing → Bitmap → NFC → E-Paper Display
 
