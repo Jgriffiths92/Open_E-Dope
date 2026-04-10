@@ -3,9 +3,18 @@
 
 # Open e-Dope
 
-NFC-powered e-paper display system for transmitting structured data without a battery.
+Open e-Dope is a system that converts CSV data into a bitmap and transmits it via NFC to a passive e-paper display.
 
 ---
+## 🧩 Key Features
+
+- End-to-end pipeline: CSV → Bitmap → NFC → E-Paper Display
+- Works with AB Quantum and Kestrel Link exports
+- Fully offline operation after installation
+- Supports multiple e-ink display sizes and orientations
+- Manual data entry mode (no CSV required)
+- Bitmap export for debugging and verification
+- Real-time NFC transfer with progress feedback
 
 ## 🚀 Overview
 
@@ -162,7 +171,7 @@ adb install bin/open_edope-0.1-debug.apk
 ## Good Display NFC E-Ink Display Setup
 
 ### Required Components
-1. Good Display NFC-D3-029 (https://www.good-display.com/product/561.html)
+1. Good Display NFC-D3-029
 2. Android Device with NFC support (Pixel, Samsung Galaxy, etc.)
 3. USB Cable for data connection (optional, for debugging)
 
@@ -194,7 +203,7 @@ adb install bin/open_edope-0.1-debug.apk
 ## Preparing NFC Tags
 
 ### Tag Requirements
-- Good Display NFC-D3-029 (https://www.good-display.com/product/561.html)
+- Good Display NFC-D3-029
 - A Good Display E-Ink display or compatible NFC e-ink display
 
 ### Compatible Displays
