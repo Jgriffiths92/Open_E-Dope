@@ -2,25 +2,20 @@ from kivy.core.window import Window
 # Ensure the soft keyboard pushes the target widget above it
 Window.softinput_mode = "below_target"
 import csv
-import itertools
 import time
 from kivy.lang import Builder
-from kivy.uix.screenmanager import ScreenManager, Screen
+from kivy.uix.screenmanager import Screen
 from kivymd.app import MDApp
-from kivymd.uix.datatables import MDDataTable
 from kivy.metrics import dp
 from plyer import filechooser
-from kivy.uix.label import Label
 from kivymd.uix.menu import MDDropdownMenu
-from kivymd.uix.snackbar import Snackbar
 from kivymd.uix.dialog import MDDialog
 from kivymd.uix.button import MDFlatButton
 from kivymd.uix.button import MDRaisedButton
 from kivy.uix.boxlayout import BoxLayout
 import os
 from kivymd.uix.textfield import MDTextField
-from PIL import Image, ImageDraw, ImageFont
-import platform
+from PIL import Image
 from kivy.config import ConfigParser
 from configparser import ConfigParser
 import shutil
@@ -35,10 +30,7 @@ from kivy.app import App
 from kivymd.toast import toast
 from kivy.properties import StringProperty
 from kivy.uix.scrollview import ScrollView
-from kivy.uix.anchorlayout import AnchorLayout
 from kivy.uix.widget import Widget
-from kivy.core.text import Label as CoreLabel
-from kivymd.uix.label import MDIcon
 from kivy.uix.image import Image
 
 
@@ -763,6 +755,10 @@ class MainApp(MDApp):
         self.selected_save_folder = None  # Store the selected folder for saving CSV files
         # The NFC tag detected from an intent (used during NFC operations)
         self.detected_tag = None  # Initialize the detected_tag attribute
+        # Native Android BLE transport for Kestrel and other BLE devices
+        self.bluetooth_helper = None
+        self.bluetooth_dialog = None
+        self.bluetooth_scan_event = None
         # User preference: sort swipe file list by date, name, or type
         self.sort_type = "date"   # Default sort type
         # Sort order: ascending or descending
@@ -803,7 +799,7 @@ class MainApp(MDApp):
         # 2. Read bitmap as 1bpp bytes and get dimensions &  Validate bitmap buffer size before sending to Java
         from PIL import Image
         with Image.open(output_path) as img:
-            img = img.convert("1", dither=Image.NONE)
+            img = img.convert("1", dither=Image.Dither.NONE)
             if self.selected_orientation == "Portrait":
                 img = img.rotate(-90, expand=True)
             # else: do not rotate for landscape
@@ -1005,6 +1001,10 @@ class MainApp(MDApp):
             return  # Never delete
 
         csv_dir = self.ensure_csv_directory()
+        if not csv_dir:
+            print("Cannot delete old folders: CSV directory is unavailable.")
+            return
+
         now = time.time()
         for folder in os.listdir(csv_dir):
             folder_path = os.path.join(csv_dir, folder)
@@ -1032,9 +1032,13 @@ class MainApp(MDApp):
                 Permission.READ_EXTERNAL_STORAGE,
                 Permission.WRITE_EXTERNAL_STORAGE,
                 Permission.VIBRATE,
+                Permission.ACCESS_FINE_LOCATION,
+                getattr(Permission, "BLUETOOTH_SCAN", "android.permission.BLUETOOTH_SCAN"),
+                getattr(Permission, "BLUETOOTH_CONNECT", "android.permission.BLUETOOTH_CONNECT"),
             ], self.on_permissions_result)
             if self.initialize_nfc():
                 print("NFC initialized successfully.")
+            self.initialize_bluetooth()
             from android import activity
             activity.bind(on_new_intent=self.on_new_intent)
 
@@ -1474,6 +1478,10 @@ class MainApp(MDApp):
         if not self.dialog:
             # Get the list of folders in the assets/CSV directory
             csv_directory = self.ensure_csv_directory()
+            if not csv_directory:
+                toast("CSV directory is unavailable. Cannot save data.")
+                return
+
             folders = [f for f in os.listdir(csv_directory) if os.path.isdir(os.path.join(csv_directory, f))]
 
             # Create a BoxLayout to hold the dropdown button and text input
@@ -1492,6 +1500,7 @@ class MainApp(MDApp):
                 height="48dp",
                 pos_hint={"center_x": 0.5},
             )
+            self.save_dialog_dropdown_button = dropdown_button
 
             # Define the function to handle menu item selection
             def update_selected_folder(selected_option):
@@ -1575,7 +1584,13 @@ class MainApp(MDApp):
             print("Manual data input detected, adding manual data before saving.")
             self.add_manual_data()
     
-        self.save_data(new_event_name=text_input.text.strip() if text_input.text.strip() else None)
+        saved = self.save_data(new_event_name=text_input.text.strip() if text_input.text.strip() else None)
+        if saved:
+            text_input.text = ""
+            text_input.opacity = 0
+            text_input.disabled = True
+            if hasattr(self, "save_dialog_dropdown_button"):
+                self.save_dialog_dropdown_button.text = "Select Event"
         self.dialog.dismiss()
     
     def save_data(self, new_event_name=None):
@@ -1612,7 +1627,7 @@ class MainApp(MDApp):
                         file_path = os.path.join(self.selected_save_folder, file_name)
                     else:
                         toast("No folder selected or created. Cannot save data.")
-                        return
+                        return False
 
                     # Write the data to the CSV file
                     with open(file_path, mode="w", encoding="utf-8", newline="") as csv_file:
@@ -1642,16 +1657,19 @@ class MainApp(MDApp):
                         print(f"Data saved to: {file_path}")
                         toast(f"Data saved")
 
-                        # Refresh the FileChooserListView
-                        saved_cards_screen = self.root.ids.screen_manager.get_screen("saved_cards")
-                        filechooser.path = filechooser.path  # Refresh the file and folder list
-                        print("File and folder list refreshed.")
+                    self.selected_save_folder = None
+                    self.clear_table_data()
+                    return True
                 except Exception as e:
                     print(f"Error saving data to CSV: {e}")
+                    toast("Data could not be saved.")
+                    return False
             else:
                 print("Private storage path is not available.")
+                return False
         else:
             print("No data available to save.")
+            return False
 
     # --- Settings / Configuration ---
     def save_settings(self):
@@ -1727,32 +1745,6 @@ class MainApp(MDApp):
         self.available_fields["Range"]["show"] = show_range
         self.available_fields["Wnd2"]["show"] = show_2_wind_holds
 
-    # --- Bitmap Generation ---
-    def find_max_font_size(self, draw, headers_text, row_texts, notes_text, image_width, image_height, font_path, min_font=8, max_font=32):
-        for font_size in range(max_font, min_font - 1, -1):
-            font = ImageFont.truetype(font_path, font_size)
-            y = 10  # Start below stage name
-            # Stage name
-            y += font_size + 10  # Stage name + spacing
-            y += 10  # line under stage name
-            # Headers
-            y += font_size + 5
-            # Rows
-            y += len(row_texts) * (font_size + 2)
-            # Notes section
-            if stage_notes.strip():
-                y += 20  # spacing before notes
-                y += font.getbbox("Stage Notes:")[3] - font.getbbox("Stage Notes:")[1] + 5
-                y += 10  # line under notes label
-                 # Wrapped notes
-                notes_max_width = base_width - 8  # 4px margin each side
-                wrapped_lines = wrap_text(stage_notes, font, notes_max_width)
-                notes_line_height = font.getbbox("A")[3] - font.getbbox("A")[1] + 2
-                notes_height = len(wrapped_lines) * notes_line_height
-                y += notes_height
-                return font_size
-        return min_font
-    
     # --- Bitmap Generation ---
     def csv_to_bitmap(self, csv_data, output_path=None):
         """Convert CSV data to a bitmap image for e-ink display, dynamically scaling font to fit all data."""
@@ -2207,6 +2199,175 @@ class MainApp(MDApp):
         else:
             print("Not running on Android. External storage is not available.")
 
+    def initialize_bluetooth(self):
+        """Initialize the native Android BLE transport."""
+        if not is_android() or autoclass is None:
+            print("Bluetooth functionality is only available on Android.")
+            return False
+        try:
+            BluetoothHelper = autoclass(
+                "com.openedope.open_edope.BluetoothHelper"
+            )
+            self.bluetooth_helper = BluetoothHelper(mActivity)
+            if not self.bluetooth_helper.isSupported():
+                toast("BLE is not supported on this device.")
+                return False
+            print("Bluetooth BLE helper initialized.")
+            return True
+        except Exception as e:
+            print(f"Error initializing Bluetooth: {e}")
+            toast("Bluetooth initialization failed.")
+            return False
+
+    def on_bluetooth_button_press(self):
+        if not is_android():
+            toast("Bluetooth scanning is available on Android.")
+            return
+        if self.bluetooth_helper is None and not self.initialize_bluetooth():
+            return
+        if not self.bluetooth_helper.isEnabled():
+            toast("Enable Bluetooth before scanning.")
+            return
+
+        content = BoxLayout(
+            orientation="vertical",
+            size_hint_y=None,
+            height=dp(240),
+            spacing=dp(8),
+        )
+        self.bluetooth_device_buttons = content
+        self.bluetooth_dialog = MDDialog(
+            title="Kestrel Bluetooth",
+            type="custom",
+            content_cls=content,
+            buttons=[
+                MDFlatButton(
+                    text="SCAN",
+                    on_release=lambda x: self.start_bluetooth_scan(),
+                ),
+                MDFlatButton(
+                    text="CLOSE",
+                    on_release=lambda x: self.close_bluetooth_dialog(),
+                ),
+            ],
+        )
+        self.bluetooth_dialog.open()
+        self.start_bluetooth_scan()
+
+    def start_bluetooth_scan(self):
+        if self.bluetooth_helper is None:
+            return
+        if not self.bluetooth_helper.startScan():
+            toast(self.bluetooth_helper.getLastError() or "BLE scan failed.")
+            return
+        self.bluetooth_device_buttons.clear_widgets()
+        self.bluetooth_device_buttons.add_widget(MDFlatButton(
+            text="Scanning for Kestrel devices...",
+            disabled=True,
+        ))
+        if self.bluetooth_scan_event is not None:
+            self.bluetooth_scan_event.cancel()
+        self.bluetooth_scan_event = Clock.schedule_interval(
+            lambda dt: self.refresh_bluetooth_devices(), 1
+        )
+
+    def refresh_bluetooth_devices(self):
+        if self.bluetooth_helper is None:
+            return False
+        devices = list(self.bluetooth_helper.getScanResults())
+        if not devices:
+            return True
+        self.bluetooth_device_buttons.clear_widgets()
+        for device in devices:
+            address, name = device.split("|", 1)
+            button = MDFlatButton(
+                text=f"{name} ({address})",
+                on_release=lambda x, addr=address: self.connect_bluetooth_device(addr),
+            )
+            self.bluetooth_device_buttons.add_widget(button)
+        return True
+
+    def connect_bluetooth_device(self, address):
+        if self.bluetooth_scan_event is not None:
+            self.bluetooth_scan_event.cancel()
+            self.bluetooth_scan_event = None
+        self.bluetooth_helper.stopScan()
+        if not self.bluetooth_helper.connect(address):
+            toast(self.bluetooth_helper.getLastError() or "BLE connection failed.")
+            return
+        toast("Connecting to Kestrel...")
+        Clock.schedule_interval(lambda dt: self.refresh_bluetooth_status(address), 1)
+
+    def refresh_bluetooth_status(self, address):
+        status = str(self.bluetooth_helper.getStatus())
+        last_error = str(self.bluetooth_helper.getLastError())
+        if status == "Connected":
+            toast(f"Connected to {address}")
+            return False
+        if status == "Disconnected" and last_error:
+            toast(last_error)
+            return False
+        if status == "Disconnected":
+            return False
+        if status == "Connection error":
+            toast(last_error or status)
+            return False
+        if status == "Error":
+            toast(last_error or status)
+            return False
+        return True
+
+    def get_bluetooth_services(self):
+        if self.bluetooth_helper is None:
+            return []
+        return [str(item) for item in self.bluetooth_helper.getServices()]
+
+    def get_bluetooth_characteristics(self, service_uuid):
+        if self.bluetooth_helper is None:
+            return []
+        return [
+            str(item)
+            for item in self.bluetooth_helper.getCharacteristics(service_uuid)
+        ]
+
+    def read_bluetooth_characteristic(self, service_uuid, characteristic_uuid):
+        if self.bluetooth_helper is None:
+            return False
+        return bool(self.bluetooth_helper.readCharacteristic(
+            service_uuid, characteristic_uuid
+        ))
+
+    def write_bluetooth_characteristic(self, service_uuid, characteristic_uuid,
+                                       hex_value, with_response=True):
+        if self.bluetooth_helper is None:
+            return False
+        return bool(self.bluetooth_helper.writeCharacteristicHex(
+            service_uuid, characteristic_uuid, hex_value, with_response
+        ))
+
+    def enable_bluetooth_notifications(self, service_uuid,
+                                       characteristic_uuid, enabled=True):
+        if self.bluetooth_helper is None:
+            return False
+        return bool(self.bluetooth_helper.setCharacteristicNotification(
+            service_uuid, characteristic_uuid, enabled
+        ))
+
+    def disconnect_bluetooth(self):
+        if self.bluetooth_helper is not None:
+            self.bluetooth_helper.disconnect()
+            toast("Bluetooth disconnected.")
+
+    def close_bluetooth_dialog(self):
+        if self.bluetooth_scan_event is not None:
+            self.bluetooth_scan_event.cancel()
+            self.bluetooth_scan_event = None
+        if self.bluetooth_helper is not None:
+            self.bluetooth_helper.stopScan()
+        if self.bluetooth_dialog is not None:
+            self.bluetooth_dialog.dismiss()
+            self.bluetooth_dialog = None
+
     def initialize_nfc(self):
         """Initialize the NFC adapter and enable foreground dispatch."""
         if is_android() and autoclass:
@@ -2614,20 +2775,24 @@ class MainApp(MDApp):
         except Exception as e:
             print(f"Error deleting file or folder: {e}")
 
-    def populate_swipe_file_list(self, target_dir=None, sort_by=None, reverse=None):
+    def populate_swipe_file_list(self, target_dir=None, sort_by=None, reverse=False):
         """Populate the swipe file list view with files and folders from the target directory."""
         # Get the swipe file list widget from the saved_cards screen
         saved_cards_screen = self.root.ids.screen_manager.get_screen("saved_cards")
         swipe_file_list = saved_cards_screen.ids.swipe_file_list
         swipe_file_list.clear_widgets()
 
+        root_dir = self.ensure_csv_directory()
+        if not root_dir:
+            print("Cannot populate file list: CSV directory is unavailable.")
+            return
+
         # Use the default CSV directory if none specified
         if target_dir is None:
-            target_dir = self.ensure_csv_directory()
+            target_dir = root_dir
 
         # Add a "Back" button if we're in a subdirectory
         # This allows users to navigate up the directory tree
-        root_dir = self.ensure_csv_directory()
         if os.path.abspath(target_dir) != os.path.abspath(root_dir):
             parent_dir = os.path.abspath(os.path.join(target_dir, ".."))
             item = Builder.load_string(f'''

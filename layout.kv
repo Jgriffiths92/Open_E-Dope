@@ -130,8 +130,15 @@ MDNavigationLayout:
                     orientation: "horizontal"
                     size_hint: None, None
                     height: dp(64)
-                    width: dp(150)
+                    width: dp(220)
                     spacing: "10dp"
+
+                    MDFloatingActionButton:
+                        icon: "bluetooth"
+                        md_bg_color: 0.0, 0.3, 0.8, 1
+                        size_hint: None, None
+                        size: dp(56), dp(56)
+                        on_release: app.on_bluetooth_button_press()
 
                     MDFloatingActionButton:
                         id: nfc_button

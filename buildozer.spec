@@ -98,9 +98,9 @@ android.presplash_color = #016586
 
 # (list) Permissions
 # (See https://python-for-android.readthedocs.io/en/latest/buildoptions/#build-options-1 for all the supported syntaxes and properties)
-android.permissions = INTERNET, WRITE_EXTERNAL_STORAGE, READ_EXTERNAL_STORAGE, FOREGROUND_SERVICE, NFC, VIBRATE
+android.permissions = INTERNET, WRITE_EXTERNAL_STORAGE, READ_EXTERNAL_STORAGE, FOREGROUND_SERVICE, NFC, VIBRATE, BLUETOOTH, BLUETOOTH_ADMIN, BLUETOOTH_SCAN, BLUETOOTH_CONNECT, ACCESS_FINE_LOCATION
 # (list) features (adds uses-feature -tags to manifest)
-#android.features = android.hardware.nfc:required
+android.features = android.hardware.bluetooth_le:required, android.hardware.nfc:required
 # (str) Android application meta-data to set (key=value format)
 #android.windowSoftInputMode = adjustResize
 # (int) Target Android API, should be as high as possible.
