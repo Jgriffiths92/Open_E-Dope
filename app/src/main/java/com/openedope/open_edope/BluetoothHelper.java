@@ -61,7 +61,9 @@ public class BluetoothHelper {
     private boolean requestAuthSent;
     private byte[] kestrelNonce;
     private byte[] hostNonce;
-    private double lastElevationMil;
+    private double lastElevationMil = Double.NaN;
+    private double lastWind1Mil = Double.NaN;
+    private double lastWind2Mil = Double.NaN;
     private double lastRangeMeters;
 
     public BluetoothHelper(Context context) {
@@ -197,6 +199,14 @@ public class BluetoothHelper {
 
     public double getLastElevationMil() {
         return lastElevationMil;
+    }
+
+    public double getLastWind1Mil() {
+        return lastWind1Mil;
+    }
+
+    public double getLastWind2Mil() {
+        return lastWind2Mil;
     }
 
     public double getLastRangeMeters() {
@@ -571,8 +581,10 @@ public class BluetoothHelper {
             if (opcode == 0x008a) {
                 byte[] solution = copyRange(parsed.payload, 2,
                         Math.min(parsed.payload.length, 92));
-                if (solution.length >= 15) {
+                if (solution.length >= 23) {
                     lastElevationMil = readF32(solution, 11);
+                    lastWind1Mil = readF32(solution, 15);
+                    lastWind2Mil = readF32(solution, 19);
                     status = "Connected";
                 }
                 writeEncryptedPacket(4, new byte[]{(byte) 0x8a, 0x00});

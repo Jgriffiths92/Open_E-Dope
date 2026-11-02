@@ -2363,13 +2363,21 @@ class MainApp(MDApp):
             return True
         if self.kestrel_active_row_fields is None:
             return True
+
         elevation_field = self.kestrel_active_row_fields.get("Elv")
-        if elevation_field is None:
-            return True
         elevation_mil = float(self.bluetooth_helper.getLastElevationMil())
-        if elevation_mil != elevation_mil:
-            return True
-        elevation_field.text = f"{elevation_mil:.2f}".rstrip("0").rstrip(".")
+        if elevation_field is not None and elevation_mil == elevation_mil:
+            elevation_field.text = f"{elevation_mil:.2f}".rstrip("0").rstrip(".")
+
+        wind1_field = self.kestrel_active_row_fields.get("Wnd1")
+        wind1_mil = float(self.bluetooth_helper.getLastWind1Mil())
+        if wind1_field is not None and wind1_mil == wind1_mil:
+            wind1_field.text = f"{wind1_mil:.2f}".rstrip("0").rstrip(".")
+
+        wind2_field = self.kestrel_active_row_fields.get("Wnd2")
+        wind2_mil = float(self.bluetooth_helper.getLastWind2Mil())
+        if wind2_field is not None and wind2_mil == wind2_mil:
+            wind2_field.text = f"{wind2_mil:.2f}".rstrip("0").rstrip(".")
         return True
 
     def get_bluetooth_services(self):
