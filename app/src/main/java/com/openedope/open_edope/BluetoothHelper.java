@@ -331,18 +331,8 @@ public class BluetoothHelper {
             }
             combinedBody = concat(combinedBody, body);
         }
-        if (combinedBody.length > 182) {
-            int combinedElevation = combinedBody[181] & 0xff;
-            int combinedWind = combinedBody[182] & 0xff;
-            if ((combinedElevation == 1 || combinedElevation == 2)
-                    && (combinedWind == 1 || combinedWind == 2)) {
-                elevationUnit = combinedElevation;
-                windUnit = combinedWind;
-                return;
-            }
-        }
         for (byte[] part : gunProfileParts) {
-            for (int offset : new int[]{181, 183}) {
+            for (int offset : new int[]{181, 182, 183}) {
                 if (offset + 1 < part.length) {
                     int eunit = part[offset] & 0xff;
                     int wunit = part[offset + 1] & 0xff;
@@ -354,10 +344,21 @@ public class BluetoothHelper {
                     }
                 }
             }
-            appendDebug("Gun profile unit scan found no valid Eunit/Wunit pair; kept Eunit="
-                    + elevationUnit + ", Wunit=" + windUnit
-                    + ", parts=" + gunProfileParts.size());
         }
+        for (int offset = 180; offset + 1 < combinedBody.length && offset < combinedBody.length; offset++) {
+            int eunit = combinedBody[offset] & 0xff;
+            int wunit = combinedBody[offset + 1] & 0xff;
+            if ((eunit == 1 || eunit == 2)
+                    && (wunit == 1 || wunit == 2)
+                    && offset >= 181 && offset <= 400) {
+                elevationUnit = eunit;
+                windUnit = wunit;
+                return;
+            }
+        }
+        appendDebug("Gun profile unit scan found no valid Eunit/Wunit pair; kept Eunit="
+                + elevationUnit + ", Wunit=" + windUnit
+                + ", parts=" + gunProfileParts.size());
     }
 
     @SuppressLint("MissingPermission")
@@ -752,7 +753,7 @@ public class BluetoothHelper {
             int opcode = readU16(parsed.payload, 0);
             if (opcode == OP_GET_ACTIVE_GUN || parsed.payload.length >= 4) {
                 activeGunIndex = readU16(parsed.payload,
-                        opcode == OP_GET_ACTIVE_GUN ? 2 : 0);
+                        parsed.payload.length >= 4 ? 2 : 0);
                 lastParsedOpcodeHex = String.format("%04x", opcode);
                 appendDebug("Active gun response: index=" + activeGunIndex + ", payload=" + bytesToHex(parsed.payload));
                 awaitingActiveGunResponse = false;
