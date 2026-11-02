@@ -2237,6 +2237,33 @@ class MainApp(MDApp):
         else:
             print("Not running on Android. External storage is not available.")
 
+    def set_bluetooth_button_connected(self, connected, error=False):
+        """Set the Home top-bar Bluetooth icon: green connected, red error, normal idle."""
+        try:
+            appbar = self.root.ids.home_screen.ids.home_appbar
+
+            def find_bluetooth(widget):
+                icon_name = getattr(widget, "icon", None)
+                if icon_name == "bluetooth":
+                    if connected:
+                        widget.theme_icon_color = "Custom"
+                        widget.icon_color = (0.0, 0.8, 0.2, 1)
+                    elif error:
+                        widget.theme_icon_color = "Custom"
+                        widget.icon_color = (0.9, 0.0, 0.0, 1)
+                    else:
+                        widget.theme_icon_color = "Primary"
+                        widget.icon_color = None
+                    return True
+                for child in getattr(widget, "children", []):
+                    if find_bluetooth(child):
+                        return True
+                return False
+
+            find_bluetooth(appbar)
+        except Exception as e:
+            print(f"Error updating Bluetooth button state: {e}")
+
     def initialize_bluetooth(self):
         """Initialize the native Android BLE transport."""
         if not is_android() or autoclass is None:
@@ -2248,12 +2275,14 @@ class MainApp(MDApp):
             )
             self.bluetooth_helper = BluetoothHelper(mActivity)
             if not self.bluetooth_helper.isSupported():
+                self.set_bluetooth_button_connected(False, error=True)
                 toast("BLE is not supported on this device.")
                 return False
             print("Bluetooth BLE helper initialized.")
             return True
         except Exception as e:
             print(f"Error initializing Bluetooth: {e}")
+            self.set_bluetooth_button_connected(False, error=True)
             toast("Bluetooth initialization failed.")
             return False
 
@@ -2264,6 +2293,7 @@ class MainApp(MDApp):
         if self.bluetooth_helper is None and not self.initialize_bluetooth():
             return
         if not self.bluetooth_helper.isEnabled():
+            self.set_bluetooth_button_connected(False, error=True)
             toast("Enable Bluetooth before scanning.")
             return
 
@@ -2296,6 +2326,7 @@ class MainApp(MDApp):
         if self.bluetooth_helper is None:
             return
         if not self.bluetooth_helper.startScan():
+            self.set_bluetooth_button_connected(False, error=True)
             toast(self.bluetooth_helper.getLastError() or "BLE scan failed.")
             return
         self.bluetooth_device_buttons.clear_widgets()
@@ -2329,8 +2360,10 @@ class MainApp(MDApp):
         if self.bluetooth_scan_event is not None:
             self.bluetooth_scan_event.cancel()
             self.bluetooth_scan_event = None
+        self.set_bluetooth_button_connected(False)
         self.bluetooth_helper.stopScan()
         if not self.bluetooth_helper.connect(address):
+            self.set_bluetooth_button_connected(False, error=True)
             toast(self.bluetooth_helper.getLastError() or "BLE connection failed.")
             return
         toast("Connecting to Kestrel...")
@@ -2339,8 +2372,9 @@ class MainApp(MDApp):
     def refresh_bluetooth_status(self, address):
         status = str(self.bluetooth_helper.getStatus())
         last_error = str(self.bluetooth_helper.getLastError())
-        if status == "Connected":
+        if status == "Connected" and bool(self.bluetooth_helper.isKestrelAuthenticated()):
             toast(f"Connected to {address}")
+            self.set_bluetooth_button_connected(True)
             if self.kestrel_profile_event is None:
                 self.bluetooth_helper.refreshKestrelProfile()
                 self.kestrel_profile_event = Clock.schedule_interval(
@@ -2352,14 +2386,18 @@ class MainApp(MDApp):
                 )
             return False
         if status == "Disconnected" and last_error:
+            self.set_bluetooth_button_connected(False, error=True)
             toast(last_error)
             return False
         if status == "Disconnected":
+            self.set_bluetooth_button_connected(False)
             return False
         if status == "Connection error":
+            self.set_bluetooth_button_connected(False, error=True)
             toast(last_error or status)
             return False
         if status == "Error":
+            self.set_bluetooth_button_connected(False, error=True)
             toast(last_error or status)
             return False
         return True
@@ -2383,18 +2421,16 @@ class MainApp(MDApp):
         if range_meters < 0:
             return
         if not bool(self.bluetooth_helper.isKestrelAuthenticated()):
+            print("Kestrel range send skipped: not authenticated")
             return
-        inclination_degrees = 0.0
-        if "Ideg" in row_fields:
-            try:
-                inclination_degrees = float(row_fields["Ideg"].text.strip())
-            except (TypeError, ValueError):
-                inclination_degrees = 0.0
         if not bool(self.bluetooth_helper.sendKestrelRange(
-                range_meters, inclination_degrees, 0.0)):
+                range_meters)):
             error = str(self.bluetooth_helper.getLastError())
+            self.set_bluetooth_button_connected(False, error=True)
             if error:
                 print(error)
+        else:
+            print(f"Kestrel range sent: {range_meters} m")
 
     def refresh_kestrel_profile(self):
         if self.bluetooth_helper is None:
@@ -2508,6 +2544,7 @@ class MainApp(MDApp):
         if self.kestrel_elevation_event is not None:
             self.kestrel_elevation_event.cancel()
             self.kestrel_elevation_event = None
+        self.set_bluetooth_button_connected(False)
 
     def close_bluetooth_dialog(self):
         if self.bluetooth_scan_event is not None:
@@ -3410,8 +3447,13 @@ def start_foreground_service():
     """Start a foreground service with a persistent notification."""
     if is_android():
         try:
-            # Create a persistent notification
-            notification.notify(
+            # Create a persistent notification. Guard the optional Plyer API so
+            # platforms without notification support do not call None.
+            notify = getattr(notification, "notify", None)
+            if not callable(notify):
+                print("Notifications are unavailable on this platform.")
+                return
+            notify(
                 title="Open E-Dope Service",
                 message="The app is running in the background.",
                 timeout=10  # Notification timeout in seconds

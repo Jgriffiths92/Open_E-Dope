@@ -70,9 +70,10 @@ MDNavigationLayout:
         size_hint: 1, 1
 
         MDTopAppBar:
+            id: home_appbar
             title: "Home"
             left_action_items: [["menu", lambda x: app.root.ids.drawer.set_state("open")]]
-            right_action_items: [["dots-vertical", lambda x: app.on_dots_press(x)]]
+            right_action_items: [["bluetooth", lambda x: app.on_bluetooth_button_press()], ["dots-vertical", lambda x: app.on_dots_press(x)]]
             md_bg_color: 0.678, 0.0, 0.969, 1
 
         MDTextField:
@@ -132,13 +133,6 @@ MDNavigationLayout:
                     height: dp(64)
                     width: dp(220)
                     spacing: "10dp"
-
-                    MDFloatingActionButton:
-                        icon: "bluetooth"
-                        md_bg_color: 0.0, 0.3, 0.8, 1
-                        size_hint: None, None
-                        size: dp(56), dp(56)
-                        on_release: app.on_bluetooth_button_press()
 
                     MDFloatingActionButton:
                         id: nfc_button

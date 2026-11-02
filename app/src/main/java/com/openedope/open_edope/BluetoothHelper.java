@@ -14,6 +14,7 @@ import android.bluetooth.le.ScanCallback;
 import android.bluetooth.le.ScanResult;
 import android.content.Context;
 import android.os.Build;
+import android.util.Log;
 
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
@@ -30,6 +31,7 @@ import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 
 public class BluetoothHelper {
+    private static final String TAG = "OpenEDopeBLE";
     private static final UUID CLIENT_CHARACTERISTIC_CONFIG =
             UUID.fromString("00002902-0000-1000-8000-00805f9b34fb");
     private static final UUID LINK_SERVICE =
@@ -72,6 +74,14 @@ public class BluetoothHelper {
     private boolean awaitingActiveGunResponse;
     private boolean awaitingGunProfile;
     private final List<byte[]> gunProfileParts = new ArrayList<>();
+    private final List<String> debugLog = new ArrayList<>();
+    private volatile int indicationChunkCount;
+    private volatile int encryptedFrameCount;
+    private volatile int clearFrameCount;
+    private volatile int profilePartCount;
+    private volatile String lastProfilePayloadHex = "";
+    private volatile String lastEncryptedPayloadHex = "";
+    private volatile String lastParsedOpcodeHex = "";
     private static final int OP_GET_ACTIVE_GUN = 0x0094;
     private static final int OP_GET_GUN = 0x0087;
     private static final int OP_END_OF_DATA = 0x0012;
@@ -81,6 +91,7 @@ public class BluetoothHelper {
         BluetoothManager manager =
                 (BluetoothManager) this.context.getSystemService(Context.BLUETOOTH_SERVICE);
         this.adapter = manager != null ? manager.getAdapter() : null;
+        appendDebug("BluetoothHelper initialized");
     }
 
     public boolean isSupported() {
@@ -108,6 +119,7 @@ public class BluetoothHelper {
             scanning = true;
             status = "Scanning";
             lastError = "";
+            appendDebug("BLE scan started");
             return true;
         } catch (Exception e) {
             lastError = e.getMessage();
@@ -118,6 +130,7 @@ public class BluetoothHelper {
 
     @SuppressLint("MissingPermission")
     public void stopScan() {
+        appendDebug("BLE scan stop requested");
         if (scanning && adapter != null && adapter.getBluetoothLeScanner() != null) {
             adapter.getBluetoothLeScanner().stopScan(scanCallback);
         }
@@ -161,6 +174,7 @@ public class BluetoothHelper {
             }
             status = "Connecting";
             lastError = "";
+            appendDebug("Connecting to " + address);
             return gatt != null;
         } catch (Exception e) {
             lastError = e.getMessage();
@@ -171,6 +185,7 @@ public class BluetoothHelper {
 
     @SuppressLint("MissingPermission")
     public void disconnect() {
+        appendDebug("Disconnect requested");
         if (gatt != null) {
             gatt.disconnect();
             gatt.close();
@@ -210,6 +225,60 @@ public class BluetoothHelper {
         return lastCharacteristicValue;
     }
 
+    private synchronized void appendDebug(String message) {
+        String entry = message;
+        debugLog.add(entry);
+        while (debugLog.size() > 300) {
+            debugLog.remove(0);
+        }
+        Log.d(TAG, entry);
+    }
+
+    public synchronized String getDebugLog() {
+        if (debugLog.isEmpty()) {
+            return "No Bluetooth debug events recorded.";
+        }
+        StringBuilder output = new StringBuilder();
+        for (String entry : debugLog) {
+            if (output.length() > 0) {
+                output.append('\n');
+            }
+            output.append(entry);
+        }
+        return output.toString();
+    }
+
+    public void clearDebugLog() {
+        debugLog.clear();
+        appendDebug("Bluetooth debug log cleared");
+    }
+
+    public String getDebugSummary() {
+        StringBuilder summary = new StringBuilder();
+        summary.append("Status: ").append(status).append('\n');
+        summary.append("Authenticated: ").append(kestrelAuthenticated).append('\n');
+        summary.append("Scanning: ").append(scanning).append('\n');
+        summary.append("Active gun index: ").append(activeGunIndex).append('\n');
+        summary.append("Elevation unit: ").append(elevationUnit == 2 ? "MOA/TMOA (2)" : "MIL (1)").append('\n');
+        summary.append("Wind unit: ").append(windUnit == 2 ? "MOA/TMOA (2)" : "MIL (1)").append('\n');
+        summary.append("Profile refresh: ").append(profileRefreshInProgress ? "in progress" : "idle").append('\n');
+        summary.append("Range meters: ").append(lastRangeMeters).append('\n');
+        summary.append("Elevation MIL: ").append(lastElevationMil).append('\n');
+        summary.append("Wind 1 MIL: ").append(lastWind1Mil).append('\n');
+        summary.append("Wind 2 MIL: ").append(lastWind2Mil).append('\n');
+        summary.append("Last opcode: ").append(lastParsedOpcodeHex.isEmpty() ? "none" : lastParsedOpcodeHex).append('\n');
+        summary.append("Indication chunks: ").append(indicationChunkCount).append('\n');
+        summary.append("Clear frames: ").append(clearFrameCount).append('\n');
+        summary.append("Encrypted frames: ").append(encryptedFrameCount).append('\n');
+        summary.append("Gun profile parts: ").append(profilePartCount).append('\n');
+        summary.append("Last profile payload: ").append(lastProfilePayloadHex.isEmpty() ? "none" : lastProfilePayloadHex).append('\n');
+        summary.append("Last packet payload: ").append(lastEncryptedPayloadHex.isEmpty() ? "none" : lastEncryptedPayloadHex).append('\n');
+        summary.append("Last characteristic: ").append(lastCharacteristicUuid.isEmpty() ? "none" : lastCharacteristicUuid).append('\n');
+        summary.append("Last characteristic hex: ").append(lastCharacteristicValue.isEmpty() ? "none" : lastCharacteristicValue).append('\n');
+        summary.append("Last error: ").append(lastError.isEmpty() ? "none" : lastError);
+        return summary.toString();
+    }
+
     public boolean isKestrelAuthenticated() {
         return kestrelAuthenticated;
     }
@@ -240,12 +309,14 @@ public class BluetoothHelper {
 
     public boolean refreshKestrelProfile() {
         if (!kestrelAuthenticated || linkWriteCharacteristic == null) {
+            appendDebug("Profile refresh skipped: authentication or write characteristic unavailable");
             return false;
         }
         profileRefreshInProgress = true;
         awaitingActiveGunResponse = true;
         awaitingGunProfile = false;
         gunProfileParts.clear();
+        appendDebug("Requesting active gun/profile units (0x0094, 0x0087)");
         return writeEncryptedPacket(0, new byte[]{
                 (byte) 0x94, 0x00, 0x00, 0x00, 0x00
         });
@@ -283,12 +354,14 @@ public class BluetoothHelper {
                     }
                 }
             }
+            appendDebug("Gun profile unit scan found no valid Eunit/Wunit pair; kept Eunit="
+                    + elevationUnit + ", Wunit=" + windUnit
+                    + ", parts=" + gunProfileParts.size());
         }
     }
 
     @SuppressLint("MissingPermission")
-    public boolean sendKestrelRange(double rangeMeters, double inclinationDegrees,
-                                    double dofDegrees) {
+    public boolean sendKestrelRange(double rangeMeters) {
         if (!kestrelAuthenticated || linkWriteCharacteristic == null) {
             lastError = "Kestrel authentication is not complete.";
             return false;
@@ -299,8 +372,8 @@ public class BluetoothHelper {
         args[0] = 0;
         args[1] = 0;
         putI24(args, 2, (int) Math.round(rangeMeters * 100.0));
-        putI24(args, 5, (int) Math.round(inclinationDegrees * 1000.0));
-        putI24(args, 8, (int) Math.round(dofDegrees * 1000.0));
+        putI24(args, 5, 0);
+        putI24(args, 8, 0);
         args[11] = (byte) 0xff;
         args[12] = (byte) 0xff;
         args[13] = (byte) 0xff;
@@ -323,6 +396,9 @@ public class BluetoothHelper {
         command[0] = (byte) 0x89;
         command[1] = 0x00;
         System.arraycopy(args, 0, command, 2, args.length);
+        lastEncryptedPayloadHex = bytesToHex(command);
+        appendDebug("Sending range 0x0089: range=" + rangeMeters
+                + " m, payload=" + lastEncryptedPayloadHex);
         return writeEncryptedPacket(0, command);
     }
 
@@ -440,8 +516,10 @@ public class BluetoothHelper {
             String name = device.getName();
             if (name != null && !name.isEmpty()) {
                 scanResults.put(address, name);
+                appendDebug("Scan result: " + name + " [" + address + "]");
             } else if (!scanResults.containsKey(address)) {
                 scanResults.put(address, "");
+                appendDebug("Scan result: Unknown [" + address + "]");
             }
         }
 
@@ -450,6 +528,7 @@ public class BluetoothHelper {
             scanning = false;
             lastError = "BLE scan failed with error " + errorCode;
             status = "Error";
+            appendDebug("BLE scan failed: " + errorCode);
         }
     };
 
@@ -457,6 +536,7 @@ public class BluetoothHelper {
         @Override
         public void onConnectionStateChange(BluetoothGatt bluetoothGatt, int statusCode, int newState) {
             connectionState = newState;
+            appendDebug("GATT connection state: status=" + statusCode + ", state=" + newState);
             if (newState == BluetoothProfile.STATE_CONNECTED) {
                 status = "Discovering services";
                 bluetoothGatt.discoverServices();
@@ -469,6 +549,7 @@ public class BluetoothHelper {
 
         @Override
         public void onServicesDiscovered(BluetoothGatt bluetoothGatt, int statusCode) {
+            appendDebug("GATT services discovered: status=" + statusCode);
             status = statusCode == BluetoothGatt.GATT_SUCCESS
                     ? "Connected"
                     : "Service discovery failed";
@@ -482,6 +563,7 @@ public class BluetoothHelper {
             if (linkService == null) {
                 lastError = "Kestrel LiNK service not found.";
                 status = "Error";
+                appendDebug("Kestrel LiNK service not found");
                 return;
             }
             linkIndicationCharacteristic =
@@ -491,6 +573,7 @@ public class BluetoothHelper {
             if (linkIndicationCharacteristic == null || linkWriteCharacteristic == null) {
                 lastError = "Kestrel LiNK characteristics not found.";
                 status = "Error";
+                appendDebug("Kestrel LiNK indication/write characteristic missing");
                 return;
             }
             status = "Enabling Kestrel Link";
@@ -523,6 +606,8 @@ public class BluetoothHelper {
                                             BluetoothGattCharacteristic characteristic) {
             lastCharacteristicUuid = characteristic.getUuid().toString();
             lastCharacteristicValue = bytesToHex(characteristic.getValue());
+            appendDebug("Characteristic indication: " + lastCharacteristicUuid
+                    + ", " + characteristic.getValue().length + " bytes");
             if (characteristic.getUuid().equals(LINK_INDICATION)) {
                 handleKestrelIndication(characteristic.getValue());
             }
@@ -534,6 +619,9 @@ public class BluetoothHelper {
                                           int statusCode) {
             if (statusCode != BluetoothGatt.GATT_SUCCESS) {
                 lastError = "Characteristic write status " + statusCode;
+                appendDebug("Characteristic write failed: " + statusCode);
+            } else {
+                appendDebug("Characteristic write succeeded: " + characteristic.getUuid());
             }
         }
 
@@ -563,12 +651,15 @@ public class BluetoothHelper {
     }
 
     private void handleKestrelIndication(byte[] chunk) {
+        indicationChunkCount++;
         indicationAccumulator.add(chunk);
         byte[][] frames = indicationAccumulator.takeCompleteFrames();
         for (byte[] frame : frames) {
             if (!kestrelAuthenticated) {
+                clearFrameCount++;
                 handleClearPacket(frame);
             } else {
+                encryptedFrameCount++;
                 handleEncryptedFrame(frame);
             }
         }
@@ -584,6 +675,7 @@ public class BluetoothHelper {
         }
         Packet parsed = parsePacket(packet);
         if (parsed == null) {
+            appendDebug("Clear Kestrel frame could not be parsed");
             return;
         }
         if (parsed.type == 4 && parsed.payload.length >= 2) {
@@ -595,6 +687,7 @@ public class BluetoothHelper {
                 return;
             }
             if (opcode == 0x007f) {
+                appendDebug("Received clear packet opcode 0x007f");
                 return;
             }
         }
@@ -609,6 +702,7 @@ public class BluetoothHelper {
             int opcode = readU16(parsed.payload, 0);
             if (opcode == 0x007f && parsed.payload.length >= 18) {
                 kestrelNonce = copyRange(parsed.payload, 2, 18);
+                appendDebug("Authentication nonce received (16 bytes)");
                 writeClearPacket(4, new byte[]{0x7f, 0x00});
                 byte[] proof = aesCbcEncrypt(concat(KestrelProofBlock(), kestrelNonce));
                 byte[] proofPacket = concat(proof, new byte[]{0, 0, 0, 0});
@@ -632,6 +726,7 @@ public class BluetoothHelper {
                 kestrelAuthenticated = true;
                 status = "Connected";
                 lastError = "";
+                appendDebug("Kestrel mutual authentication verified");
                 refreshKestrelProfile();
             } else {
                 lastError = "Kestrel mutual authentication failed.";
@@ -644,10 +739,12 @@ public class BluetoothHelper {
         byte[] packet = unwrapEncrypted(frame);
         if (packet == null) {
             lastError = "Invalid encrypted Kestrel frame.";
+            appendDebug(lastError);
             return;
         }
         Packet parsed = parsePacket(packet);
         if (parsed == null) {
+            appendDebug("Encrypted Kestrel frame could not be parsed");
             return;
         }
 
@@ -656,6 +753,8 @@ public class BluetoothHelper {
             if (opcode == OP_GET_ACTIVE_GUN || parsed.payload.length >= 4) {
                 activeGunIndex = readU16(parsed.payload,
                         opcode == OP_GET_ACTIVE_GUN ? 2 : 0);
+                lastParsedOpcodeHex = String.format("%04x", opcode);
+                appendDebug("Active gun response: index=" + activeGunIndex + ", payload=" + bytesToHex(parsed.payload));
                 awaitingActiveGunResponse = false;
                 awaitingGunProfile = true;
                 writeEncryptedPacket(4, new byte[]{
@@ -673,6 +772,9 @@ public class BluetoothHelper {
 
         if (awaitingGunProfile && parsed.type == 1 && parsed.payload.length > 0) {
             gunProfileParts.add(parsed.payload);
+            profilePartCount = gunProfileParts.size();
+            lastProfilePayloadHex = bytesToHex(parsed.payload);
+            appendDebug("Gun profile part " + profilePartCount + ": " + lastProfilePayloadHex);
             writeEncryptedPacket(4, new byte[]{
                     (byte) 0x87, 0x00
             });
@@ -688,6 +790,7 @@ public class BluetoothHelper {
                 applyGunProfileUnits();
                 profileRefreshInProgress = false;
                 awaitingGunProfile = false;
+                appendDebug("Gun profile complete: Eunit=" + elevationUnit + ", Wunit=" + windUnit);
                 return;
             }
         }
@@ -695,6 +798,7 @@ public class BluetoothHelper {
         if (parsed.type == 0 && parsed.payload.length >= 92) {
             int opcode = readU16(parsed.payload, 0);
             if (opcode == 0x008a) {
+                lastParsedOpcodeHex = "008a";
                 byte[] solution = copyRange(parsed.payload, 2,
                         Math.min(parsed.payload.length, 92));
                 if (solution.length >= 23) {
@@ -702,6 +806,10 @@ public class BluetoothHelper {
                     lastWind1Mil = readF32(solution, 15);
                     lastWind2Mil = readF32(solution, 19);
                     status = "Connected";
+                    appendDebug("Solution 0x008a: ElvMIL=" + lastElevationMil
+                            + ", Wnd1MIL=" + lastWind1Mil
+                            + ", Wnd2MIL=" + lastWind2Mil
+                            + ", payload=" + bytesToHex(parsed.payload));
                 }
                 writeEncryptedPacket(4, new byte[]{(byte) 0x8a, 0x00});
             }
@@ -742,6 +850,8 @@ public class BluetoothHelper {
         linkWriteCharacteristic.setWriteType(
                 BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT);
         linkWriteCharacteristic.setValue(frame);
+        appendDebug("Encrypted packet write: type=" + type + ", payloadHex=" + bytesToHex(packet)
+                + ", frameBytes=" + frame.length);
         return gatt.writeCharacteristic(linkWriteCharacteristic);
     }
 
