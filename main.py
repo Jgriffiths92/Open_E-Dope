@@ -369,7 +369,14 @@ class ManageDataScreen(Screen):
 
 
 class SettingsScreen(Screen):
-    pass
+    def on_pre_enter(self, *args):
+        app = App.get_running_app()
+        direction_button = getattr(self.ids, "kestrel_direction_dropdown_button", None)
+        if direction_button is not None:
+            direction_button.text = (
+                "U/D L/R" if app.kestrel_direction_style == "DIRECTION"
+                else "+/-"
+            )
 
 
 class CustomFileChooserListView(FileChooserListView):
@@ -751,6 +758,7 @@ class MainApp(MDApp):
         self.selected_resolution = (240, 416)  # Default resolution for 3.7-inch display
         # Portrait vs Landscape orientation preference
         self.selected_orientation = "Portrait"  # Default orientation
+        self.kestrel_direction_style = "DIRECTION"
         # Folder where CSV files will be saved when user chooses an event
         self.selected_save_folder = None  # Store the selected folder for saving CSV files
         # The NFC tag detected from an intent (used during NFC operations)
@@ -1688,6 +1696,7 @@ class MainApp(MDApp):
             # These affect bitmap output resolution and layout
             self.config_parser.set("Settings", "display_model", self.selected_display)
             self.config_parser.set("Settings", "orientation", self.selected_orientation)
+            self.config_parser.set("Settings", "kestrel_direction_style", getattr(self, "kestrel_direction_style", "DIRECTION"))
             self.config_parser.set("Settings", "standalone_mode", str(self.standalone_mode_enabled))
             
             # Save column visibility preferences
@@ -1734,6 +1743,9 @@ class MainApp(MDApp):
             
             # Load orientation preference (Portrait or Landscape)
             self.selected_orientation = settings.get("orientation", "Portrait")
+
+            direction_style = settings.get("kestrel_direction_style", "DIRECTION").upper()
+            self.kestrel_direction_style = direction_style if direction_style in {"SIGNED", "DIRECTION"} else "DIRECTION"
             
             # Load file list sorting preferences (how files are ordered in the browser)
             self.sort_type = settings.get("sort_type", "date")  # Sort by: date, name, or type
@@ -1742,6 +1754,7 @@ class MainApp(MDApp):
             # Use sensible defaults if no settings file exists (first run)
             self.sort_type = "date"
             self.sort_order = "asc"
+            self.kestrel_direction_style = "DIRECTION"
         
         # Update the available_fields dictionary to match loaded visibility settings
         # This ensures the UI reflects user preferences
@@ -2105,6 +2118,27 @@ class MainApp(MDApp):
         if self.orientation_menu:
             self.orientation_menu.dismiss()
 
+    def open_kestrel_direction_dropdown(self, button):
+        options = [
+            {"text": "+/-", "on_release": lambda: self.set_kestrel_direction_style("SIGNED")},
+            {"text": "U/D & L/R", "on_release": lambda: self.set_kestrel_direction_style("DIRECTION")},
+        ]
+        self.kestrel_direction_menu = MDDropdownMenu(caller=button, items=options)
+        self.kestrel_direction_menu.open()
+
+    def set_kestrel_direction_style(self, style):
+        if style not in {"SIGNED", "DIRECTION"}:
+            return
+        self.kestrel_direction_style = style
+        try:
+            button_text = "U/D L/R" if style == "DIRECTION" else "+/-"
+            self.root.ids.settings_screen.ids.kestrel_direction_dropdown_button.text = button_text
+        except (AttributeError, KeyError):
+            pass
+        self.save_settings()
+        if hasattr(self, "kestrel_direction_menu"):
+            self.kestrel_direction_menu.dismiss()
+
     def on_standalone_mode_toggle(self, active):
         """Handle the Stand Alone Mode toggle."""
         self.standalone_mode_enabled = active  # Update the standalone mode state
@@ -2382,7 +2416,7 @@ class MainApp(MDApp):
         elevation_mil = float(self.bluetooth_helper.getLastElevationMil())
         if elevation_field is not None and elevation_mil == elevation_mil:
             elevation_value = elevation_mil
-            if int(self.bluetooth_helper.getElevationUnit()) == 2:
+            if self.kestrel_hold_uses_moa("ELEVATION"):
                 elevation_value *= 3.43774677
             elevation_field.text = self.format_kestrel_elevation_hold(elevation_value)
 
@@ -2390,7 +2424,7 @@ class MainApp(MDApp):
         wind1_mil = float(self.bluetooth_helper.getLastWind1Mil())
         if wind1_field is not None and wind1_mil == wind1_mil:
             wind1_value = wind1_mil
-            if int(self.bluetooth_helper.getWindUnit()) == 2:
+            if self.kestrel_hold_uses_moa("WIND"):
                 wind1_value *= 3.43774677
             wind1_field.text = self.format_kestrel_wind_hold(wind1_value)
 
@@ -2398,25 +2432,32 @@ class MainApp(MDApp):
         wind2_mil = float(self.bluetooth_helper.getLastWind2Mil())
         if wind2_field is not None and wind2_mil == wind2_mil:
             wind2_value = wind2_mil
-            if int(self.bluetooth_helper.getWindUnit()) == 2:
+            if self.kestrel_hold_uses_moa("WIND"):
                 wind2_value *= 3.43774677
             wind2_field.text = self.format_kestrel_wind_hold(wind2_value)
         return True
 
-    @staticmethod
-    def format_kestrel_elevation_hold(value):
+    def kestrel_hold_uses_moa(self, hold_type):
+        if hold_type == "ELEVATION":
+            return int(self.bluetooth_helper.getElevationUnit()) == 2
+        return int(self.bluetooth_helper.getWindUnit()) == 2
+
+    def format_kestrel_elevation_hold(self, value):
         value = float(value)
         if value == 0:
             return "0"
+        if getattr(self, "kestrel_direction_style", "DIRECTION") == "SIGNED":
+            return f"{value:.2f}".rstrip("0").rstrip(".")
         direction = "U" if value < 0 else "D"
         magnitude = f"{abs(value):.2f}".rstrip("0").rstrip(".")
         return f"{magnitude}{direction}"
 
-    @staticmethod
-    def format_kestrel_wind_hold(value):
+    def format_kestrel_wind_hold(self, value):
         value = float(value)
         if value == 0:
             return "0"
+        if getattr(self, "kestrel_direction_style", "DIRECTION") == "SIGNED":
+            return f"{value:.2f}".rstrip("0").rstrip(".")
         direction = "R" if value < 0 else "L"
         magnitude = f"{abs(value):.2f}".rstrip("0").rstrip(".")
         return f"{magnitude}{direction}"

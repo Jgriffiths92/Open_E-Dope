@@ -288,6 +288,20 @@ MDNavigationLayout:
                     height: dp(32)
                     on_release: app.open_orientation_dropdown(self)
 
+                MDLabel:
+                    text: "Kestrel Hold Direction Style:"
+                    halign: "center"
+                    size_hint_y: None
+                    height: self.texture_size[1] + dp(4)
+
+                MDFlatButton:
+                    id: kestrel_direction_dropdown_button
+                    text: "U/D L/R"
+                    pos_hint: {"center_x": 0.5}
+                    size_hint_y: None
+                    height: dp(32)
+                    on_release: app.open_kestrel_direction_dropdown(self)
+
 <SwipeFileItem@CustomSwipeFileItem>:
     swipe_disabled: False
     radius: [0, 0, 0, 0]
