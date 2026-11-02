@@ -761,6 +761,7 @@ class MainApp(MDApp):
         self.bluetooth_scan_event = None
         self.kestrel_range_event = None
         self.kestrel_elevation_event = None
+        self.kestrel_profile_event = None
         self.kestrel_active_row_fields = None
         # User preference: sort swipe file list by date, name, or type
         self.sort_type = "date"   # Default sort type
@@ -2306,6 +2307,11 @@ class MainApp(MDApp):
         last_error = str(self.bluetooth_helper.getLastError())
         if status == "Connected":
             toast(f"Connected to {address}")
+            if self.kestrel_profile_event is None:
+                self.bluetooth_helper.refreshKestrelProfile()
+                self.kestrel_profile_event = Clock.schedule_interval(
+                    lambda dt: self.refresh_kestrel_profile(), 5.0
+                )
             if self.kestrel_elevation_event is None:
                 self.kestrel_elevation_event = Clock.schedule_interval(
                     lambda dt: self.poll_kestrel_elevation(), 0.25
@@ -2356,6 +2362,14 @@ class MainApp(MDApp):
             if error:
                 print(error)
 
+    def refresh_kestrel_profile(self):
+        if self.bluetooth_helper is None:
+            return True
+        if not bool(self.bluetooth_helper.isKestrelAuthenticated()):
+            return True
+        self.bluetooth_helper.refreshKestrelProfile()
+        return True
+
     def poll_kestrel_elevation(self):
         if self.bluetooth_helper is None:
             return True
@@ -2367,17 +2381,26 @@ class MainApp(MDApp):
         elevation_field = self.kestrel_active_row_fields.get("Elv")
         elevation_mil = float(self.bluetooth_helper.getLastElevationMil())
         if elevation_field is not None and elevation_mil == elevation_mil:
-            elevation_field.text = f"{elevation_mil:.2f}".rstrip("0").rstrip(".")
+            elevation_value = elevation_mil
+            if int(self.bluetooth_helper.getElevationUnit()) == 2:
+                elevation_value *= 3.43774677
+            elevation_field.text = f"{elevation_value:.2f}".rstrip("0").rstrip(".")
 
         wind1_field = self.kestrel_active_row_fields.get("Wnd1")
         wind1_mil = float(self.bluetooth_helper.getLastWind1Mil())
         if wind1_field is not None and wind1_mil == wind1_mil:
-            wind1_field.text = f"{wind1_mil:.2f}".rstrip("0").rstrip(".")
+            wind1_value = wind1_mil
+            if int(self.bluetooth_helper.getWindUnit()) == 2:
+                wind1_value *= 3.43774677
+            wind1_field.text = f"{wind1_value:.2f}".rstrip("0").rstrip(".")
 
         wind2_field = self.kestrel_active_row_fields.get("Wnd2")
         wind2_mil = float(self.bluetooth_helper.getLastWind2Mil())
         if wind2_field is not None and wind2_mil == wind2_mil:
-            wind2_field.text = f"{wind2_mil:.2f}".rstrip("0").rstrip(".")
+            wind2_value = wind2_mil
+            if int(self.bluetooth_helper.getWindUnit()) == 2:
+                wind2_value *= 3.43774677
+            wind2_field.text = f"{wind2_value:.2f}".rstrip("0").rstrip(".")
         return True
 
     def get_bluetooth_services(self):
@@ -2420,6 +2443,12 @@ class MainApp(MDApp):
         if self.bluetooth_helper is not None:
             self.bluetooth_helper.disconnect()
             toast("Bluetooth disconnected.")
+        if self.kestrel_profile_event is not None:
+            self.kestrel_profile_event.cancel()
+            self.kestrel_profile_event = None
+        if self.kestrel_elevation_event is not None:
+            self.kestrel_elevation_event.cancel()
+            self.kestrel_elevation_event = None
 
     def close_bluetooth_dialog(self):
         if self.bluetooth_scan_event is not None:

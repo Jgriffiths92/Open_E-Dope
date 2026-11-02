@@ -65,6 +65,16 @@ public class BluetoothHelper {
     private double lastWind1Mil = Double.NaN;
     private double lastWind2Mil = Double.NaN;
     private double lastRangeMeters;
+    private volatile int elevationUnit = 1;
+    private volatile int windUnit = 1;
+    private volatile int activeGunIndex = -1;
+    private boolean profileRefreshInProgress;
+    private boolean awaitingActiveGunResponse;
+    private boolean awaitingGunProfile;
+    private final List<byte[]> gunProfileParts = new ArrayList<>();
+    private static final int OP_GET_ACTIVE_GUN = 0x0094;
+    private static final int OP_GET_GUN = 0x0087;
+    private static final int OP_END_OF_DATA = 0x0012;
 
     public BluetoothHelper(Context context) {
         this.context = context.getApplicationContext();
@@ -170,6 +180,13 @@ public class BluetoothHelper {
         kestrelAuthenticated = false;
         privacyResponseReceived = false;
         requestAuthSent = false;
+        profileRefreshInProgress = false;
+        gunProfileParts.clear();
+        awaitingActiveGunResponse = false;
+        awaitingGunProfile = false;
+        activeGunIndex = -1;
+        elevationUnit = 1;
+        windUnit = 1;
         status = "Disconnected";
     }
 
@@ -211,6 +228,62 @@ public class BluetoothHelper {
 
     public double getLastRangeMeters() {
         return lastRangeMeters;
+    }
+
+    public int getElevationUnit() {
+        return elevationUnit;
+    }
+
+    public int getWindUnit() {
+        return windUnit;
+    }
+
+    public boolean refreshKestrelProfile() {
+        if (!kestrelAuthenticated || linkWriteCharacteristic == null) {
+            return false;
+        }
+        profileRefreshInProgress = true;
+        awaitingActiveGunResponse = true;
+        awaitingGunProfile = false;
+        gunProfileParts.clear();
+        return writeEncryptedPacket(0, new byte[]{
+                (byte) 0x94, 0x00, 0x00, 0x00, 0x00
+        });
+    }
+
+    private void applyGunProfileUnits() {
+        byte[] combinedBody = new byte[0];
+        for (byte[] part : gunProfileParts) {
+            byte[] body = part;
+            if (part.length >= 2 && readU16(part, 0) == OP_GET_GUN) {
+                body = copyRange(part, 2, part.length);
+            }
+            combinedBody = concat(combinedBody, body);
+        }
+        if (combinedBody.length > 182) {
+            int combinedElevation = combinedBody[181] & 0xff;
+            int combinedWind = combinedBody[182] & 0xff;
+            if ((combinedElevation == 1 || combinedElevation == 2)
+                    && (combinedWind == 1 || combinedWind == 2)) {
+                elevationUnit = combinedElevation;
+                windUnit = combinedWind;
+                return;
+            }
+        }
+        for (byte[] part : gunProfileParts) {
+            for (int offset : new int[]{181, 183}) {
+                if (offset + 1 < part.length) {
+                    int eunit = part[offset] & 0xff;
+                    int wunit = part[offset + 1] & 0xff;
+                    if ((eunit == 1 || eunit == 2)
+                            && (wunit == 1 || wunit == 2)) {
+                        elevationUnit = eunit;
+                        windUnit = wunit;
+                        return;
+                    }
+                }
+            }
+        }
     }
 
     @SuppressLint("MissingPermission")
@@ -559,6 +632,7 @@ public class BluetoothHelper {
                 kestrelAuthenticated = true;
                 status = "Connected";
                 lastError = "";
+                refreshKestrelProfile();
             } else {
                 lastError = "Kestrel mutual authentication failed.";
                 status = "Error";
@@ -576,6 +650,48 @@ public class BluetoothHelper {
         if (parsed == null) {
             return;
         }
+
+        if (awaitingActiveGunResponse && parsed.type == 1 && parsed.payload.length >= 4) {
+            int opcode = readU16(parsed.payload, 0);
+            if (opcode == OP_GET_ACTIVE_GUN || parsed.payload.length >= 4) {
+                activeGunIndex = readU16(parsed.payload,
+                        opcode == OP_GET_ACTIVE_GUN ? 2 : 0);
+                awaitingActiveGunResponse = false;
+                awaitingGunProfile = true;
+                writeEncryptedPacket(4, new byte[]{
+                        (byte) 0x94, 0x00
+                });
+                gunProfileParts.clear();
+                writeEncryptedPacket(0, new byte[]{
+                        (byte) 0x87, 0x00,
+                        (byte) (activeGunIndex & 0xff),
+                        (byte) ((activeGunIndex >>> 8) & 0xff)
+                });
+                return;
+            }
+        }
+
+        if (awaitingGunProfile && parsed.type == 1 && parsed.payload.length > 0) {
+            gunProfileParts.add(parsed.payload);
+            writeEncryptedPacket(4, new byte[]{
+                    (byte) 0x87, 0x00
+            });
+            return;
+        }
+
+        if (awaitingGunProfile && parsed.type == 0 && parsed.payload.length >= 2) {
+            int opcode = readU16(parsed.payload, 0);
+            if (opcode == OP_END_OF_DATA && !gunProfileParts.isEmpty()) {
+                writeEncryptedPacket(4, new byte[]{
+                        (byte) 0x12, 0x00
+                });
+                applyGunProfileUnits();
+                profileRefreshInProgress = false;
+                awaitingGunProfile = false;
+                return;
+            }
+        }
+
         if (parsed.type == 0 && parsed.payload.length >= 92) {
             int opcode = readU16(parsed.payload, 0);
             if (opcode == 0x008a) {
