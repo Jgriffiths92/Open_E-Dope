@@ -2384,7 +2384,7 @@ class MainApp(MDApp):
             elevation_value = elevation_mil
             if int(self.bluetooth_helper.getElevationUnit()) == 2:
                 elevation_value *= 3.43774677
-            elevation_field.text = f"{elevation_value:.2f}".rstrip("0").rstrip(".")
+            elevation_field.text = self.format_kestrel_elevation_hold(elevation_value)
 
         wind1_field = self.kestrel_active_row_fields.get("Wnd1")
         wind1_mil = float(self.bluetooth_helper.getLastWind1Mil())
@@ -2392,7 +2392,7 @@ class MainApp(MDApp):
             wind1_value = wind1_mil
             if int(self.bluetooth_helper.getWindUnit()) == 2:
                 wind1_value *= 3.43774677
-            wind1_field.text = f"{wind1_value:.2f}".rstrip("0").rstrip(".")
+            wind1_field.text = self.format_kestrel_wind_hold(wind1_value)
 
         wind2_field = self.kestrel_active_row_fields.get("Wnd2")
         wind2_mil = float(self.bluetooth_helper.getLastWind2Mil())
@@ -2400,8 +2400,26 @@ class MainApp(MDApp):
             wind2_value = wind2_mil
             if int(self.bluetooth_helper.getWindUnit()) == 2:
                 wind2_value *= 3.43774677
-            wind2_field.text = f"{wind2_value:.2f}".rstrip("0").rstrip(".")
+            wind2_field.text = self.format_kestrel_wind_hold(wind2_value)
         return True
+
+    @staticmethod
+    def format_kestrel_elevation_hold(value):
+        value = float(value)
+        if value == 0:
+            return "0"
+        direction = "U" if value < 0 else "D"
+        magnitude = f"{abs(value):.2f}".rstrip("0").rstrip(".")
+        return f"{magnitude}{direction}"
+
+    @staticmethod
+    def format_kestrel_wind_hold(value):
+        value = float(value)
+        if value == 0:
+            return "0"
+        direction = "R" if value < 0 else "L"
+        magnitude = f"{abs(value):.2f}".rstrip("0").rstrip(".")
+        return f"{magnitude}{direction}"
 
     def get_bluetooth_services(self):
         if self.bluetooth_helper is None:
