@@ -759,6 +759,9 @@ class MainApp(MDApp):
         self.bluetooth_helper = None
         self.bluetooth_dialog = None
         self.bluetooth_scan_event = None
+        self.kestrel_range_event = None
+        self.kestrel_elevation_event = None
+        self.kestrel_active_row_fields = None
         # User preference: sort swipe file list by date, name, or type
         self.sort_type = "date"   # Default sort type
         # Sort order: ascending or descending
@@ -2303,6 +2306,10 @@ class MainApp(MDApp):
         last_error = str(self.bluetooth_helper.getLastError())
         if status == "Connected":
             toast(f"Connected to {address}")
+            if self.kestrel_elevation_event is None:
+                self.kestrel_elevation_event = Clock.schedule_interval(
+                    lambda dt: self.poll_kestrel_elevation(), 0.25
+                )
             return False
         if status == "Disconnected" and last_error:
             toast(last_error)
@@ -2315,6 +2322,54 @@ class MainApp(MDApp):
         if status == "Error":
             toast(last_error or status)
             return False
+        return True
+
+    def queue_kestrel_range(self, range_field, value, row_fields):
+        self.kestrel_active_row_fields = row_fields
+        if self.kestrel_range_event is not None:
+            self.kestrel_range_event.cancel()
+        self.kestrel_range_event = Clock.schedule_once(
+            lambda dt: self.send_kestrel_range(value, row_fields), 0.25
+        )
+
+    def send_kestrel_range(self, value, row_fields):
+        self.kestrel_range_event = None
+        if self.bluetooth_helper is None:
+            return
+        try:
+            range_meters = float(str(value).strip())
+        except (TypeError, ValueError):
+            return
+        if range_meters < 0:
+            return
+        if not bool(self.bluetooth_helper.isKestrelAuthenticated()):
+            return
+        inclination_degrees = 0.0
+        if "Ideg" in row_fields:
+            try:
+                inclination_degrees = float(row_fields["Ideg"].text.strip())
+            except (TypeError, ValueError):
+                inclination_degrees = 0.0
+        if not bool(self.bluetooth_helper.sendKestrelRange(
+                range_meters, inclination_degrees, 0.0)):
+            error = str(self.bluetooth_helper.getLastError())
+            if error:
+                print(error)
+
+    def poll_kestrel_elevation(self):
+        if self.bluetooth_helper is None:
+            return True
+        if not bool(self.bluetooth_helper.isKestrelAuthenticated()):
+            return True
+        if self.kestrel_active_row_fields is None:
+            return True
+        elevation_field = self.kestrel_active_row_fields.get("Elv")
+        if elevation_field is None:
+            return True
+        elevation_mil = float(self.bluetooth_helper.getLastElevationMil())
+        if elevation_mil != elevation_mil:
+            return True
+        elevation_field.text = f"{elevation_mil:.2f}".rstrip("0").rstrip(".")
         return True
 
     def get_bluetooth_services(self):
@@ -2937,6 +2992,11 @@ SwipeFileItem:
                 text_field.bind(
                     on_focus=lambda instance, value: self.scroll_manual_input_to_buttons() if value else None
                 )
+                if field_name == "Range":
+                    text_field.bind(
+                        text=lambda instance, value, fields=row_fields:
+                            self.queue_kestrel_range(instance, value, fields)
+                    )
                 row_fields[field_name] = text_field
                 manual_fields.append(text_field)
                 row_layout.add_widget(text_field)
