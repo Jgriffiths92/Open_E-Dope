@@ -221,6 +221,10 @@ public class BluetoothHelper {
         kestrelAuthenticated = false;
         privacyResponseReceived = false;
         requestAuthSent = false;
+        lastElevationMil = Double.NaN;
+        lastWind1Mil = Double.NaN;
+        lastWind2Mil = Double.NaN;
+        lastRangeMeters = Double.NaN;
         profileRefreshInProgress = false;
         gunProfileParts.clear();
         awaitingActiveGunResponse = false;
@@ -315,6 +319,20 @@ public class BluetoothHelper {
         return kestrelAuthenticated;
     }
 
+    /**
+     * True while the Kestrel protocol is completing a profile read or a
+     * range-to-solution transaction. The Python UI must not start another
+     * request until this returns false (the protocol is stop-and-wait).
+     */
+    public boolean isKestrelBusy() {
+        return profileRefreshInProgress || awaitingActiveGunResponse
+                || awaitingGunProfile || awaitingRangeInputs || awaitingRangeSolution;
+    }
+
+    public boolean isKestrelRangeBusy() {
+        return awaitingRangeInputs || awaitingRangeSolution;
+    }
+
     public double getLastElevationMil() {
         return lastElevationMil;
     }
@@ -342,6 +360,11 @@ public class BluetoothHelper {
     public boolean refreshKestrelProfile() {
         if (!kestrelAuthenticated || linkWriteCharacteristic == null) {
             appendDebug("Profile refresh skipped: authentication or write characteristic unavailable");
+            return false;
+        }
+        if (profileRefreshInProgress || awaitingActiveGunResponse || awaitingGunProfile
+                || awaitingRangeInputs || awaitingRangeSolution) {
+            appendDebug("Profile refresh skipped: another Kestrel transaction is active");
             return false;
         }
         profileRefreshInProgress = true;
@@ -695,6 +718,10 @@ public class BluetoothHelper {
                     kestrelAuthenticated = false;
                     privacyResponseReceived = false;
                     requestAuthSent = false;
+                    lastElevationMil = Double.NaN;
+                    lastWind1Mil = Double.NaN;
+                    lastWind2Mil = Double.NaN;
+                    lastRangeMeters = Double.NaN;
                     profileRefreshInProgress = false;
                     awaitingActiveGunResponse = false;
                     awaitingGunProfile = false;
