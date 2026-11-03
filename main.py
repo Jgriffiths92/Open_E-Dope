@@ -687,9 +687,7 @@ class MainApp(MDApp):
             Clock.schedule_once(lambda dt: self.clear_table_data(), 0.5)
             # Now clear manual input fields if present
             if hasattr(self, "manual_data_rows"):
-                for row_fields in self.manual_data_rows:
-                    for field in row_fields.values():
-                        field.text = ""
+                self.clear_manual_data_fields()
 
         from kivy.clock import Clock
         Clock.schedule_once(delayed_clear, 2.5)
@@ -1088,6 +1086,10 @@ class MainApp(MDApp):
         # Set the default text for the display and orientation dropdown buttons
         self.root.ids.settings_screen.ids.display_dropdown_button.text = self.selected_display
         self.root.ids.settings_screen.ids.orientation_dropdown_button.text = self.selected_orientation
+        self.root.ids.settings_screen.ids.target_identifier_dropdown_button.text = (
+            "A, B, C..." if self.target_identifier_style == "ALPHA"
+            else "1, 2, 3..."
+        )
 
         # Hide the NFC button if on Android
         self.hide_nfc_button()
@@ -2192,6 +2194,7 @@ class MainApp(MDApp):
             self.root.ids.settings_screen.ids.target_identifier_dropdown_button.text = button_text
         except (AttributeError, KeyError):
             pass
+        self.refresh_manual_target_identifier_labels()
         self.save_settings()
         if hasattr(self, "target_identifier_menu"):
             self.target_identifier_menu.dismiss()
@@ -3178,6 +3181,39 @@ SwipeFileItem:
             label = chr(ord("A") + remainder) + label
         return label
 
+    def refresh_manual_target_identifier_labels(self):
+        """Update untouched automatic target labels in the Home manual-data rows."""
+        if not hasattr(self, "manual_data_rows"):
+            return
+
+        self._manual_target_text_suppress = True
+        try:
+            for row_number, row_fields in enumerate(self.manual_data_rows, start=1):
+                target_field = row_fields.get("Target")
+                if target_field is None:
+                    continue
+                if getattr(target_field, "_target_identifier_auto_generated", True):
+                    target_field.text = self.get_target_identifier_label(row_number)
+        finally:
+            self._manual_target_text_suppress = False
+
+    def on_manual_target_text_change(self, target_field, new_text):
+        if getattr(self, "_manual_target_text_suppress", False):
+            return
+        target_field._target_identifier_auto_generated = False
+
+    def clear_manual_data_fields(self):
+        if not hasattr(self, "manual_data_rows"):
+            return
+
+        self._manual_target_text_suppress = True
+        try:
+            for row_fields in self.manual_data_rows:
+                for field in row_fields.values():
+                    field.text = ""
+        finally:
+            self._manual_target_text_suppress = False
+
     def add_data_row(self, rows_layout, focus_row=True):
         """Create and add a new row of data input fields based on available_fields configuration."""
         # This dynamically builds a row with one text field for each visible column
@@ -3201,6 +3237,8 @@ SwipeFileItem:
                 )
                 if field_name == "Target":
                     text_field.text = next_target_label
+                    text_field._target_identifier_auto_generated = True
+                    text_field.bind(text=self.on_manual_target_text_change)
                 # Scroll to button area when user focuses on this field
                 # (makes the buttons visible for adding/deleting rows)
                 text_field.bind(
@@ -3256,9 +3294,13 @@ SwipeFileItem:
         if len(data_rows) <= 1:
             # Only 1 row left: clear all text fields in that row
             last_row = data_rows[0]
-            for widget in last_row.children:
-                if isinstance(widget, MDTextField):
-                    widget.text = ""
+            self._manual_target_text_suppress = True
+            try:
+                for widget in last_row.children:
+                    if isinstance(widget, MDTextField):
+                        widget.text = ""
+            finally:
+                self._manual_target_text_suppress = False
             # Also clear the corresponding manual_data_rows entry if you want
             #for row_fields in self.manual_data_rows:
             #    for field in row_fields.values():
@@ -3368,9 +3410,7 @@ SwipeFileItem:
             #        field.text = ""
             # Also clear the corresponding manual_data_rows entry if you want
             if hasattr(self, "manual_data_rows") and self.manual_data_rows:
-                for row_fields in self.manual_data_rows:
-                    for field in row_fields.values():
-                        field.text = ""
+                self.clear_manual_data_fields()
             print("Manual data added:", self.current_data)
         except Exception as e:
             print(f"Error adding manual data: {e}")
