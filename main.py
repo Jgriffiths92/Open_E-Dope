@@ -32,6 +32,7 @@ from kivy.properties import StringProperty
 from kivy.uix.scrollview import ScrollView
 from kivy.uix.widget import Widget
 from kivy.uix.image import Image
+from kivymd.uix.selectioncontrol import MDCheckbox
 
 
 # === Imports & Global Setup ===
@@ -377,6 +378,9 @@ class SettingsScreen(Screen):
                 "U/D L/R" if app.kestrel_direction_style == "DIRECTION"
                 else "+/-"
             )
+        range_checkbox = getattr(self.ids, "show_range_checkbox", None)
+        if range_checkbox is not None:
+            range_checkbox.active = bool(show_range)
 
 
 class CustomFileChooserListView(FileChooserListView):
@@ -1308,10 +1312,6 @@ class MainApp(MDApp):
                     filtered_data_zeros.append(row)
             data = filtered_data_zeros
 
-        if data and list(data[0].keys())[0] == "Range":
-            show_range = True
-            print("Range is in column 0, setting show_range = True")
-
         static_headers = ["Target", "Range", "Elv", "Wnd1", "Wnd2", "Lead"]
         headers = ["Elv", "Wnd1"]
         target_present = any(row.get("Target") for row in data)
@@ -1468,6 +1468,16 @@ class MainApp(MDApp):
         # Save settings if any menu option except "Settings" was selected
         if changed:
             self.save_settings()
+            if option in {"Hide Range", "Show Range"}:
+                try:
+                    range_checkbox = self.root.ids.settings_screen.ids.show_range_checkbox
+                    range_checkbox.active = bool(show_range)
+                except (AttributeError, KeyError):
+                    pass
+                if getattr(self, "standalone_mode_enabled", False):
+                    self.show_manual_data_input()
+                elif hasattr(self, "current_data") and self.current_data:
+                    self.display_table(self.current_data)
 
         # Regenerate the manual data input fields if they are visible
         home_screen = self.root.ids.home_screen
@@ -1755,6 +1765,7 @@ class MainApp(MDApp):
             self.sort_type = "date"
             self.sort_order = "asc"
             self.kestrel_direction_style = "DIRECTION"
+            show_range = False
         
         # Update the available_fields dictionary to match loaded visibility settings
         # This ensures the UI reflects user preferences
@@ -2138,6 +2149,24 @@ class MainApp(MDApp):
         self.save_settings()
         if hasattr(self, "kestrel_direction_menu"):
             self.kestrel_direction_menu.dismiss()
+
+    def get_range_display(self):
+        return bool(show_range)
+
+    def set_range_display(self, active):
+        global show_range
+        active = bool(active)
+        if show_range == active:
+            return
+        show_range = active
+        self.available_fields["Range"]["show"] = active
+        self.save_settings()
+
+        if getattr(self, "standalone_mode_enabled", False):
+            if hasattr(self, "manual_data_fields"):
+                self.show_manual_data_input()
+        elif hasattr(self, "current_data") and self.current_data:
+            self.display_table(self.current_data)
 
     def on_standalone_mode_toggle(self, active):
         """Handle the Stand Alone Mode toggle."""
