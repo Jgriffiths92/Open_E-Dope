@@ -14,6 +14,8 @@ import android.bluetooth.le.ScanCallback;
 import android.bluetooth.le.ScanResult;
 import android.content.Context;
 import android.os.Build;
+import android.os.Handler;
+import android.os.Looper;
 import android.util.Log;
 
 import java.nio.ByteBuffer;
@@ -82,6 +84,11 @@ public class BluetoothHelper {
     private boolean profileRefreshInProgress;
     private boolean awaitingActiveGunResponse;
     private boolean awaitingGunProfile;
+    private volatile boolean awaitingRangeInputs;
+    private volatile double pendingRangeMeters = Double.NaN;
+    private final Handler mainHandler = new Handler(Looper.getMainLooper());
+    private Runnable rangeInputTimeout;
+    private int remoteSolutionCounter;
     private final List<byte[]> gunProfileParts = new ArrayList<>();
     private final List<String> debugLog = new ArrayList<>();
     private volatile int indicationChunkCount;
@@ -215,6 +222,9 @@ public class BluetoothHelper {
         gunProfileParts.clear();
         awaitingActiveGunResponse = false;
         awaitingGunProfile = false;
+        awaitingRangeInputs = false;
+        pendingRangeMeters = Double.NaN;
+        clearRangeInputTimeout();
         activeGunIndex = -1;
         elevationUnit = 1;
         windUnit = 1;
@@ -375,14 +385,75 @@ public class BluetoothHelper {
             lastError = "Kestrel authentication is not complete.";
             return false;
         }
-        lastRangeMeters = rangeMeters;
+        if ((Double.isNaN(rangeMeters) || Double.isInfinite(rangeMeters)) || rangeMeters <= 0.0
+                || Math.round(rangeMeters * 100.0) > 0x7fffff) {
+            lastError = "Range must be positive and within the Kestrel input range.";
+            return false;
+        }
+        if (profileRefreshInProgress || awaitingActiveGunResponse || awaitingGunProfile
+                || awaitingRangeInputs) {
+            lastError = "Another Kestrel command is still in progress.";
+            return false;
+        }
+
+        // 0x0089 SetFullInputs writes range, inclination and direction of fire
+        // together. Read the current target first so changing range does not
+        // overwrite the existing inclination or DoF with zeroes.
+        pendingRangeMeters = rangeMeters;
+        awaitingRangeInputs = true;
+        int counter = remoteSolutionCounter++ & 0xff;
+        appendDebug("Reading current target inputs before range update (0x00a0), counter="
+                + counter);
+
+        boolean queued = writeEncryptedPacket(0, new byte[]{
+                (byte) 0xa0, 0x00, 0x00, (byte) counter
+        });
+        if (!queued) {
+            awaitingRangeInputs = false;
+            pendingRangeMeters = Double.NaN;
+            return false;
+        }
+        clearRangeInputTimeout();
+        rangeInputTimeout = () -> {
+            if (awaitingRangeInputs) {
+                awaitingRangeInputs = false;
+                pendingRangeMeters = Double.NaN;
+                lastError = "Timed out reading current target inputs; range was not changed.";
+                appendDebug(lastError);
+            }
+            rangeInputTimeout = null;
+        };
+        mainHandler.postDelayed(rangeInputTimeout, 6000L);
+        return true;
+    }
+
+    private void clearRangeInputTimeout() {
+        if (rangeInputTimeout != null) {
+            mainHandler.removeCallbacks(rangeInputTimeout);
+            rangeInputTimeout = null;
+        }
+    }
+
+    private boolean sendKestrelFullInputs(double rangeMeters,
+                                          double inclinationDegrees,
+                                          double directionOfFireDegrees) {
+        long rangeValue = Math.round(rangeMeters * 100.0);
+        long inclinationValue = Math.round(inclinationDegrees * 1000.0);
+        long directionValue = Math.round(directionOfFireDegrees * 1000.0);
+        if (rangeValue < -0x800000L || rangeValue > 0x7fffffL
+                || inclinationValue < -0x800000L || inclinationValue > 0x7fffffL
+                || directionValue < -0x800000L || directionValue > 0x7fffffL) {
+            lastError = "Current target inputs cannot be represented in the Kestrel command.";
+            appendDebug(lastError);
+            return false;
+        }
 
         byte[] args = new byte[28];
         args[0] = 0;
         args[1] = 0;
-        putI24(args, 2, (int) Math.round(rangeMeters * 100.0));
-        putI24(args, 5, 0);
-        putI24(args, 8, 0);
+        putI24(args, 2, (int) rangeValue);          // range, 0.01 m
+        putI24(args, 5, (int) inclinationValue);    // inclination, 0.001 degree
+        putI24(args, 8, (int) directionValue);      // DoF, 0.001 degree
         args[11] = (byte) 0xff;
         args[12] = (byte) 0xff;
         args[13] = (byte) 0xff;
@@ -407,8 +478,13 @@ public class BluetoothHelper {
         System.arraycopy(args, 0, command, 2, args.length);
         lastEncryptedPayloadHex = "<redacted; " + command.length + " bytes>";
         appendDebug("Sending range command 0x0089: range=" + rangeMeters
-                + " m, payloadBytes=" + command.length);
-        return writeEncryptedPacket(0, command);
+                + " m, preserving inclination=" + inclinationDegrees
+                + " deg and DoF=" + directionOfFireDegrees + " deg");
+        boolean queued = writeEncryptedPacket(0, command);
+        if (queued) {
+            lastRangeMeters = rangeMeters;
+        }
+        return queued;
     }
 
     public String[] getServices() {
@@ -471,470 +547,6 @@ public class BluetoothHelper {
                 : BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE;
         characteristic.setWriteType(writeType);
         characteristic.setValue(value);
-        return gatt.writeCharacteristic(characteristic);
-    }
-
-    public boolean writeCharacteristicHex(String serviceUuid, String characteristicUuid,
-                                          String hex, boolean withResponse) {
-        return writeCharacteristic(serviceUuid, characteristicUuid, hexToBytes(hex), withResponse);
-    }
-
-    @SuppressLint("MissingPermission")
-    public boolean setCharacteristicNotification(String serviceUuid,
-                                                 String characteristicUuid,
-                                                 boolean enabled) {
-        BluetoothGattCharacteristic characteristic = findCharacteristic(serviceUuid, characteristicUuid);
-        if (gatt == null || characteristic == null) {
-            lastError = "Characteristic not found.";
-            return false;
-        }
-        if (!gatt.setCharacteristicNotification(characteristic, enabled)) {
-            lastError = "Could not configure characteristic notifications.";
-            return false;
-        }
-        BluetoothGattDescriptor descriptor =
-                characteristic.getDescriptor(CLIENT_CHARACTERISTIC_CONFIG);
-        if (descriptor == null) {
-            return true;
-        }
-        byte[] value = enabled
-                ? BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
-                : BluetoothGattDescriptor.DISABLE_NOTIFICATION_VALUE;
-        descriptor.setValue(value);
-        return gatt.writeDescriptor(descriptor);
-    }
-
-    private BluetoothGattCharacteristic findCharacteristic(String serviceUuid,
-                                                           String characteristicUuid) {
-        if (gatt == null) {
-            return null;
-        }
-        for (BluetoothGattService service : gatt.getServices()) {
-            if (!service.getUuid().toString().equalsIgnoreCase(serviceUuid)) {
-                2 ? "MOA/TMOA (2)" : "MIL (1)").append('\n');
-        summary.append("Wind unit: ").append(windUnit == 2 ? "MOA/TMOA (2)" : "MIL (1)").append('\n');
-        summary.append("Profile refresh: ").append(profileRefreshInProgress ? "in progress" : "idle").append('\n');
-        summary.append("Range meters: ").append(lastRangeMeters).append('\n');
-        summary.append("Elevation MIL: ").append(lastElevationMil).append('\n');
-        summary.append("Wind 1 MIL: ").append(lastWind1Mil).append('\n');
-        summary.append("Wind 2 MIL: ").append(lastWind2Mil).append('\n');
-        summary.append("Last opcode: ").append(lastParsedOpcodeHex.isEmpty() ? "none" : lastParsedOpcodeHex).append('\n');
-        summary.append("Indication chunks: ").append(indicationChunkCount).append('\n');
-        summary.append("Clear frames: ").append(clearFrameCount).append('\n');
-        summary.append("Encrypted frames: ").append(encryptedFrameCount).append('\n');
-        summary.append("Gun profile parts: ").append(profilePartCount).append('\n');
-        summary.append("Last profile payload: ").append(lastProfilePayloadHex.isEmpty() ? "none" : lastProfilePayloadHex).append('\n');
-        summary.append("Last packet payload: ").append(lastEncryptedPayloadHex.isEmpty() ? "none" : lastEncryptedPayloadHex).append('\n');
-        summary.append("Last characteristic: ").append(lastCharacteristicUuid.isEmpty() ? "none" : lastCharacteristicUuid).append('\n');
-        summary.append("Last characteristic hex: ").append(lastCharacteristicValue.isEmpty() ? "none" : lastCharacteristicValue).append('\n');
-        summary.append("Last error: ").append(lastError.isEmpty() ? "none" : lastError);
-        return summary.toString();
-    }
-
-    public boolean isKestrelAuthenticated() {
-        return kestrelAuthenticated;
-    }
-
-    public double getLastElevationMil() {
-        return lastElevationMil;
-    }
-
-    public double getLastWind1Mil() {
-        return lastWind1Mil;
-    }
-
-    public double getLastWind2Mil() {
-        return lastWind2Mil;
-    }
-
-    public double getLastRangeMeters() {
-        return lastRangeMeters;
-    }
-
-    public int getElevationUnit() {
-        return elevationUnit;
-    }
-
-    public int getWindUnit() {
-        return windUnit;
-    }
-
-    public boolean refreshKestrelProfile() {
-        if (!kestrelAuthenticated || linkWriteCharacteristic == null) {
-            appendDebug("Profile refresh skipped: authentication or write characteristic unavailable");
-            return false;
-        }
-        profileRefreshInProgress = true;
-        awaitingActiveGunResponse = true;
-        awaitingGunProfile = false;
-        gunProfileParts.clear();
-        appendDebug("Requesting active gun/profile units (0x0094, 0x0087)");
-        return writeEncryptedPacket(0, new byte[]{
-                (byte) 0x94, 0x00, 0x00, 0x00, 0x00
-        });
-    }
-
-    private void applyGunProfileUnits() {
-        // EAMARS get_gun() returns separate type-3 response parts.
-        // The unit bytes are in response part 1 (the second part):
-        // elevation unit at offset 181, wind unit at offset 182.
-        if (gunProfileParts.size() < 2) {
-            appendDebug("Gun profile incomplete: expected at least two response parts, got "
-                    + gunProfileParts.size());
-            return;
-        }
-
-        byte[] secondPart = gunProfileParts.get(1);
-        if (secondPart.length <= 182) {
-            appendDebug("Second gun profile response part too short: "
-                    + secondPart.length + " bytes");
-            return;
-        }
-
-        int eunit = secondPart[181] & 0xff;
-        int wunit = secondPart[182] & 0xff;
-
-        if ((eunit == 1 || eunit == 2) && (wunit == 1 || wunit == 2)) {
-            elevationUnit = eunit;
-            windUnit = wunit;
-            appendDebug("Gun profile units updated: elevation="
-                    + elevationUnit + ", wind=" + windUnit);
-        } else {
-            appendDebug("Invalid gun profile units at second-part offsets 181/182: "
-                    + eunit + "/" + wunit + "; retaining current units");
-        }
-    }
-
-    @SuppressLint("MissingPermission")
-    public boolean sendKestrelRange(double rangeMeters) {
-        if (!kestrelAuthenticated || linkWriteCharacteristic == null) {
-            lastError = "Kestrel authentication is not complete.";
-            return false;
-        }
-        lastRangeMeters = rangeMeters;
-
-        byte[] args = new byte[28];
-        args[0] = 0;
-        args[1] = 0;
-        putI24(args, 2, (int) Math.round(rangeMeters * 100.0));
-        putI24(args, 5, 0);
-        putI24(args, 8, 0);
-        args[11] = (byte) 0xff;
-        args[12] = (byte) 0xff;
-        args[13] = (byte) 0xff;
-        args[14] = (byte) 0xff;
-        args[15] = (byte) 0xff;
-        args[16] = (byte) 0xff;
-        args[17] = 0x01;
-        args[18] = 0x00;
-        args[19] = (byte) 0x80;
-        args[20] = 0x01;
-        args[21] = 0x00;
-        args[22] = (byte) 0x80;
-        args[23] = (byte) 0x81;
-        args[24] = (byte) 0xff;
-        args[25] = 0x00;
-        args[26] = (byte) 0xff;
-        args[27] = 0x00;
-
-        byte[] command = new byte[30];
-        command[0] = (byte) 0x89;
-        command[1] = 0x00;
-        System.arraycopy(args, 0, command, 2, args.length);
-        lastEncryptedPayloadHex = "<redacted; " + command.length + " bytes>";
-        appendDebug("Sending range command 0x0089: range=" + rangeMeters
-                + " m, payloadBytes=" + command.length);
-        return writeEncryptedPacket(0, command);
-    }
-
-    public String[] getServices() {
-        if (gatt == null || connectionState != BluetoothProfile.STATE_CONNECTED) {
-            return new String[0];
-        }
-        List<String> uuids = new ArrayList<>();
-        for (BluetoothGattService service : gatt.getServices()) {
-            uuids.add(service.getUuid().toString());
-        }
-        return uuids.toArray(new String[0]);
-    }
-
-    public String[] getCharacteristics(String serviceUuid) {
-        if (gatt == null) {
-            return new String[0];
-        }
-        for (BluetoothGattService service : gatt.getServices()) {
-            if (service.getUuid().toString().equalsIgnoreCase(serviceUuid)) {
-                List<String> uuids = new ArrayList<>();
-                for (BluetoothGattCharacteristic characteristic : service.getCharacteristics()) {
-                    uuids.add(characteristic.getUuid().toString());
-                }
-                return uuids.toArray(new String[0]);
-            }
-        }
-        return new String[0];
-    }
-
-    @SuppressLint("MissingPermission")
-    public boolean readCharacteristic(String serviceUuid, String characteristicUuid) {
-        BluetoothGattCharacteristic characteristic = findCharacteristic(serviceUuid, characteristicUuid);
-        if (gatt == null || characteristic == null) {
-            lastError = "Characteristic not found.";
-            return false;
-        }
-        lastError = "";
-        return gatt.readCharacteristic(characteristic);
-    }
-
-    @SuppressLint("MissingPermission")
-    public boolean writeCharacteristic(String serviceUuid, String characteristicUuid,
-                                       byte[] value, boolean withResponse) {
-        BluetoothGattCharacteristic characteristic = findCharacteristic(serviceUuid, characteristicUuid);
-        if (gatt == null || characteristic == null) {
-            lastError = "Characteristic not found.";
-            return false;
-        }
-        lastError = "";
-
-        // LiNK protocol writes must share one serialized queue. The Kestrel
-        // transport uses write-with-response, even for caller-supplied frames.
-        if (LINK_SERVICE.toString().equalsIgnoreCase(serviceUuid)
-                && LINK_WRITE.toString().equalsIgnoreCase(characteristicUuid)) {
-            return enqueueBleFrame(value);
-        }
-
-        int writeType = withResponse
-                ? BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
-                : BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE;
-        characteristic.setWriteType(writeType);
-        characteristic.setValue(value);
-        return gatt.writeCharacteristic(characteristic);
-    }
-
-    public boolean writeCharacteristicHex(String serviceUuid, String characteristicUuid,
-                                          String hex, boolean withResponse) {
-        return writeCharacteristic(serviceUuid, characteristicUuid, hexToBytes(hex), withResponse);
-    }
-
-    @SuppressLint("MissingPermission")
-    public boolean setCharacteristicNotification(String serviceUuid,
-                                                 String characteristicUuid,
-                                                 boolean enabled) {
-        BluetoothGattCharacteristic characteristic = findCharacteristic(serviceUuid, characteristicUuid);
-        if (gatt == null || characteristic == null) {
-            lastError = "Characteristic not found.";
-            return false;
-        }
-        if (!gatt.setCharacteristicNotification(characteristic, enabled)) {
-            lastError = "Could not configure characteristic notifications.";
-            return false;
-        }
-        BluetoothGattDescriptor descriptor =
-                characteristic.getDescriptor(CLIENT_CHARACTERISTIC_CONFIG);
-        if (descriptor == null) {
-            return true;
-        }
-        byte[] value = enabled
-                ? BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
-                : BluetoothGattDescriptor.DISABLE_NOTIFICATION_VALUE;
-        descriptor.setValue(value);
-        return gatt.writeDescriptor(descriptor);
-    }
-
-    private BluetoothGattCharacteristic findCharacteristic(String serviceUuid,
-                                                           String characteristicUuid) {
-        if (gatt == null) {
-            return null;
-        }
-        for (BluetoothGattService service : gatt.getServices()) {
-            if (!service.getUuid().toString().equalsIgnoreCase(serviceUuid)) {
-               d("Indication chunks: ").append(indicationChunkCount).append('\n');
-        summary.append("Clear frames: ").append(clearFrameCount).append('\n');
-        summary.append("Encrypted frames: ").append(encryptedFrameCount).append('\n');
-        summary.append("Gun profile parts: ").append(profilePartCount).append('\n');
-        summary.append("Last profile payload: ").append(lastProfilePayloadHex.isEmpty() ? "none" : lastProfilePayloadHex).append('\n');
-        summary.append("Last packet payload: ").append(lastEncryptedPayloadHex.isEmpty() ? "none" : lastEncryptedPayloadHex).append('\n');
-        summary.append("Last characteristic: ").append(lastCharacteristicUuid.isEmpty() ? "none" : lastCharacteristicUuid).append('\n');
-        summary.append("Last characteristic hex: ").append(lastCharacteristicValue.isEmpty() ? "none" : lastCharacteristicValue).append('\n');
-        summary.append("Last error: ").append(lastError.isEmpty() ? "none" : lastError);
-        return summary.toString();
-    }
-
-    public boolean isKestrelAuthenticated() {
-        return kestrelAuthenticated;
-    }
-
-    public double getLastElevationMil() {
-        return lastElevationMil;
-    }
-
-    public double getLastWind1Mil() {
-        return lastWind1Mil;
-    }
-
-    public double getLastWind2Mil() {
-        return lastWind2Mil;
-    }
-
-    public double getLastRangeMeters() {
-        return lastRangeMeters;
-    }
-
-    public int getElevationUnit() {
-        return elevationUnit;
-    }
-
-    public int getWindUnit() {
-        return windUnit;
-    }
-
-    public boolean refreshKestrelProfile() {
-        if (!kestrelAuthenticated || linkWriteCharacteristic == null) {
-            appendDebug("Profile refresh skipped: authentication or write characteristic unavailable");
-            return false;
-        }
-        profileRefreshInProgress = true;
-        awaitingActiveGunResponse = true;
-        awaitingGunProfile = false;
-        gunProfileParts.clear();
-        appendDebug("Requesting active gun/profile units (0x0094, 0x0087)");
-        return writeEncryptedPacket(0, new byte[]{
-                (byte) 0x94, 0x00, 0x00, 0x00, 0x00
-        });
-    }
-
-    private void applyGunProfileUnits() {
-        byte[] combinedBody = new byte[0];
-        for (byte[] part : gunProfileParts) {
-            byte[] body = part;
-            if (part.length >= 2 && readU16(part, 0) == OP_GET_GUN) {
-                body = copyRange(part, 2, part.length);
-            }
-            combinedBody = concat(combinedBody, body);
-        }
-        for (byte[] part : gunProfileParts) {
-            for (int offset : new int[]{181, 182, 183}) {
-                if (offset + 1 < part.length) {
-                    int eunit = part[offset] & 0xff;
-                    int wunit = part[offset + 1] & 0xff;
-                    if ((eunit == 1 || eunit == 2)
-                            && (wunit == 1 || wunit == 2)) {
-                        elevationUnit = eunit;
-                        windUnit = wunit;
-                        return;
-                    }
-                }
-            }
-        }
-        for (int offset = 180; offset + 1 < combinedBody.length && offset < combinedBody.length; offset++) {
-            int eunit = combinedBody[offset] & 0xff;
-            int wunit = combinedBody[offset + 1] & 0xff;
-            if ((eunit == 1 || eunit == 2)
-                    && (wunit == 1 || wunit == 2)
-                    && offset >= 181 && offset <= 400) {
-                elevationUnit = eunit;
-                windUnit = wunit;
-                return;
-            }
-        }
-        appendDebug("Gun profile unit scan found no valid Eunit/Wunit pair; kept Eunit="
-                + elevationUnit + ", Wunit=" + windUnit
-                + ", parts=" + gunProfileParts.size());
-    }
-
-    @SuppressLint("MissingPermission")
-    public boolean sendKestrelRange(double rangeMeters) {
-        if (!kestrelAuthenticated || linkWriteCharacteristic == null) {
-            lastError = "Kestrel authentication is not complete.";
-            return false;
-        }
-        lastRangeMeters = rangeMeters;
-
-        byte[] args = new byte[28];
-        args[0] = 0;
-        args[1] = 0;
-        putI24(args, 2, (int) Math.round(rangeMeters * 100.0));
-        putI24(args, 5, 0);
-        putI24(args, 8, 0);
-        args[11] = (byte) 0xff;
-        args[12] = (byte) 0xff;
-        args[13] = (byte) 0xff;
-        args[14] = (byte) 0xff;
-        args[15] = (byte) 0xff;
-        args[16] = (byte) 0xff;
-        args[17] = 0x01;
-        args[18] = 0x00;
-        args[19] = (byte) 0x80;
-        args[20] = 0x01;
-        args[21] = 0x00;
-        args[22] = (byte) 0x80;
-        args[23] = (byte) 0x81;
-        args[24] = (byte) 0xff;
-        args[25] = 0x00;
-        args[26] = (byte) 0xff;
-        args[27] = 0x00;
-
-        byte[] command = new byte[30];
-        command[0] = (byte) 0x89;
-        command[1] = 0x00;
-        System.arraycopy(args, 0, command, 2, args.length);
-        lastEncryptedPayloadHex = bytesToHex(command);
-        appendDebug("Sending range 0x0089: range=" + rangeMeters
-                + " m, payload=" + lastEncryptedPayloadHex);
-        return writeEncryptedPacket(0, command);
-    }
-
-    public String[] getServices() {
-        if (gatt == null || connectionState != BluetoothProfile.STATE_CONNECTED) {
-            return new String[0];
-        }
-        List<String> uuids = new ArrayList<>();
-        for (BluetoothGattService service : gatt.getServices()) {
-            uuids.add(service.getUuid().toString());
-        }
-        return uuids.toArray(new String[0]);
-    }
-
-    public String[] getCharacteristics(String serviceUuid) {
-        if (gatt == null) {
-            return new String[0];
-        }
-        for (BluetoothGattService service : gatt.getServices()) {
-            if (service.getUuid().toString().equalsIgnoreCase(serviceUuid)) {
-                List<String> uuids = new ArrayList<>();
-                for (BluetoothGattCharacteristic characteristic : service.getCharacteristics()) {
-                    uuids.add(characteristic.getUuid().toString());
-                }
-                return uuids.toArray(new String[0]);
-            }
-        }
-        return new String[0];
-    }
-
-    @SuppressLint("MissingPermission")
-    public boolean readCharacteristic(String serviceUuid, String characteristicUuid) {
-        BluetoothGattCharacteristic characteristic = findCharacteristic(serviceUuid, characteristicUuid);
-        if (gatt == null || characteristic == null) {
-            lastError = "Characteristic not found.";
-            return false;
-        }
-        lastError = "";
-        return gatt.readCharacteristic(characteristic);
-    }
-
-    @SuppressLint("MissingPermission")
-    public boolean writeCharacteristic(String serviceUuid, String characteristicUuid,
-                                       byte[] value, boolean withResponse) {
-        BluetoothGattCharacteristic characteristic = findCharacteristic(serviceUuid, characteristicUuid);
-        if (gatt == null || characteristic == null) {
-            lastError = "Characteristic not found.";
-            return false;
-        }
-        int writeType = withResponse
-                ? BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
-                : BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE;
-        characteristic.setWriteType(writeType);
-        characteristic.setValue(value);
-        lastError = "";
         return gatt.writeCharacteristic(characteristic);
     }
 
@@ -1025,6 +637,23 @@ public class BluetoothHelper {
                 status = newState == BluetoothProfile.STATE_DISCONNECTED
                         ? "Disconnected"
                         : "Connection error";
+
+                if (newState == BluetoothProfile.STATE_DISCONNECTED) {
+                    synchronized (bleWriteLock) {
+                        bleWriteQueue.clear();
+                        bleWriteInProgress = false;
+                    }
+                    kestrelAuthenticated = false;
+                    privacyResponseReceived = false;
+                    requestAuthSent = false;
+                    profileRefreshInProgress = false;
+                    awaitingActiveGunResponse = false;
+                    awaitingGunProfile = false;
+                    linkIndicationCharacteristic = null;
+                    linkWriteCharacteristic = null;
+                    indicationAccumulator.clear();
+                    appendDebug("BLE disconnected; pending writes cleared");
+                }
             }
         }
 
@@ -1086,9 +715,11 @@ public class BluetoothHelper {
         public void onCharacteristicChanged(BluetoothGatt bluetoothGatt,
                                             BluetoothGattCharacteristic characteristic) {
             lastCharacteristicUuid = characteristic.getUuid().toString();
-            lastCharacteristicValue = bytesToHex(characteristic.getValue());
+            byte[] indication = characteristic.getValue();
+            lastCharacteristicValue = "<redacted; "
+                    + (indication == null ? 0 : indication.length) + " bytes>";
             appendDebug("Characteristic indication: " + lastCharacteristicUuid
-                    + ", " + characteristic.getValue().length + " bytes");
+                    + ", " + (indication == null ? 0 : indication.length) + " bytes");
             if (characteristic.getUuid().equals(LINK_INDICATION)) {
                 handleKestrelIndication(characteristic.getValue());
             }
@@ -1098,12 +729,15 @@ public class BluetoothHelper {
         public void onCharacteristicWrite(BluetoothGatt bluetoothGatt,
                                           BluetoothGattCharacteristic characteristic,
                                           int statusCode) {
-            if (statusCode != BluetoothGatt.GATT_SUCCESS) {
-                lastError = "Characteristic write status " + statusCode;
-                appendDebug("Characteristic write failed: " + statusCode);
-            } else {
-                appendDebug("Characteristic write succeeded: " + characteristic.getUuid());
+            if (characteristic == null
+                    || !LINK_WRITE.equals(characteristic.getUuid())) {
+                if (statusCode != BluetoothGatt.GATT_SUCCESS) {
+                    lastError = "Characteristic write status " + statusCode;
+                    appendDebug("Characteristic write failed: " + statusCode);
+                }
+                return;
             }
+            onBleWriteComplete(statusCode);
         }
 
         @Override
@@ -1190,7 +824,7 @@ public class BluetoothHelper {
                 writeClearPacket(3, proofPacket);
                 return;
             }
-            if (opcode == 0x007e && parsed.payload.length >= 4) {
+            if (opcode == 0x007e && parsed.payload.length >= 2) {
                 writeClearPacket(4, new byte[]{0x7e, 0x00});
                 hostNonce = new byte[16];
                 new SecureRandom().nextBytes(hostNonce);
@@ -1198,7 +832,7 @@ public class BluetoothHelper {
                 return;
             }
         }
-        if (parsed.type == 3 && parsed.payload.length >= 36 && hostNonce != null) {
+        if (parsed.type == 3 && parsed.payload.length >= 32 && hostNonce != null) {
             byte[] plaintext = aesCbcDecrypt(copyRange(parsed.payload, 0, 32));
             boolean verified = plaintext.length >= 32
                     && constantTimeEquals(copyRange(plaintext, 16, 32), hostNonce);
@@ -1223,100 +857,273 @@ public class BluetoothHelper {
             appendDebug(lastError);
             return;
         }
+
         Packet parsed = parsePacket(packet);
         if (parsed == null) {
             appendDebug("Encrypted Kestrel frame could not be parsed");
             return;
         }
 
-        if (awaitingActiveGunResponse && parsed.type == 1 && parsed.payload.length >= 4) {
-            int opcode = readU16(parsed.payload, 0);
-            if (opcode == OP_GET_ACTIVE_GUN || parsed.payload.length >= 4) {
-                activeGunIndex = readU16(parsed.payload,
-                        parsed.payload.length >= 4 ? 2 : 0);
-                lastParsedOpcodeHex = String.format("%04x", opcode);
-                appendDebug("Active gun response: index=" + activeGunIndex + ", payload=" + bytesToHex(parsed.payload));
-                awaitingActiveGunResponse = false;
-                awaitingGunProfile = true;
-                writeEncryptedPacket(4, new byte[]{
-                        (byte) 0x94, 0x00
-                });
-                gunProfileParts.clear();
-                writeEncryptedPacket(0, new byte[]{
-                        (byte) 0x87, 0x00,
-                        (byte) (activeGunIndex & 0xff),
-                        (byte) ((activeGunIndex >>> 8) & 0xff)
-                });
-                return;
-            }
-        }
+        appendDebug("Encrypted packet received: type=" + parsed.type
+                + ", payloadBytes=" + parsed.payload.length);
 
-        if (awaitingGunProfile && parsed.type == 1 && parsed.payload.length > 0) {
-            gunProfileParts.add(parsed.payload);
-            profilePartCount = gunProfileParts.size();
-            lastProfilePayloadHex = bytesToHex(parsed.payload);
-            appendDebug("Gun profile part " + profilePartCount + ": " + lastProfilePayloadHex);
+        // Type 3 is RESPONSE. Its payload is response data, not an opcode.
+        // GetActiveGunIndex returns the selected slot at payload bytes 2-3.
+        if (awaitingActiveGunResponse
+                && parsed.type == 3
+                && parsed.payload.length >= 4) {
+
+            activeGunIndex = readU16(parsed.payload, 2);
+            lastParsedOpcodeHex = String.format("%04x", OP_GET_ACTIVE_GUN);
+
+            appendDebug("Active gun response received: slot=" + activeGunIndex);
+
+            awaitingActiveGunResponse = false;
+            awaitingGunProfile = true;
+            gunProfileParts.clear();
+            profilePartCount = 0;
+
+            // A RESPONSE is acknowledged using the opcode of the request.
             writeEncryptedPacket(4, new byte[]{
-                    (byte) 0x87, 0x00
+                    (byte) (OP_GET_ACTIVE_GUN & 0xff),
+                    (byte) ((OP_GET_ACTIVE_GUN >>> 8) & 0xff)
+            });
+
+            // Request the selected gun. The Kestrel returns multiple type-3
+            // RESPONSE parts followed by a type-0 COMMAND carrying EOD.
+            writeEncryptedPacket(0, new byte[]{
+                    (byte) (OP_GET_GUN & 0xff),
+                    (byte) ((OP_GET_GUN >>> 8) & 0xff),
+                    (byte) (activeGunIndex & 0xff),
+                    (byte) ((activeGunIndex >>> 8) & 0xff)
             });
             return;
         }
 
-        if (awaitingGunProfile && parsed.type == 0 && parsed.payload.length >= 2) {
-            int opcode = readU16(parsed.payload, 0);
-            if (opcode == OP_END_OF_DATA && !gunProfileParts.isEmpty()) {
-                writeEncryptedPacket(4, new byte[]{
-                        (byte) 0x12, 0x00
-                });
-                applyGunProfileUnits();
-                profileRefreshInProgress = false;
-                awaitingGunProfile = false;
-                appendDebug("Gun profile complete: Eunit=" + elevationUnit + ", Wunit=" + windUnit);
-                return;
-            }
+        // Each gun-profile RESPONSE part is type 3 and is ACKed with 0x0087.
+        if (awaitingGunProfile && parsed.type == 3) {
+            gunProfileParts.add(parsed.payload.clone());
+            profilePartCount = gunProfileParts.size();
+            lastProfilePayloadHex = "<redacted; "
+                    + parsed.payload.length + " bytes>";
+
+            appendDebug("Gun profile response part received: "
+                    + profilePartCount + ", bytes=" + parsed.payload.length);
+
+            writeEncryptedPacket(4, new byte[]{
+                    (byte) (OP_GET_GUN & 0xff),
+                    (byte) ((OP_GET_GUN >>> 8) & 0xff)
+            });
+            return;
         }
 
-        if (parsed.type == 0 && parsed.payload.length >= 92) {
-            int opcode = readU16(parsed.payload, 0);
-            if (opcode == 0x008a) {
-                lastParsedOpcodeHex = "008a";
-                byte[] solution = copyRange(parsed.payload, 2,
-                        Math.min(parsed.payload.length, 92));
-                if (solution.length >= 23) {
-                    lastElevationMil = readF32(solution, 11);
-                    lastWind1Mil = readF32(solution, 15);
-                    lastWind2Mil = readF32(solution, 19);
-                    status = "Connected";
-                    appendDebug("Solution 0x008a: ElvMIL=" + lastElevationMil
-                            + ", Wnd1MIL=" + lastWind1Mil
-                            + ", Wnd2MIL=" + lastWind2Mil
-                            + ", payload=" + bytesToHex(parsed.payload));
+        // End-of-data is a Kestrel COMMAND (type 0), ACKed with its own opcode.
+        if (awaitingGunProfile
+                && parsed.type == 0
+                && parsed.payload.length >= 2
+                && readU16(parsed.payload, 0) == OP_END_OF_DATA) {
+
+            appendDebug("Gun profile end-of-data received");
+
+            writeEncryptedPacket(4, new byte[]{
+                    (byte) (OP_END_OF_DATA & 0xff),
+                    (byte) ((OP_END_OF_DATA >>> 8) & 0xff)
+            });
+
+            applyGunProfileUnits();
+            profileRefreshInProgress = false;
+            awaitingGunProfile = false;
+
+            appendDebug("Gun profile refresh finished: parts="
+                    + gunProfileParts.size()
+                    + ", elevationUnit=" + elevationUnit
+                    + ", windUnit=" + windUnit);
+            return;
+        }
+
+        // GetRemoteSoln (0x00a0) returns the current target inputs in a
+        // Kestrel COMMAND (0x00a1). ACK it, then use its DoF and inclination
+        // values when composing the state-changing 0x0089 range update.
+        if (parsed.type == 0
+                && parsed.payload.length >= 109
+                && readU16(parsed.payload, 0) == 0x00a1) {
+            writeEncryptedPacket(4, new byte[]{(byte) 0xa1, 0x00});
+            if (awaitingRangeInputs) {
+                clearRangeInputTimeout();
+                float currentDoF = readF32(parsed.payload, 2 + 27);
+                float currentInclination = readF32(parsed.payload, 2 + 103);
+                double requestedRange = pendingRangeMeters;
+                awaitingRangeInputs = false;
+                pendingRangeMeters = Double.NaN;
+
+                if (Float.isNaN(currentDoF) || Float.isInfinite(currentDoF)
+                        || Float.isNaN(currentInclination) || Float.isInfinite(currentInclination)) {
+                    lastError = "Kestrel returned invalid current inclination/DoF; range was not changed.";
+                    appendDebug(lastError);
+                    return;
                 }
-                writeEncryptedPacket(4, new byte[]{(byte) 0x8a, 0x00});
+
+                appendDebug("Current target inputs read: inclination="
+                        + currentInclination + " deg, DoF=" + currentDoF + " deg");
+                if (!sendKestrelFullInputs(requestedRange,
+                        currentInclination, currentDoF)) {
+                    if (lastError == null || lastError.isEmpty()) {
+                        lastError = "Unable to queue Kestrel range update.";
+                    }
+                }
             }
-        } else if (parsed.type == 4 && parsed.payload.length >= 2) {
-            // Command acknowledgement; no additional UI action required.
-        } else if (parsed.type == 5 && parsed.payload.length >= 4) {
+            return;
+        }
+
+        // 0x008A is a Kestrel COMMAND carrying the calculated solution.
+        // Its record begins after the two-byte opcode.
+        if (parsed.type == 0
+                && parsed.payload.length >= 92
+                && readU16(parsed.payload, 0) == 0x008a) {
+
+            lastParsedOpcodeHex = "008a";
+
+            byte[] solution = copyRange(parsed.payload, 2, 92);
+            if (solution.length >= 23) {
+                lastElevationMil = readF32(solution, 11);
+                lastWind1Mil = readF32(solution, 15);
+                lastWind2Mil = readF32(solution, 19);
+                status = "Connected";
+
+                appendDebug("Solution 0x008a received: elevationMIL="
+                        + lastElevationMil
+                        + ", wind1MIL=" + lastWind1Mil
+                        + ", wind2MIL=" + lastWind2Mil);
+            }
+
+            // A Kestrel COMMAND is acknowledged with its own opcode.
+            writeEncryptedPacket(4, new byte[]{
+                    (byte) 0x8a, 0x00
+            });
+            return;
+        }
+
+        if (parsed.type == 5 && parsed.payload.length >= 4) {
+            int rejectedOpcode = readU16(parsed.payload, 0);
             int reason = readU16(parsed.payload, 2);
-            lastError = "Kestrel rejected command, reason " + reason;
+            lastError = "Kestrel rejected command 0x"
+                    + String.format("%04x", rejectedOpcode)
+                    + ", reason " + reason;
+            if (rejectedOpcode == 0x00a0 || rejectedOpcode == 0x0089) {
+                awaitingRangeInputs = false;
+                pendingRangeMeters = Double.NaN;
+                clearRangeInputTimeout();
+                appendDebug("Pending range update cancelled after Kestrel NACK");
+            }
             status = "Error";
+            appendDebug(lastError);
+        }
+        // Type 4 packets are acknowledgements for our commands; no UI action.
+    }
+
+    @SuppressLint("MissingPermission")
+    private boolean enqueueBleFrame(byte[] frame) {
+        if (frame == null || frame.length == 0
+                || gatt == null || linkWriteCharacteristic == null) {
+            lastError = "Kestrel BLE write characteristic unavailable.";
+            return false;
+        }
+
+        synchronized (bleWriteLock) {
+            for (int offset = 0; offset < frame.length;
+                 offset += BLE_WRITE_CHUNK_SIZE) {
+                int length = Math.min(BLE_WRITE_CHUNK_SIZE, frame.length - offset);
+                byte[] chunk = new byte[length];
+                System.arraycopy(frame, offset, chunk, 0, length);
+                bleWriteQueue.add(chunk);
+            }
+
+            appendDebug("BLE frame queued: " + frame.length + " bytes, "
+                    + ((frame.length + BLE_WRITE_CHUNK_SIZE - 1)
+                    / BLE_WRITE_CHUNK_SIZE) + " chunks");
+
+            if (!bleWriteInProgress) {
+                return sendNextBleChunkLocked();
+            }
+            return true;
+        }
+    }
+
+    // Must be called while holding bleWriteLock.
+    @SuppressLint("MissingPermission")
+    private boolean sendNextBleChunkLocked() {
+        if (bleWriteInProgress || bleWriteQueue.isEmpty()) {
+            return true;
+        }
+
+        if (gatt == null || linkWriteCharacteristic == null) {
+            bleWriteQueue.clear();
+            bleWriteInProgress = false;
+            lastError = "Kestrel BLE connection lost while writing.";
+            return false;
+        }
+
+        byte[] chunk = bleWriteQueue.peek();
+        linkWriteCharacteristic.setWriteType(
+                BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT);
+        linkWriteCharacteristic.setValue(chunk);
+
+        boolean started = gatt.writeCharacteristic(linkWriteCharacteristic);
+        if (!started) {
+            bleWriteQueue.clear();
+            bleWriteInProgress = false;
+            lastError = "Android could not start BLE characteristic write.";
+            appendDebug(lastError);
+            return false;
+        }
+
+        bleWriteInProgress = true;
+        appendDebug("BLE chunk write started: " + chunk.length + " bytes");
+        return true;
+    }
+
+    @SuppressLint("MissingPermission")
+    private void onBleWriteComplete(int statusCode) {
+        synchronized (bleWriteLock) {
+            if (!bleWriteInProgress) {
+                appendDebug("Unexpected LiNK write callback; no chunk was pending");
+                return;
+            }
+
+            if (statusCode != BluetoothGatt.GATT_SUCCESS) {
+                lastError = "LiNK BLE chunk write failed: GATT status " + statusCode;
+                appendDebug(lastError);
+                bleWriteQueue.clear();
+                bleWriteInProgress = false;
+                return;
+            }
+
+            bleWriteQueue.poll();
+            bleWriteInProgress = false;
+
+            if (!bleWriteQueue.isEmpty()) {
+                sendNextBleChunkLocked();
+            } else {
+                appendDebug("BLE frame/write queue drained");
+            }
         }
     }
 
     private boolean writeClearPacket(int type, byte[] payload) {
         if (linkWriteCharacteristic == null || gatt == null) {
+            lastError = "Kestrel BLE connection unavailable.";
             return false;
         }
         byte[] packet = encodePacket(type, payload);
         byte[] frame = hdlcWrap(packet);
-        linkWriteCharacteristic.setWriteType(
-                BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT);
-        linkWriteCharacteristic.setValue(frame);
-        return gatt.writeCharacteristic(linkWriteCharacteristic);
+        appendDebug("Queueing clear packet: type=" + type
+                + ", frameBytes=" + frame.length);
+        return enqueueBleFrame(frame);
     }
 
     private boolean writeEncryptedPacket(int type, byte[] payload) {
         if (!kestrelAuthenticated || linkWriteCharacteristic == null || gatt == null) {
+            lastError = "Kestrel authentication or BLE connection unavailable.";
             return false;
         }
         byte[] packet = encodePacket(type, payload);
@@ -1327,13 +1134,14 @@ public class BluetoothHelper {
             plaintext = concat(plaintext, new byte[]{0});
         }
         byte[] ciphertext = aesCbcEncrypt(plaintext);
+        if (ciphertext.length == 0) {
+            lastError = "Kestrel packet encryption failed.";
+            return false;
+        }
         byte[] frame = hdlcWrap(ciphertext);
-        linkWriteCharacteristic.setWriteType(
-                BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT);
-        linkWriteCharacteristic.setValue(frame);
-        appendDebug("Encrypted packet write: type=" + type + ", payloadHex=" + bytesToHex(packet)
+        appendDebug("Queueing encrypted packet: type=" + type
                 + ", frameBytes=" + frame.length);
-        return gatt.writeCharacteristic(linkWriteCharacteristic);
+        return enqueueBleFrame(frame);
     }
 
     private static byte[] hdlcWrap(byte[] body) {
@@ -1555,6 +1363,10 @@ public class BluetoothHelper {
                 return;
             }
             pending = concat(pending, chunk);
+        }
+
+        void clear() {
+            pending = new byte[0];
         }
 
         byte[][] takeCompleteFrames() {
