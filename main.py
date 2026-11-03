@@ -28,11 +28,14 @@ from circularprogressbar import CircularProgressBar
 from kivy.lang import Builder
 from kivy.app import App
 from kivymd.toast import toast
-from kivy.properties import StringProperty
+from kivy.properties import BooleanProperty, ListProperty, StringProperty
 from kivy.uix.scrollview import ScrollView
 from kivy.uix.widget import Widget
 from kivy.uix.image import Image
-from kivymd.uix.selectioncontrol import MDCheckbox
+from kivymd.uix.selectioncontrol import MDCheckbox, MDSwitch
+
+from kivy.graphics import Color, Ellipse, RoundedRectangle
+from kivy.factory import Factory
 
 
 # === Imports & Global Setup ===
@@ -42,6 +45,7 @@ from kivymd.uix.selectioncontrol import MDCheckbox
 show_lead = False # Default to not showing the Lead field
 show_range = False  # Default to not showing the Range field
 hide_range_in_bitmap = True  # Settings-only: hide Range in generated bitmap/Data Card image
+range_bitmap_visibility_override = None  # Three-dot menu temporary visibility override
 show_2_wind_holds = True # Default to showing the two wind holds
 
 try:
@@ -368,6 +372,54 @@ class ManageDataScreen(Screen):
             ],
         )
         dialog.open()
+
+
+class MobileToggle(Widget):
+    active = BooleanProperty(False)
+    track_color_active = ListProperty([0.0, 0.4, 0.8, 1.0])
+    track_color_inactive = ListProperty([0.62, 0.62, 0.62, 1.0])
+    thumb_color = ListProperty([1.0, 1.0, 1.0, 1.0])
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.bind(pos=self.redraw, size=self.redraw, active=self.redraw)
+
+    def redraw(self, *args):
+        self.canvas.clear()
+        thumb_size = max(dp(20), self.height - dp(8))
+        thumb_y = self.y + ((self.height - thumb_size) / 2.0)
+        thumb_x = (
+            self.right - thumb_size - dp(4)
+            if self.active
+            else self.x + dp(4)
+        )
+
+        with self.canvas:
+            Color(*(
+                self.track_color_active if self.active
+                else self.track_color_inactive
+            ))
+            RoundedRectangle(
+                pos=self.pos,
+                size=self.size,
+                radius=[self.height / 2.0],
+            )
+            Color(*self.thumb_color)
+            Ellipse(pos=(thumb_x, thumb_y), size=(thumb_size, thumb_size))
+
+    def on_touch_down(self, touch):
+        if self.collide_point(*touch.pos):
+            return True
+        return super().on_touch_down(touch)
+
+    def on_touch_up(self, touch):
+        if self.collide_point(*touch.pos):
+            self.active = not self.active
+            return True
+        return super().on_touch_up(touch)
+
+
+Factory.register("MobileToggle", cls=MobileToggle)
 
 
 class SettingsScreen(Screen):
@@ -1437,7 +1489,7 @@ class MainApp(MDApp):
         self.menu.open()
 
     def menu_callback(self, option):
-        global show_lead, show_range, hide_range_in_bitmap, show_2_wind_holds
+        global show_lead, show_range, range_bitmap_visibility_override, show_2_wind_holds
 
         # Track if we changed a setting
         changed = False
@@ -1451,11 +1503,11 @@ class MainApp(MDApp):
             changed = True
         if option == "Hide Range":
             show_range = False
-            hide_range_in_bitmap = True
+            range_bitmap_visibility_override = True
             changed = True
         elif option == "Show Range":
             show_range = True
-            hide_range_in_bitmap = False
+            range_bitmap_visibility_override = None
             changed = True
         if option == "Show 1 Wind Hold":
             show_2_wind_holds = False
@@ -1481,11 +1533,6 @@ class MainApp(MDApp):
         if changed:
             self.save_settings()
             if option in {"Hide Range", "Show Range"}:
-                try:
-                    range_checkbox = self.root.ids.settings_screen.ids.show_range_checkbox
-                    range_checkbox.active = bool(hide_range_in_bitmap)
-                except (AttributeError, KeyError):
-                    pass
                 if getattr(self, "standalone_mode_enabled", False):
                     self.show_manual_data_input()
                 elif hasattr(self, "current_data") and self.current_data:
@@ -1748,7 +1795,8 @@ class MainApp(MDApp):
     def load_settings(self):
         """Load persisted user preferences from the settings file."""
         # This includes display model, orientation, sort preferences, and column visibility
-        global show_lead, show_range, hide_range_in_bitmap, show_2_wind_holds
+        global show_lead, show_range, hide_range_in_bitmap, range_bitmap_visibility_override, show_2_wind_holds
+        range_bitmap_visibility_override = None
         
         # Check if settings file exists from previous session
         if os.path.exists(self.config_file):
@@ -1858,7 +1906,7 @@ class MainApp(MDApp):
                 headers.insert(0, "Target")
             
             # Add Range to the bitmap only when the bitmap setting is set to show it.
-            if not hide_range_in_bitmap:
+            if self.get_effective_hide_range_in_bitmap() is False:
                 if not target_present:
                     headers.insert(0, "Range")
                 else:
@@ -2200,6 +2248,11 @@ class MainApp(MDApp):
             self.target_identifier_menu.dismiss()
 
     def get_hide_range_in_bitmap(self):
+        return bool(hide_range_in_bitmap)
+
+    def get_effective_hide_range_in_bitmap(self):
+        if range_bitmap_visibility_override is not None:
+            return bool(range_bitmap_visibility_override)
         return bool(hide_range_in_bitmap)
 
     def set_hide_range_in_bitmap(self, active):
@@ -3105,6 +3158,19 @@ SwipeFileItem:
     # --- Manual Data Input ---
     def show_manual_data_input(self):
         """Display dynamic manual data input fields with add/delete row functionality."""
+        # Preserve entered values when settings rebuild the manual Home form.
+        preserved_rows = []
+        if hasattr(self, "manual_data_rows"):
+            for row_fields in self.manual_data_rows:
+                preserved_row = {}
+                for field_name, field in row_fields.items():
+                    preserved_row[field_name] = (
+                        field.text,
+                        getattr(field, "_target_identifier_auto_generated", True),
+                    )
+                if preserved_row:
+                    preserved_rows.append(preserved_row)
+
         # Initialize list to track manual input fields for later retrieval
         self.manual_data_fields = []
         self.manual_data_rows = []
@@ -3122,8 +3188,22 @@ SwipeFileItem:
         rows_layout.bind(minimum_height=rows_layout.setter("height"))
         self.manual_rows_layout = rows_layout
 
-        # Start with one empty row ready for input
-        self.add_data_row(rows_layout, focus_row=False)
+        # Recreate the same number of rows and restore their values.
+        row_count = len(preserved_rows) if preserved_rows else 1
+        for row_index in range(row_count):
+            self.add_data_row(rows_layout, focus_row=False)
+            if row_index < len(preserved_rows):
+                self._manual_target_text_suppress = True
+                try:
+                    for field_name, preserved in preserved_rows[row_index].items():
+                        field = self.manual_data_rows[-1].get(field_name)
+                        if field is None:
+                            continue
+                        field.text = preserved[0]
+                        if field_name == "Target":
+                            field._target_identifier_auto_generated = preserved[1]
+                finally:
+                    self._manual_target_text_suppress = False
 
         # Wrap the rows layout in a ScrollView so user can scroll if many rows are added
         scroll = ScrollView(size_hint_y=0.8)  # Take up 80% of vertical space
@@ -3266,9 +3346,11 @@ SwipeFileItem:
         # Add the new row to the layout
         rows_layout.add_widget(row_layout)
         
-        # Auto-focus the first field in the new row to start typing immediately
+        # Auto-focus Range first when it is visible; otherwise use the first visible field.
         if manual_fields and focus_row:
-            Clock.schedule_once(lambda dt: setattr(manual_fields[0], "focus", True), 0.1)
+            range_field = row_fields.get("Range")
+            focus_field = range_field if range_field is not None else manual_fields[0]
+            Clock.schedule_once(lambda dt: setattr(focus_field, "focus", True), 0.1)
 
         # Update keyboard navigation for all fields on homepage
         self.enable_next_navigation_on_homepage()

@@ -310,19 +310,34 @@ MDNavigationLayout:
                     height: dp(32)
                     on_release: app.open_target_identifier_dropdown(self)
 
-                MDLabel:
-                    text: "Hide Range in Bitmap:"
-                    halign: "center"
+                BoxLayout:
+                    orientation: "horizontal"
                     size_hint_y: None
-                    height: self.texture_size[1] + dp(4)
+                    height: dp(36)
+                    spacing: "4dp"
 
-                MDCheckbox:
-                    id: show_range_checkbox
-                    size_hint: None, None
-                    size: "48dp", "48dp"
-                    pos_hint: {"center_x": 0.5}
-                    active: app.get_hide_range_in_bitmap() if hasattr(app, "get_hide_range_in_bitmap") else True
-                    on_active: app.set_hide_range_in_bitmap(self.active)
+                    Widget:
+                        size_hint_x: 1
+
+                    MDLabel:
+                        text: "Hide Range in Bitmap:"
+                        halign: "center"
+                        valign: "middle"
+                        size_hint_x: None
+                        width: min(dp(180), max(dp(120), self.parent.width - dp(68)))
+                        size_hint_y: 1
+                        text_size: self.width, None
+
+                    MobileToggle:
+                        id: show_range_checkbox
+                        size_hint: None, None
+                        size: "64dp", "32dp"
+                        pos_hint: {"center_y": 0.5}
+                        active: app.get_hide_range_in_bitmap() if hasattr(app, "get_hide_range_in_bitmap") else True
+                        on_active: app.set_hide_range_in_bitmap(self.active)
+
+                    Widget:
+                        size_hint_x: 1
 
 <SwipeFileItem@CustomSwipeFileItem>:
     swipe_disabled: False
