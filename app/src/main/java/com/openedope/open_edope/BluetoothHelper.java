@@ -95,6 +95,8 @@ public class BluetoothHelper {
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private Runnable rangeInputTimeout;
     private Runnable rangeSolutionTimeout;
+    private Runnable profileRefreshTimeout;
+    private Runnable profileRefreshPoll;
     private int remoteSolutionCounter;
     private final Queue<Double> pendingRangeQueue = new ArrayDeque<>();
     private final List<byte[]> gunProfileParts = new ArrayList<>();
@@ -246,6 +248,7 @@ public class BluetoothHelper {
         pendingRangeCounter = -1;
         clearRangeInputTimeout();
         clearRangeSolutionTimeout();
+        stopProfileRefreshPolling();
         activeGunIndex = -1;
         elevationUnit = 1;
         windUnit = 1;
@@ -368,6 +371,38 @@ public class BluetoothHelper {
         return windUnit;
     }
 
+    private void clearProfileRefreshTimeout() {
+        if (profileRefreshTimeout != null) {
+            mainHandler.removeCallbacks(profileRefreshTimeout);
+            profileRefreshTimeout = null;
+        }
+    }
+
+    private void startProfileRefreshPolling() {
+        stopProfileRefreshPolling();
+        profileRefreshPoll = new Runnable() {
+            @Override
+            public void run() {
+                if (!kestrelAuthenticated || connectionState != BluetoothProfile.STATE_CONNECTED) {
+                    profileRefreshPoll = null;
+                    return;
+                }
+                refreshKestrelProfile();
+                profileRefreshPoll = this;
+                mainHandler.postDelayed(this, 10000L);
+            }
+        };
+        mainHandler.postDelayed(profileRefreshPoll, 10000L);
+    }
+
+    private void stopProfileRefreshPolling() {
+        clearProfileRefreshTimeout();
+        if (profileRefreshPoll != null) {
+            mainHandler.removeCallbacks(profileRefreshPoll);
+            profileRefreshPoll = null;
+        }
+    }
+
     public boolean refreshKestrelProfile() {
         if (!kestrelAuthenticated || linkWriteCharacteristic == null) {
             appendDebug("Profile refresh skipped: authentication or write characteristic unavailable");
@@ -391,8 +426,23 @@ public class BluetoothHelper {
             awaitingActiveGunResponse = false;
             awaitingGunProfile = false;
             gunProfileParts.clear();
+            return false;
         }
-        return queued;
+        clearProfileRefreshTimeout();
+        profileRefreshTimeout = () -> {
+            if (profileRefreshInProgress) {
+                profileRefreshInProgress = false;
+                awaitingActiveGunResponse = false;
+                awaitingGunProfile = false;
+                gunProfileParts.clear();
+                lastError = "Timed out refreshing the active Kestrel gun profile.";
+                appendDebug(lastError);
+                startNextQueuedRange();
+            }
+            profileRefreshTimeout = null;
+        };
+        mainHandler.postDelayed(profileRefreshTimeout, 8000L);
+        return true;
     }
 
     private void applyGunProfileUnits() {
@@ -774,7 +824,8 @@ public class BluetoothHelper {
                     linkWriteCharacteristic = null;
                     indicationAccumulator.clear();
                     appendDebug("BLE disconnected; pending writes cleared");
-                }
+                        stopProfileRefreshPolling();
+                    }
             }
         }
 
@@ -988,6 +1039,7 @@ public class BluetoothHelper {
                 lastError = "";
                 appendDebug("Kestrel mutual authentication verified");
                 refreshKestrelProfile();
+                startProfileRefreshPolling();
             } else {
                 lastError = "Kestrel mutual authentication failed.";
                 status = "Error";
@@ -1055,6 +1107,7 @@ public class BluetoothHelper {
                     (byte) ((activeGunIndex >>> 8) & 0xff)
             });
             if (!requestQueued) {
+                clearProfileRefreshTimeout();
                 profileRefreshInProgress = false;
                 awaitingGunProfile = false;
                 gunProfileParts.clear();
@@ -1090,6 +1143,7 @@ public class BluetoothHelper {
             appendDebug("Gun profile end-of-data received");
 
             applyGunProfileUnits();
+            clearProfileRefreshTimeout();
             profileRefreshInProgress = false;
             awaitingGunProfile = false;
 
@@ -1194,6 +1248,7 @@ public class BluetoothHelper {
                     + String.format("%04x", rejectedOpcode)
                     + ", reason " + reason;
             if (rejectedOpcode == 0x0094 || rejectedOpcode == 0x0087) {
+                clearProfileRefreshTimeout();
                 profileRefreshInProgress = false;
                 awaitingActiveGunResponse = false;
                 awaitingGunProfile = false;
