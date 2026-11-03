@@ -41,6 +41,7 @@ from kivymd.uix.selectioncontrol import MDCheckbox
 # Global configuration variables
 show_lead = False # Default to not showing the Lead field
 show_range = False  # Default to not showing the Range field
+hide_range_in_bitmap = True  # Settings-only: hide Range in generated bitmap/Data Card image
 show_2_wind_holds = True # Default to showing the two wind holds
 
 try:
@@ -380,7 +381,13 @@ class SettingsScreen(Screen):
             )
         range_checkbox = getattr(self.ids, "show_range_checkbox", None)
         if range_checkbox is not None:
-            range_checkbox.active = bool(show_range)
+            range_checkbox.active = bool(app.get_hide_range_in_bitmap())
+        target_button = getattr(self.ids, "target_identifier_dropdown_button", None)
+        if target_button is not None:
+            target_button.text = (
+                "A, B, C..." if app.target_identifier_style == "ALPHA"
+                else "1, 2, 3..."
+            )
 
 
 class CustomFileChooserListView(FileChooserListView):
@@ -763,6 +770,7 @@ class MainApp(MDApp):
         # Portrait vs Landscape orientation preference
         self.selected_orientation = "Portrait"  # Default orientation
         self.kestrel_direction_style = "DIRECTION"
+        self.target_identifier_style = "NUMERIC"
         # Folder where CSV files will be saved when user chooses an event
         self.selected_save_folder = None  # Store the selected folder for saving CSV files
         # The NFC tag detected from an intent (used during NFC operations)
@@ -1427,7 +1435,7 @@ class MainApp(MDApp):
         self.menu.open()
 
     def menu_callback(self, option):
-        global show_lead, show_range, show_2_wind_holds
+        global show_lead, show_range, hide_range_in_bitmap, show_2_wind_holds
 
         # Track if we changed a setting
         changed = False
@@ -1441,9 +1449,11 @@ class MainApp(MDApp):
             changed = True
         if option == "Hide Range":
             show_range = False
+            hide_range_in_bitmap = True
             changed = True
         elif option == "Show Range":
             show_range = True
+            hide_range_in_bitmap = False
             changed = True
         if option == "Show 1 Wind Hold":
             show_2_wind_holds = False
@@ -1471,7 +1481,7 @@ class MainApp(MDApp):
             if option in {"Hide Range", "Show Range"}:
                 try:
                     range_checkbox = self.root.ids.settings_screen.ids.show_range_checkbox
-                    range_checkbox.active = bool(show_range)
+                    range_checkbox.active = bool(hide_range_in_bitmap)
                 except (AttributeError, KeyError):
                     pass
                 if getattr(self, "standalone_mode_enabled", False):
@@ -1707,12 +1717,14 @@ class MainApp(MDApp):
             self.config_parser.set("Settings", "display_model", self.selected_display)
             self.config_parser.set("Settings", "orientation", self.selected_orientation)
             self.config_parser.set("Settings", "kestrel_direction_style", getattr(self, "kestrel_direction_style", "DIRECTION"))
+            self.config_parser.set("Settings", "target_identifier_style", getattr(self, "target_identifier_style", "NUMERIC"))
             self.config_parser.set("Settings", "standalone_mode", str(self.standalone_mode_enabled))
             
             # Save column visibility preferences
             # These determine which rangecard columns are shown/exported
             self.config_parser.set("Settings", "show_lead", str(show_lead))
             self.config_parser.set("Settings", "show_range", str(show_range))
+            self.config_parser.set("Settings", "hide_range_in_bitmap", str(hide_range_in_bitmap))
             self.config_parser.set("Settings", "show_2_wind_holds", str(show_2_wind_holds))
             
             # Save file browser sorting preferences
@@ -1734,7 +1746,7 @@ class MainApp(MDApp):
     def load_settings(self):
         """Load persisted user preferences from the settings file."""
         # This includes display model, orientation, sort preferences, and column visibility
-        global show_lead, show_range, show_2_wind_holds
+        global show_lead, show_range, hide_range_in_bitmap, show_2_wind_holds
         
         # Check if settings file exists from previous session
         if os.path.exists(self.config_file):
@@ -1746,6 +1758,12 @@ class MainApp(MDApp):
             # These determine which rangecard columns are shown/exported
             show_lead = settings.getboolean("show_lead", True)  # Show Lead/Drift column
             show_range = settings.getboolean("show_range", True)  # Show Range column
+            if self.config_parser.has_option("Settings", "hide_range_in_bitmap"):
+                hide_range_in_bitmap = settings.getboolean("hide_range_in_bitmap", True)
+            elif self.config_parser.has_option("Settings", "show_range_on_data_card"):
+                hide_range_in_bitmap = not settings.getboolean("show_range_on_data_card", False)
+            else:
+                hide_range_in_bitmap = True
             show_2_wind_holds = settings.getboolean("show_2_wind_holds", True)  # Show Wnd2 (second wind hold)
             
             # Load display model (determines output image resolution)
@@ -1756,6 +1774,11 @@ class MainApp(MDApp):
 
             direction_style = settings.get("kestrel_direction_style", "DIRECTION").upper()
             self.kestrel_direction_style = direction_style if direction_style in {"SIGNED", "DIRECTION"} else "DIRECTION"
+            target_identifier_style = settings.get("target_identifier_style", "NUMERIC").upper()
+            self.target_identifier_style = (
+                target_identifier_style if target_identifier_style in {"ALPHA", "NUMERIC"}
+                else "NUMERIC"
+            )
             
             # Load file list sorting preferences (how files are ordered in the browser)
             self.sort_type = settings.get("sort_type", "date")  # Sort by: date, name, or type
@@ -1765,7 +1788,9 @@ class MainApp(MDApp):
             self.sort_type = "date"
             self.sort_order = "asc"
             self.kestrel_direction_style = "DIRECTION"
+            self.target_identifier_style = "NUMERIC"
             show_range = False
+            hide_range_in_bitmap = True
         
         # Update the available_fields dictionary to match loaded visibility settings
         # This ensures the UI reflects user preferences
@@ -1830,8 +1855,8 @@ class MainApp(MDApp):
             if target_present:
                 headers.insert(0, "Target")
             
-            # Show Range column if configured
-            if show_range:
+            # Add Range to the bitmap only when the bitmap setting is set to show it.
+            if not hide_range_in_bitmap:
                 if not target_present:
                     headers.insert(0, "Range")
                 else:
@@ -2150,23 +2175,37 @@ class MainApp(MDApp):
         if hasattr(self, "kestrel_direction_menu"):
             self.kestrel_direction_menu.dismiss()
 
-    def get_range_display(self):
-        return bool(show_range)
+    def open_target_identifier_dropdown(self, button):
+        options = [
+            {"text": "A, B, C...", "on_release": lambda: self.set_target_identifier_style("ALPHA")},
+            {"text": "1, 2, 3...", "on_release": lambda: self.set_target_identifier_style("NUMERIC")},
+        ]
+        self.target_identifier_menu = MDDropdownMenu(caller=button, items=options)
+        self.target_identifier_menu.open()
 
-    def set_range_display(self, active):
-        global show_range
-        active = bool(active)
-        if show_range == active:
+    def set_target_identifier_style(self, style):
+        if style not in {"ALPHA", "NUMERIC"}:
             return
-        show_range = active
-        self.available_fields["Range"]["show"] = active
+        self.target_identifier_style = style
+        try:
+            button_text = "A, B, C..." if style == "ALPHA" else "1, 2, 3..."
+            self.root.ids.settings_screen.ids.target_identifier_dropdown_button.text = button_text
+        except (AttributeError, KeyError):
+            pass
         self.save_settings()
+        if hasattr(self, "target_identifier_menu"):
+            self.target_identifier_menu.dismiss()
 
-        if getattr(self, "standalone_mode_enabled", False):
-            if hasattr(self, "manual_data_fields"):
-                self.show_manual_data_input()
-        elif hasattr(self, "current_data") and self.current_data:
-            self.display_table(self.current_data)
+    def get_hide_range_in_bitmap(self):
+        return bool(hide_range_in_bitmap)
+
+    def set_hide_range_in_bitmap(self, active):
+        global hide_range_in_bitmap
+        active = bool(active)
+        if hide_range_in_bitmap == active:
+            return
+        hide_range_in_bitmap = active
+        self.save_settings()
 
     def on_standalone_mode_toggle(self, active):
         """Handle the Stand Alone Mode toggle."""
@@ -3065,6 +3104,7 @@ SwipeFileItem:
         """Display dynamic manual data input fields with add/delete row functionality."""
         # Initialize list to track manual input fields for later retrieval
         self.manual_data_fields = []
+        self.manual_data_rows = []
         home_screen = self.root.ids.home_screen
         table_container = home_screen.ids.table_container
 
@@ -3127,9 +3167,22 @@ SwipeFileItem:
         # Add completed layout to the home screen's table area
         table_container.add_widget(main_layout)
 
+    def get_target_identifier_label(self, row_number):
+        if getattr(self, "target_identifier_style", "NUMERIC") == "NUMERIC":
+            return str(row_number)
+
+        label = ""
+        number = row_number
+        while number > 0:
+            number, remainder = divmod(number - 1, 26)
+            label = chr(ord("A") + remainder) + label
+        return label
+
     def add_data_row(self, rows_layout, focus_row=True):
         """Create and add a new row of data input fields based on available_fields configuration."""
         # This dynamically builds a row with one text field for each visible column
+        existing_row_count = len(getattr(self, "manual_data_rows", []))
+        next_target_label = self.get_target_identifier_label(existing_row_count + 1)
         
         # Create horizontal layout to hold all fields in this row
         row_layout = BoxLayout(orientation="horizontal", spacing="10dp", size_hint=(1, None))
@@ -3146,6 +3199,8 @@ SwipeFileItem:
                     multiline=False,
                     size_hint_x=0.15
                 )
+                if field_name == "Target":
+                    text_field.text = next_target_label
                 # Scroll to button area when user focuses on this field
                 # (makes the buttons visible for adding/deleting rows)
                 text_field.bind(

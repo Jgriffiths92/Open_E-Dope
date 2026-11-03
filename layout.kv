@@ -297,7 +297,7 @@ MDNavigationLayout:
                     on_release: app.open_kestrel_direction_dropdown(self)
 
                 MDLabel:
-                    text: "Display Range on Data Card:"
+                    text: "Hide Range in Bitmap:"
                     halign: "center"
                     size_hint_y: None
                     height: self.texture_size[1] + dp(4)
@@ -307,8 +307,8 @@ MDNavigationLayout:
                     size_hint: None, None
                     size: "48dp", "48dp"
                     pos_hint: {"center_x": 0.5}
-                    active: app.get_range_display() if hasattr(app, "get_range_display") else False
-                    on_active: app.set_range_display(self.active)
+                    active: app.get_hide_range_in_bitmap() if hasattr(app, "get_hide_range_in_bitmap") else True
+                    on_active: app.set_hide_range_in_bitmap(self.active)
 
 <SwipeFileItem@CustomSwipeFileItem>:
     swipe_disabled: False
