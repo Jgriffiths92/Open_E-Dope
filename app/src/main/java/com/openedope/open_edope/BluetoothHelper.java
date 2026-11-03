@@ -85,9 +85,12 @@ public class BluetoothHelper {
     private boolean awaitingActiveGunResponse;
     private boolean awaitingGunProfile;
     private volatile boolean awaitingRangeInputs;
+    private volatile boolean awaitingRangeSolution;
     private volatile double pendingRangeMeters = Double.NaN;
+    private int pendingRangeCounter = -1;
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private Runnable rangeInputTimeout;
+    private Runnable rangeSolutionTimeout;
     private int remoteSolutionCounter;
     private final List<byte[]> gunProfileParts = new ArrayList<>();
     private final List<String> debugLog = new ArrayList<>();
@@ -223,8 +226,11 @@ public class BluetoothHelper {
         awaitingActiveGunResponse = false;
         awaitingGunProfile = false;
         awaitingRangeInputs = false;
+        awaitingRangeSolution = false;
         pendingRangeMeters = Double.NaN;
+        pendingRangeCounter = -1;
         clearRangeInputTimeout();
+        clearRangeSolutionTimeout();
         activeGunIndex = -1;
         elevationUnit = 1;
         windUnit = 1;
@@ -343,9 +349,16 @@ public class BluetoothHelper {
         awaitingGunProfile = false;
         gunProfileParts.clear();
         appendDebug("Requesting active gun/profile units (0x0094, 0x0087)");
-        return writeEncryptedPacket(0, new byte[]{
+        boolean queued = writeEncryptedPacket(0, new byte[]{
                 (byte) 0x94, 0x00, 0x00, 0x00, 0x00
         });
+        if (!queued) {
+            profileRefreshInProgress = false;
+            awaitingActiveGunResponse = false;
+            awaitingGunProfile = false;
+            gunProfileParts.clear();
+        }
+        return queued;
     }
 
     private void applyGunProfileUnits() {
@@ -391,7 +404,7 @@ public class BluetoothHelper {
             return false;
         }
         if (profileRefreshInProgress || awaitingActiveGunResponse || awaitingGunProfile
-                || awaitingRangeInputs) {
+                || awaitingRangeInputs || awaitingRangeSolution) {
             lastError = "Another Kestrel command is still in progress.";
             return false;
         }
@@ -402,6 +415,7 @@ public class BluetoothHelper {
         pendingRangeMeters = rangeMeters;
         awaitingRangeInputs = true;
         int counter = remoteSolutionCounter++ & 0xff;
+        pendingRangeCounter = counter;
         appendDebug("Reading current target inputs before range update (0x00a0), counter="
                 + counter);
 
@@ -411,6 +425,7 @@ public class BluetoothHelper {
         if (!queued) {
             awaitingRangeInputs = false;
             pendingRangeMeters = Double.NaN;
+            pendingRangeCounter = -1;
             return false;
         }
         clearRangeInputTimeout();
@@ -418,6 +433,7 @@ public class BluetoothHelper {
             if (awaitingRangeInputs) {
                 awaitingRangeInputs = false;
                 pendingRangeMeters = Double.NaN;
+                pendingRangeCounter = -1;
                 lastError = "Timed out reading current target inputs; range was not changed.";
                 appendDebug(lastError);
             }
@@ -432,6 +448,23 @@ public class BluetoothHelper {
             mainHandler.removeCallbacks(rangeInputTimeout);
             rangeInputTimeout = null;
         }
+    }
+
+    private void clearRangeSolutionTimeout() {
+        if (rangeSolutionTimeout != null) {
+            mainHandler.removeCallbacks(rangeSolutionTimeout);
+            rangeSolutionTimeout = null;
+        }
+    }
+
+    private void cancelPendingRangeOperation(String reason) {
+        awaitingRangeInputs = false;
+        awaitingRangeSolution = false;
+        pendingRangeMeters = Double.NaN;
+        pendingRangeCounter = -1;
+        clearRangeInputTimeout();
+        clearRangeSolutionTimeout();
+        appendDebug(reason);
     }
 
     private boolean sendKestrelFullInputs(double rangeMeters,
@@ -480,9 +513,25 @@ public class BluetoothHelper {
         appendDebug("Sending range command 0x0089: range=" + rangeMeters
                 + " m, preserving inclination=" + inclinationDegrees
                 + " deg and DoF=" + directionOfFireDegrees + " deg");
+        // Keep the operation locked until the corresponding 0x008A solution
+        // arrives. A successful BLE write only means the frame was queued;
+        // it does not mean the Kestrel completed the calculation.
+        awaitingRangeSolution = true;
+        clearRangeSolutionTimeout();
+        rangeSolutionTimeout = () -> {
+            if (awaitingRangeSolution) {
+                cancelPendingRangeOperation(
+                        "Timed out waiting for Kestrel 0x008A solution after range update.");
+                lastError = "Timed out waiting for the Kestrel range solution.";
+                status = "Error";
+            }
+            rangeSolutionTimeout = null;
+        };
+        mainHandler.postDelayed(rangeSolutionTimeout, 10000L);
+
         boolean queued = writeEncryptedPacket(0, command);
-        if (queued) {
-            lastRangeMeters = rangeMeters;
+        if (!queued) {
+            cancelPendingRangeOperation("Unable to queue Kestrel range update.");
         }
         return queued;
     }
@@ -649,6 +698,12 @@ public class BluetoothHelper {
                     profileRefreshInProgress = false;
                     awaitingActiveGunResponse = false;
                     awaitingGunProfile = false;
+                    awaitingRangeInputs = false;
+                    awaitingRangeSolution = false;
+                    pendingRangeMeters = Double.NaN;
+                    pendingRangeCounter = -1;
+                    clearRangeInputTimeout();
+                    clearRangeSolutionTimeout();
                     linkIndicationCharacteristic = null;
                     linkWriteCharacteristic = null;
                     indicationAccumulator.clear();
@@ -867,6 +922,17 @@ public class BluetoothHelper {
         appendDebug("Encrypted packet received: type=" + parsed.type
                 + ", payloadBytes=" + parsed.payload.length);
 
+        // Every Kestrel-initiated COMMAND is acknowledged with its own opcode,
+        // including unsolicited commands that this app does not otherwise use.
+        // Do this centrally so known commands are not accidentally ACKed twice.
+        if (parsed.type == 0 && parsed.payload.length >= 2) {
+            int commandOpcode = readU16(parsed.payload, 0);
+            writeEncryptedPacket(4, new byte[]{
+                    (byte) (commandOpcode & 0xff),
+                    (byte) ((commandOpcode >>> 8) & 0xff)
+            });
+        }
+
         // Type 3 is RESPONSE. Its payload is response data, not an opcode.
         // GetActiveGunIndex returns the selected slot at payload bytes 2-3.
         if (awaitingActiveGunResponse
@@ -891,12 +957,19 @@ public class BluetoothHelper {
 
             // Request the selected gun. The Kestrel returns multiple type-3
             // RESPONSE parts followed by a type-0 COMMAND carrying EOD.
-            writeEncryptedPacket(0, new byte[]{
+            boolean requestQueued = writeEncryptedPacket(0, new byte[]{
                     (byte) (OP_GET_GUN & 0xff),
                     (byte) ((OP_GET_GUN >>> 8) & 0xff),
                     (byte) (activeGunIndex & 0xff),
                     (byte) ((activeGunIndex >>> 8) & 0xff)
             });
+            if (!requestQueued) {
+                profileRefreshInProgress = false;
+                awaitingGunProfile = false;
+                gunProfileParts.clear();
+                lastError = "Unable to request the active Kestrel gun profile.";
+                appendDebug(lastError);
+            }
             return;
         }
 
@@ -925,11 +998,6 @@ public class BluetoothHelper {
 
             appendDebug("Gun profile end-of-data received");
 
-            writeEncryptedPacket(4, new byte[]{
-                    (byte) (OP_END_OF_DATA & 0xff),
-                    (byte) ((OP_END_OF_DATA >>> 8) & 0xff)
-            });
-
             applyGunProfileUnits();
             profileRefreshInProgress = false;
             awaitingGunProfile = false;
@@ -947,19 +1015,27 @@ public class BluetoothHelper {
         if (parsed.type == 0
                 && parsed.payload.length >= 109
                 && readU16(parsed.payload, 0) == 0x00a1) {
-            writeEncryptedPacket(4, new byte[]{(byte) 0xa1, 0x00});
             if (awaitingRangeInputs) {
+                int responseType = parsed.payload[2] & 0xff;
+                int responseCounter = parsed.payload[3] & 0xff;
+                if (responseType != 0 || responseCounter != pendingRangeCounter) {
+                    appendDebug("Ignoring stale/mismatched 0x00a1 response: type="
+                            + responseType + ", counter=" + responseCounter
+                            + ", expected=" + pendingRangeCounter);
+                    return;
+                }
                 clearRangeInputTimeout();
                 float currentDoF = readF32(parsed.payload, 2 + 27);
                 float currentInclination = readF32(parsed.payload, 2 + 103);
                 double requestedRange = pendingRangeMeters;
                 awaitingRangeInputs = false;
-                pendingRangeMeters = Double.NaN;
 
                 if (Float.isNaN(currentDoF) || Float.isInfinite(currentDoF)
                         || Float.isNaN(currentInclination) || Float.isInfinite(currentInclination)) {
+                    cancelPendingRangeOperation(
+                            "Kestrel returned invalid current inclination/DoF; range was not changed.");
                     lastError = "Kestrel returned invalid current inclination/DoF; range was not changed.";
-                    appendDebug(lastError);
+                    status = "Error";
                     return;
                 }
 
@@ -967,6 +1043,7 @@ public class BluetoothHelper {
                         + currentInclination + " deg, DoF=" + currentDoF + " deg");
                 if (!sendKestrelFullInputs(requestedRange,
                         currentInclination, currentDoF)) {
+                    cancelPendingRangeOperation("Range update could not be started.");
                     if (lastError == null || lastError.isEmpty()) {
                         lastError = "Unable to queue Kestrel range update.";
                     }
@@ -996,10 +1073,25 @@ public class BluetoothHelper {
                         + ", wind2MIL=" + lastWind2Mil);
             }
 
-            // A Kestrel COMMAND is acknowledged with its own opcode.
-            writeEncryptedPacket(4, new byte[]{
-                    (byte) 0x8a, 0x00
-            });
+            if (awaitingRangeSolution) {
+                // 0x008A carries the calculated target range as u24 centimetres
+                // at record offset +2 (packet payload offset +4). Only finish
+                // this operation when the returned solution matches our request.
+                int returnedRangeCm = (parsed.payload[4] & 0xff)
+                        | ((parsed.payload[5] & 0xff) << 8)
+                        | ((parsed.payload[6] & 0xff) << 16);
+                double returnedRangeMeters = returnedRangeCm / 100.0;
+                if (Math.abs(returnedRangeMeters - pendingRangeMeters) <= 0.02) {
+                    lastRangeMeters = returnedRangeMeters;
+                    cancelPendingRangeOperation(
+                            "Kestrel range update completed; matching 0x008A solution received.");
+                    lastError = "";
+                    status = "Connected";
+                } else {
+                    appendDebug("Ignoring 0x008A solution with range=" + returnedRangeMeters
+                            + " m; waiting for requested range=" + pendingRangeMeters + " m");
+                }
+            }
             return;
         }
 
@@ -1009,11 +1101,17 @@ public class BluetoothHelper {
             lastError = "Kestrel rejected command 0x"
                     + String.format("%04x", rejectedOpcode)
                     + ", reason " + reason;
+            if (rejectedOpcode == 0x0094 || rejectedOpcode == 0x0087) {
+                profileRefreshInProgress = false;
+                awaitingActiveGunResponse = false;
+                awaitingGunProfile = false;
+                gunProfileParts.clear();
+                profilePartCount = 0;
+                appendDebug("Profile refresh cancelled after Kestrel NACK for 0x"
+                        + String.format("%04x", rejectedOpcode));
+            }
             if (rejectedOpcode == 0x00a0 || rejectedOpcode == 0x0089) {
-                awaitingRangeInputs = false;
-                pendingRangeMeters = Double.NaN;
-                clearRangeInputTimeout();
-                appendDebug("Pending range update cancelled after Kestrel NACK");
+                cancelPendingRangeOperation("Pending range update cancelled after Kestrel NACK.");
             }
             status = "Error";
             appendDebug(lastError);
