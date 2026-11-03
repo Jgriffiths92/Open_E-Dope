@@ -767,9 +767,9 @@ class MainApp(MDApp):
         self.bluetooth_helper = None
         self.bluetooth_dialog = None
         self.bluetooth_scan_event = None
+        self.bluetooth_status_event = None
         self.kestrel_range_event = None
         self.kestrel_elevation_event = None
-        self.kestrel_profile_event = None
         self.kestrel_active_row_fields = None
         # User preference: sort swipe file list by date, name, or type
         self.sort_type = "date"   # Default sort type
@@ -2360,6 +2360,9 @@ class MainApp(MDApp):
         if self.bluetooth_scan_event is not None:
             self.bluetooth_scan_event.cancel()
             self.bluetooth_scan_event = None
+        if self.bluetooth_status_event is not None:
+            self.bluetooth_status_event.cancel()
+            self.bluetooth_status_event = None
         self.set_bluetooth_button_connected(False)
         self.bluetooth_helper.stopScan()
         if not self.bluetooth_helper.connect(address):
@@ -2367,7 +2370,9 @@ class MainApp(MDApp):
             toast(self.bluetooth_helper.getLastError() or "BLE connection failed.")
             return
         toast("Connecting to Kestrel...")
-        Clock.schedule_interval(lambda dt: self.refresh_bluetooth_status(address), 1)
+        self.bluetooth_status_event = Clock.schedule_interval(
+            lambda dt: self.refresh_bluetooth_status(address), 1
+        )
 
     def refresh_bluetooth_status(self, address):
         status = str(self.bluetooth_helper.getStatus())
@@ -2375,30 +2380,30 @@ class MainApp(MDApp):
         if status == "Connected" and bool(self.bluetooth_helper.isKestrelAuthenticated()):
             toast(f"Connected to {address}")
             self.set_bluetooth_button_connected(True)
-            if self.kestrel_profile_event is None:
-                self.bluetooth_helper.refreshKestrelProfile()
-                self.kestrel_profile_event = Clock.schedule_interval(
-                    lambda dt: self.refresh_kestrel_profile(), 5.0
-                )
             if self.kestrel_elevation_event is None:
                 self.kestrel_elevation_event = Clock.schedule_interval(
                     lambda dt: self.poll_kestrel_elevation(), 0.25
                 )
+            self.bluetooth_status_event = None
             return False
         if status == "Disconnected" and last_error:
             self.set_bluetooth_button_connected(False, error=True)
             toast(last_error)
+            self.bluetooth_status_event = None
             return False
         if status == "Disconnected":
             self.set_bluetooth_button_connected(False)
+            self.bluetooth_status_event = None
             return False
         if status == "Connection error":
             self.set_bluetooth_button_connected(False, error=True)
             toast(last_error or status)
+            self.bluetooth_status_event = None
             return False
         if status == "Error":
             self.set_bluetooth_button_connected(False, error=True)
             toast(last_error or status)
+            self.bluetooth_status_event = None
             return False
         return True
 
@@ -2431,14 +2436,6 @@ class MainApp(MDApp):
                 print(error)
         else:
             print(f"Kestrel range sent: {range_meters} m")
-
-    def refresh_kestrel_profile(self):
-        if self.bluetooth_helper is None:
-            return True
-        if not bool(self.bluetooth_helper.isKestrelAuthenticated()):
-            return True
-        self.bluetooth_helper.refreshKestrelProfile()
-        return True
 
     def poll_kestrel_elevation(self):
         if self.bluetooth_helper is None:
@@ -2538,9 +2535,9 @@ class MainApp(MDApp):
         if self.bluetooth_helper is not None:
             self.bluetooth_helper.disconnect()
             toast("Bluetooth disconnected.")
-        if self.kestrel_profile_event is not None:
-            self.kestrel_profile_event.cancel()
-            self.kestrel_profile_event = None
+        if self.bluetooth_status_event is not None:
+            self.bluetooth_status_event.cancel()
+            self.bluetooth_status_event = None
         if self.kestrel_elevation_event is not None:
             self.kestrel_elevation_event.cancel()
             self.kestrel_elevation_event = None

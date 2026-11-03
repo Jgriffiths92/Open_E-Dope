@@ -72,6 +72,10 @@ public class BluetoothHelper {
     private boolean kestrelAuthenticated;
     private boolean privacyResponseReceived;
     private boolean requestAuthSent;
+    private boolean authenticationInProgress;
+    private boolean kestrelNonceSent;
+    private boolean hostNonceSent;
+    private boolean authenticationProofProcessed;
     private byte[] kestrelNonce;
     private byte[] hostNonce;
     private double lastElevationMil = Double.NaN;
@@ -92,6 +96,7 @@ public class BluetoothHelper {
     private Runnable rangeInputTimeout;
     private Runnable rangeSolutionTimeout;
     private int remoteSolutionCounter;
+    private final Queue<Double> pendingRangeQueue = new ArrayDeque<>();
     private final List<byte[]> gunProfileParts = new ArrayList<>();
     private final List<String> debugLog = new ArrayList<>();
     private volatile int indicationChunkCount;
@@ -209,6 +214,7 @@ public class BluetoothHelper {
             bleWriteQueue.clear();
             bleWriteInProgress = false;
         }
+        pendingRangeQueue.clear();
         if (gatt != null) {
             gatt.disconnect();
             gatt.close();
@@ -221,6 +227,11 @@ public class BluetoothHelper {
         kestrelAuthenticated = false;
         privacyResponseReceived = false;
         requestAuthSent = false;
+        authenticationInProgress = false;
+        kestrelNonceSent = false;
+        hostNonceSent = false;
+        authenticationProofProcessed = false;
+        authenticationProofProcessed = false;
         lastElevationMil = Double.NaN;
         lastWind1Mil = Double.NaN;
         lastWind2Mil = Double.NaN;
@@ -428,9 +439,14 @@ public class BluetoothHelper {
         }
         if (profileRefreshInProgress || awaitingActiveGunResponse || awaitingGunProfile
                 || awaitingRangeInputs || awaitingRangeSolution) {
-            lastError = "Another Kestrel command is still in progress.";
-            return false;
+            pendingRangeQueue.offer(rangeMeters);
+            appendDebug("Queued range while Kestrel transaction is active: "
+                    + rangeMeters + " m, queueSize=" + pendingRangeQueue.size());
+            return true;
         }
+        lastElevationMil = Double.NaN;
+        lastWind1Mil = Double.NaN;
+        lastWind2Mil = Double.NaN;
 
         // 0x0089 SetFullInputs writes range, inclination and direction of fire
         // together. Read the current target first so changing range does not
@@ -488,6 +504,25 @@ public class BluetoothHelper {
         clearRangeInputTimeout();
         clearRangeSolutionTimeout();
         appendDebug(reason);
+        startNextQueuedRange();
+    }
+
+    private void startNextQueuedRange() {
+        if (!kestrelAuthenticated || pendingRangeQueue.isEmpty()) {
+            return;
+        }
+        if (profileRefreshInProgress || awaitingActiveGunResponse || awaitingGunProfile
+                || awaitingRangeInputs || awaitingRangeSolution) {
+            return;
+        }
+        Double nextRange = pendingRangeQueue.poll();
+        if (nextRange == null) {
+            return;
+        }
+        mainHandler.post(() -> {
+            appendDebug("Starting queued Kestrel range: " + nextRange + " m");
+            sendKestrelRange(nextRange);
+        });
     }
 
     private boolean sendKestrelFullInputs(double rangeMeters,
@@ -715,9 +750,13 @@ public class BluetoothHelper {
                         bleWriteQueue.clear();
                         bleWriteInProgress = false;
                     }
+                    pendingRangeQueue.clear();
                     kestrelAuthenticated = false;
                     privacyResponseReceived = false;
                     requestAuthSent = false;
+                    authenticationInProgress = false;
+                    kestrelNonceSent = false;
+                    hostNonceSent = false;
                     lastElevationMil = Double.NaN;
                     lastWind1Mil = Double.NaN;
                     lastWind2Mil = Double.NaN;
@@ -840,9 +879,17 @@ public class BluetoothHelper {
         if (linkWriteCharacteristic == null) {
             return;
         }
+        if (authenticationInProgress || kestrelAuthenticated) {
+            appendDebug("Authentication start ignored: already in progress or authenticated");
+            return;
+        }
         privacyResponseReceived = false;
         requestAuthSent = false;
         kestrelAuthenticated = false;
+        authenticationInProgress = true;
+        kestrelNonceSent = false;
+        hostNonceSent = false;
+        authenticationProofProcessed = false;
         status = "Authenticating Kestrel";
         writeClearPacket(0, new byte[]{(byte) 0x81, 0x00});
     }
@@ -898,7 +945,12 @@ public class BluetoothHelper {
         if (parsed.type == 0 && parsed.payload.length >= 2) {
             int opcode = readU16(parsed.payload, 0);
             if (opcode == 0x007f && parsed.payload.length >= 18) {
+                if (kestrelNonceSent) {
+                    appendDebug("Ignoring duplicate Kestrel nonce frame");
+                    return;
+                }
                 kestrelNonce = copyRange(parsed.payload, 2, 18);
+                kestrelNonceSent = true;
                 appendDebug("Authentication nonce received (16 bytes)");
                 writeClearPacket(4, new byte[]{0x7f, 0x00});
                 byte[] proof = aesCbcEncrypt(concat(KestrelProofBlock(), kestrelNonce));
@@ -907,20 +959,31 @@ public class BluetoothHelper {
                 return;
             }
             if (opcode == 0x007e && parsed.payload.length >= 2) {
+                if (hostNonceSent) {
+                    appendDebug("Ignoring duplicate Kestrel authentication request");
+                    return;
+                }
                 writeClearPacket(4, new byte[]{0x7e, 0x00});
                 hostNonce = new byte[16];
                 new SecureRandom().nextBytes(hostNonce);
+                hostNonceSent = true;
                 writeClearPacket(0, concat(new byte[]{0x7f, 0x00}, hostNonce));
                 return;
             }
         }
         if (parsed.type == 3 && parsed.payload.length >= 32 && hostNonce != null) {
+            if (authenticationProofProcessed) {
+                appendDebug("Ignoring duplicate Kestrel authentication proof");
+                return;
+            }
+            authenticationProofProcessed = true;
             byte[] plaintext = aesCbcDecrypt(copyRange(parsed.payload, 0, 32));
             boolean verified = plaintext.length >= 32
                     && constantTimeEquals(copyRange(plaintext, 16, 32), hostNonce);
             writeClearPacket(4, new byte[]{0x7f, 0x00});
             if (verified) {
                 kestrelAuthenticated = true;
+                authenticationInProgress = false;
                 status = "Connected";
                 lastError = "";
                 appendDebug("Kestrel mutual authentication verified");
@@ -928,6 +991,7 @@ public class BluetoothHelper {
             } else {
                 lastError = "Kestrel mutual authentication failed.";
                 status = "Error";
+                authenticationInProgress = false;
             }
         }
     }
@@ -1033,6 +1097,7 @@ public class BluetoothHelper {
                     + gunProfileParts.size()
                     + ", elevationUnit=" + elevationUnit
                     + ", windUnit=" + windUnit);
+            startNextQueuedRange();
             return;
         }
 
