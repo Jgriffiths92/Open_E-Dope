@@ -40,12 +40,15 @@ version = 1.0
 
 # (list) Application requirements
 # comma separated e.g. requirements = sqlite3,kivy
-requirements = hostpython3==3.11.9,python3==3.11.9,kivy==2.3.1,kivymd==1.2.0,pyjnius,pillow==11.2.1,plyer==2.1.0
+requirements = hostpython3==3.11.9,python3==3.11.9,kivy==2.3.1,kivymd==1.2.0,pyjnius,pillow==11.3.0,plyer==2.1.0
 
 # (str) Custom source folders for requirements
 # Sets custom source for any requirements with recipes
 # requirements.source.kivy = ../../kivy
-requirements.source.pyjnius = /content/pyjnius-src
+# Use python-for-android's maintained pyjnius recipe and checkout.
+# A Colab-only absolute source path makes the spec non-reproducible and
+# bypasses p4a's Android-specific build configuration.
+# requirements.source.pyjnius = /content/pyjnius-src
 
 # (str) Presplash of the application
 presplash.filename = assets/images/splash.png
@@ -117,7 +120,7 @@ android.minapi = 21
 android.ndk = 25b
 
 # (int) Android NDK API to use. This is the minimum API your app will support, it should usually match android.minapi.
-#android.ndk_api = 21
+android.ndk_api = 21
 
 # (bool) Use --private data storage (True) or --dir public storage (False)
 android.private_storage = True
@@ -283,7 +286,7 @@ android.meta_data = android.allowBalOptIn=true
 #android.adb_args = -H host.docker.internal
 
 # (bool) Copy library instead of making a libpymodules.so
-#android.copy_libs = 1
+android.copy_libs = True
 
 # (list) The Android archs to build for, choices: armeabi-v7a, arm64-v8a, x86, x86_64
 # In past, was `android.arch` as we weren't supporting builds for multiple archs at the same time.
@@ -325,7 +328,7 @@ android.allow_backup = True
 #p4a.fork = kivy
 
 # (str) python-for-android branch to use, defaults to master
-#p4a.branch = master
+p4a.branch = master
 
 # (str) python-for-android specific commit to use, defaults to HEAD, must be within p4a.branch
 #p4a.commit = HEAD
