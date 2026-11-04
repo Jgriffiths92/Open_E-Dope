@@ -104,7 +104,7 @@ android.features = android.hardware.bluetooth_le:required, android.hardware.nfc:
 # (str) Android application meta-data to set (key=value format)
 #android.windowSoftInputMode = adjustResize
 # (int) Target Android API, should be as high as possible.
-android.api = 31
+android.api = 33
 
 # (int) Minimum API your APK / AAB will support.
 android.minapi = 21
