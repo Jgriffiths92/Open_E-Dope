@@ -24,35 +24,27 @@ jobs:
     - name: Install System Dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y autoconf libtool pkg-config git zip unzip
-
-    - name: Install uv (Fast Package Manager)
-      uses: astral-sh/setup-uv@v3
-      with:
-        enable-cache: true
-        version: "latest"
+        sudo apt-get install -y autoconf libtool pkg-config git zip unzip cmake libffi-dev libssl-dev libncurses-dev zlib1g-dev
 
     - name: Set up Python
-      run: uv python pin 3.11
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
 
-    - name: Install Python Dependencies & Build Tools
-      run: |
-        uv init --package open-edope --python 3.11
-        uv add git+https://github.com --dev
-        uv add kivymd pillow
+    - name: Install Buildozer
+      run: pip install --upgrade Cython==0.29.36 virtualenv buildozer
 
-    - name: Compile APK via ksproject
+    - name: Pin python-for-android
+      # current p4a master breaks the build (pip/venv handling); use the last known-good commit
       run: |
-        uv run ksproject android build debug
-      env:
-        # Pre-accept licenses for the SDK packages ksproject installs
-        ANDROID_COMPONENT_PROMPT: "1" 
+        sed -i 's/^#\?p4a.commit *=.*/p4a.commit = 2473ddeabb286b826924c49e62ea6c42a9acfd7a/' buildozer.spec
+        grep -n '^p4a\.\(branch\|commit\)' buildozer.spec
+
+    - name: Compile APK
+      run: yes | buildozer -v android debug
 
     - name: Upload Output Artifact
       uses: actions/upload-artifact@v4
       with:
         name: open-edope-debug-apk
-        path: |
-          .ksproject/build/outputs/apk/debug/*.apk
-          .ksproject/dist/*.apk
-          bin/*.apk
+        path: bin/*.apk
