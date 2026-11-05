@@ -1,0 +1,55 @@
+name: Build Open E-Dope APK
+
+on:
+  push:
+    branches: [ master, main ]
+  pull_request:
+    branches: [ master, main ]
+  workflow_dispatch: # Allows you to manually trigger the build from the Actions tab
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+
+    - name: Set up Java Development Kit (JDK)
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'temurin'
+        java-version: '17' # Required by modern Android SDK tools
+
+    - name: Set up Android SDK
+      uses: android-actions/setup-android@v3
+
+    - name: Install System Dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y AutoConf libtool pkg-config git zip unzip
+
+    - name: Install uv (Fast Package Manager)
+      uses: astral-sh/setup-uv@v3
+      with:
+        enable-cache: true
+        version: "latest"
+
+    - name: Set up Python
+      run: uv python pin 3.11
+
+    - name: Install Python Dependencies & Build Tools
+      run: |
+        uv init --package open-edope --python 3.11
+        uv add git+https://github.com --dev
+        uv add kivymd pillow
+
+    - name: Compile APK via ksproject
+      run: |
+        uv run ksproject android build debug
+
+    - name: Upload Output Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: open-edope-debug-apk
+        path: .ksproject/build/outputs/apk/debug/*.apk # Default ksproject output folder structure
