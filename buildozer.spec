@@ -103,8 +103,7 @@ android.presplash_color = #016586
 # (list) Permissions
 # (See https://python-for-android.readthedocs.io/en/latest/buildoptions/#build-options-1 for all the supported syntaxes and properties)
 android.permissions = INTERNET, WRITE_EXTERNAL_STORAGE, READ_EXTERNAL_STORAGE, FOREGROUND_SERVICE, NFC, VIBRATE, BLUETOOTH, BLUETOOTH_ADMIN, BLUETOOTH_SCAN, BLUETOOTH_CONNECT, ACCESS_FINE_LOCATION
-# (list) features (adds uses-feature -tags to manifest)
-android.features = android.hardware.bluetooth_le:required, android.hardware.nfc:required
+# Hardware features are declared in extra_manifest.xml for compatibility with the pinned p4a CLI.
 # (str) Android application meta-data to set (key=value format)
 #android.windowSoftInputMode = adjustResize
 # (int) Target Android API, should be as high as possible.
@@ -330,8 +329,11 @@ android.debug_artifact = apk
 # (str) python-for-android branch to use, defaults to master
 p4a.branch = master
 
-# (str) python-for-android specific commit to use, defaults to HEAD, must be within p4a.branch
-#p4a.commit = HEAD
+# Keep the Python 3.11-compatible p4a revision and use local PEP 517 recipe fixes.
+p4a.commit = 2473ddeabb286b826924c49e62ea6c42a9acfd7a
+
+# Run PEP 517 recipe backends with host Python, not the Android target interpreter.
+p4a.local_recipes = p4a-recipes
 
 # (str) python-for-android git clone directory (if empty, it will be automatically cloned from github)
 #p4a.source_dir =
