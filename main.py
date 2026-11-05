@@ -49,23 +49,26 @@ range_bitmap_visibility_override = None  # Three-dot menu temporary visibility o
 show_2_wind_holds = True # Default to showing the two wind holds
 
 try:
-    from android import mActivity
     from jnius import autoclass, cast
+except Exception:
+    autoclass = None  # pyjnius is not available
+    cast = None
+try:
+    from android import mActivity
+except Exception:
+    mActivity = None  # Not running on Android
+try:
     from android.permissions import request_permissions, Permission
-except ImportError:
-    mActivity = None  # Handle cases where the app is not running on Android
-    autoclass = None  # Handle cases where pyjnius is not available
+except Exception:
     request_permissions = None
     Permission = None
 try:
-    from jnius import autoclass, cast
     NfcAdapter = autoclass('android.nfc.NfcAdapter')
     Ndef = autoclass('android.nfc.tech.Ndef')
     NdefFormatable = autoclass('android.nfc.tech.NdefFormatable')
     MifareClassic = autoclass('android.nfc.tech.MifareClassic')
     MifareUltralight = autoclass('android.nfc.tech.MifareUltralight')
-except ImportError:
-    autoclass = None
+except Exception:
     NfcAdapter = None
     Ndef = None
     NdefFormatable = None
@@ -74,15 +77,8 @@ except ImportError:
 
 def is_android():
     """Check if the app is running on an Android device."""
-    try:
-        from android import mActivity
-        print("Running on Android")
-        # Print if these modules are imported
-        print("android imported:", 'mActivity' in globals() and mActivity is not None)
-        print("jnius imported:", 'autoclass' in globals() and autoclass is not None)
-        return True
-    except ImportError:
-        return False
+    from kivy.utils import platform
+    return platform == 'android' or 'ANDROID_ARGUMENT' in os.environ
 
 # Import the nfc module if not running on Android
 if not is_android():
