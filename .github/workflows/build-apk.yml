@@ -38,7 +38,15 @@ jobs:
       run: pip install --upgrade Cython==0.29.36 virtualenv buildozer
 
     - name: Compile APK
-      run: yes | buildozer -v android debug
+      run: |
+        for attempt in 1 2 3; do
+          if yes | buildozer -v android debug; then
+            exit 0
+          fi
+          echo "Build attempt $attempt failed (possibly a transient download error); retrying..."
+          sleep 30
+        done
+        exit 1
 
     - name: Upload Output Artifact
       uses: actions/upload-artifact@v4
