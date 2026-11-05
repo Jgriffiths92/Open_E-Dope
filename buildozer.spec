@@ -330,8 +330,11 @@ android.debug_artifact = apk
 # (str) python-for-android branch to use, defaults to master
 p4a.branch = master
 
-# Use the host Python for PEP 517 builds; Android Python lacks the math module there.
-p4a.commit = 869c74bbab79ae4f93955862b641d5169a93f92a
+# Keep the Python 3.11-compatible p4a revision and use the local Pillow recipe fix.
+p4a.commit = 2473ddeabb286b826924c49e62ea6c42a9acfd7a
+
+# Override Pillow's PEP 517 build to use host Python instead of Android Python.
+p4a.local_recipes = p4a-recipes
 
 # (str) python-for-android git clone directory (if empty, it will be automatically cloned from github)
 #p4a.source_dir =
