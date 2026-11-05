@@ -24,7 +24,7 @@ jobs:
     - name: Install System Dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y autoconf libtool pkg-config git zip unzip cmake libffi-dev libssl-dev libncurses-dev zlib1g-dev
+        sudo apt-get install -y autoconf automake libtool libltdl-dev pkg-config git zip unzip cmake libffi-dev libssl-dev libncurses-dev zlib1g-dev
 
     - name: Set up Python
       uses: actions/setup-python@v5
