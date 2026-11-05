@@ -330,8 +330,8 @@ android.debug_artifact = apk
 # (str) python-for-android branch to use, defaults to master
 p4a.branch = master
 
-# (str) python-for-android specific commit to use, defaults to HEAD, must be within p4a.branch
-#p4a.commit = HEAD
+# Use the host Python for PEP 517 builds; Android Python lacks the math module there.
+p4a.commit = 869c74bbab79ae4f93955862b641d5169a93f92a
 
 # (str) python-for-android git clone directory (if empty, it will be automatically cloned from github)
 #p4a.source_dir =
