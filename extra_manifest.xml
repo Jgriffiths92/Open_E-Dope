@@ -1,2 +1,2 @@
-<uses-feature android:name="android.hardware.nfc" android:required="true" />
-<uses-feature android:name="android.hardware.bluetooth_le" android:required="true" />
+<uses-feature android:name="android.hardware.nfc" android:required="false" />
+<uses-feature android:name="android.hardware.bluetooth_le" android:required="false" />
