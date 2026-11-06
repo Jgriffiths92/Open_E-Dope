@@ -472,7 +472,17 @@ class CustomFileChooserListView(FileChooserListView):
 
 # === NFC Progress Listener ===
 # Java callback wrapper for NFC progress, refresh, and error events.
-if is_android():
+def _java_class_available(name):
+    """Return True if a Java class can be loaded (it may be missing from the APK)."""
+    try:
+        autoclass(name)
+        return True
+    except Exception as e:
+        print(f"Java class {name} is not available: {e}")
+        return False
+
+NfcProgressListener = None
+if is_android() and autoclass and _java_class_available('com.openedope.open_edope.NfcProgressListener'):
     from jnius import PythonJavaClass, java_method, cast
 
     class NfcProgressListener(PythonJavaClass):
@@ -1097,20 +1107,26 @@ class MainApp(MDApp):
 
         # Request permissions on Android
         if is_android():
-            request_permissions([
-                Permission.NFC,
-                Permission.READ_EXTERNAL_STORAGE,
-                Permission.WRITE_EXTERNAL_STORAGE,
-                Permission.VIBRATE,
-                Permission.ACCESS_FINE_LOCATION,
-                getattr(Permission, "BLUETOOTH_SCAN", "android.permission.BLUETOOTH_SCAN"),
-                getattr(Permission, "BLUETOOTH_CONNECT", "android.permission.BLUETOOTH_CONNECT"),
-            ], self.on_permissions_result)
+            if request_permissions and Permission:
+                request_permissions([
+                    Permission.NFC,
+                    Permission.READ_EXTERNAL_STORAGE,
+                    Permission.WRITE_EXTERNAL_STORAGE,
+                    Permission.VIBRATE,
+                    Permission.ACCESS_FINE_LOCATION,
+                    getattr(Permission, "BLUETOOTH_SCAN", "android.permission.BLUETOOTH_SCAN"),
+                    getattr(Permission, "BLUETOOTH_CONNECT", "android.permission.BLUETOOTH_CONNECT"),
+                ], self.on_permissions_result)
+            else:
+                print("android.permissions is unavailable; skipping permission request.")
             if self.initialize_nfc():
                 print("NFC initialized successfully.")
             self.initialize_bluetooth()
-            from android import activity
-            activity.bind(on_new_intent=self.on_new_intent)
+            try:
+                from android import activity
+                activity.bind(on_new_intent=self.on_new_intent)
+            except Exception as e:
+                print(f"Could not bind on_new_intent: {e}")
 
         # Dynamically set the rootpath for the FileChooserListView
         self.root = Builder.load_file("layout.kv")  # Load the root widget from the KV file
