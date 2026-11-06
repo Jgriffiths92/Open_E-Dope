@@ -104,7 +104,7 @@ Open_E-Dope/
 ├── circularprogressbar.py       # Custom progress bar widget
 ├── requirements.txt             # Python dependencies
 ├── buildozer.spec              # APK build configuration
-├── Kivy_App_To_APK.ipynb       # Google Colab build instructions
+├── .github/workflows/build-apk.yml  # GitHub Actions APK build
 │
 ├── app/
 │   └── src/main/java/com/openedope/open_edope/
@@ -141,13 +141,15 @@ Note: NFC features will be disabled on desktop; other functionality fully testab
 
 ## Building the APK
 
-### Method 1: Google Colab (Recommended for Windows users)
+### Method 1: GitHub Actions (Recommended)
 
-1. Open Kivy_App_To_APK.ipynb
-2. Copy the notebook URL to Google Colab
-3. Run all cells in order
-4. Download the generated APK from Colab output
+1. Push your changes to GitHub (or fork the repository)
+2. Open the **Actions** tab and select the **build-apk** workflow
+3. Click **Run workflow** (it also runs automatically on pushes, if configured)
+4. When the run finishes, download the APK from the run's **Artifacts** section
 5. Transfer to Android device and install
+
+The workflow is defined in `.github/workflows/build-apk.yml`.
 
 ---
 
