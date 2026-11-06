@@ -57,6 +57,12 @@ try:
     from android import mActivity
 except Exception:
     mActivity = None  # Not running on Android
+if mActivity is None and autoclass is not None:
+    # `android.mActivity` can be None; fall back to the activity pyjnius exposes
+    try:
+        mActivity = autoclass('org.kivy.android.PythonActivity').mActivity
+    except Exception:
+        mActivity = None
 try:
     from android.permissions import request_permissions, Permission
 except Exception:
@@ -2331,6 +2337,7 @@ class MainApp(MDApp):
     def get_private_storage_path(self):
         """Retrieve the app's private storage path."""
 
+        private_storage_path = None
         if is_android():
             try:
                 context = mActivity.getApplicationContext()
@@ -2339,7 +2346,7 @@ class MainApp(MDApp):
                 return private_storage_path
             except Exception as e:
                 print(f"Error retrieving private storage path: {e}")
-
+                private_storage_path = os.environ.get("ANDROID_PRIVATE")
         else:
             # Use a local directory for non-Android platforms
             private_storage_path = os.path.join(os.path.dirname(__file__), "private_storage")
