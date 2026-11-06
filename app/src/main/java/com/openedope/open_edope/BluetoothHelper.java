@@ -11,6 +11,7 @@ import android.bluetooth.BluetoothGattService;
 import android.bluetooth.BluetoothManager;
 import android.bluetooth.BluetoothProfile;
 import android.bluetooth.le.ScanCallback;
+import android.bluetooth.le.ScanRecord;
 import android.bluetooth.le.ScanResult;
 import android.content.Context;
 import android.os.Build;
@@ -763,8 +764,12 @@ public class BluetoothHelper {
             }
             BluetoothDevice device = result.getDevice();
             String address = device.getAddress();
-            String name = device.getName();
-            if (name != null && !name.isEmpty()) {
+            ScanRecord scanRecord = result.getScanRecord();
+            String name = scanRecord != null ? scanRecord.getDeviceName() : null;
+            if (name == null || name.trim().isEmpty()) {
+                name = device.getName();
+            }
+            if (name != null && !name.trim().isEmpty()) {
                 scanResults.put(address, name);
                 appendDebug("Scan result: " + name + " [" + address + "]");
             } else if (!scanResults.containsKey(address)) {
