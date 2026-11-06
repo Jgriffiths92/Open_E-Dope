@@ -2450,13 +2450,20 @@ class MainApp(MDApp):
             toast("Enable Bluetooth before scanning.")
             return
 
-        content = BoxLayout(
-            orientation="vertical",
+        content = ScrollView(
             size_hint_y=None,
             height=dp(240),
+            do_scroll_x=False,
+        )
+        device_buttons = BoxLayout(
+            orientation="vertical",
+            size_hint_y=None,
             spacing=dp(8),
         )
-        self.bluetooth_device_buttons = content
+        device_buttons.bind(minimum_height=device_buttons.setter("height"))
+        content.add_widget(device_buttons)
+        self.bluetooth_device_buttons = device_buttons
+        self.bluetooth_device_scroll = content
         self.bluetooth_dialog = MDDialog(
             title="Kestrel Bluetooth",
             type="custom",
@@ -2486,7 +2493,11 @@ class MainApp(MDApp):
         self.bluetooth_device_buttons.add_widget(MDFlatButton(
             text="Scanning for Kestrel devices...",
             disabled=True,
+            size_hint_y=None,
+            height=dp(48),
         ))
+        self.bluetooth_scan_results = ()
+        self.bluetooth_device_scroll.scroll_y = 1
         if self.bluetooth_scan_event is not None:
             self.bluetooth_scan_event.cancel()
         self.bluetooth_scan_event = Clock.schedule_interval(
@@ -2496,8 +2507,8 @@ class MainApp(MDApp):
     def refresh_bluetooth_devices(self):
         if self.bluetooth_helper is None:
             return False
-        devices = list(self.bluetooth_helper.getScanResults())
-        if not devices:
+        devices = tuple(self.bluetooth_helper.getScanResults())
+        if not devices or devices == self.bluetooth_scan_results:
             return True
         self.bluetooth_device_buttons.clear_widgets()
         for device in devices:
@@ -2505,8 +2516,11 @@ class MainApp(MDApp):
             button = MDFlatButton(
                 text=f"{name} ({address})",
                 on_release=lambda x, addr=address: self.connect_bluetooth_device(addr),
+                size_hint_y=None,
+                height=dp(48),
             )
             self.bluetooth_device_buttons.add_widget(button)
+        self.bluetooth_scan_results = devices
         return True
 
     def connect_bluetooth_device(self, address):
