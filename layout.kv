@@ -86,6 +86,7 @@ MDNavigationLayout:
             size_hint_x: 0.8
             pos_hint: {"center_x": 0.5, "center_y": 0.5}
             on_text_validate: app.on_stage_name_entered(self.text)
+            on_text: app.capitalize_first_letter(self)
 
         BoxLayout:
             id: table_container

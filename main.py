@@ -1176,6 +1176,14 @@ class MainApp(MDApp):
         return self.root
 
     # --- Table / Data Handling ---
+    def capitalize_first_letter(self, field):
+        """Force the first character of a text field to upper case, keeping the cursor in place."""
+        text = field.text
+        if text and text[0] != text[0].upper():
+            cursor = field.cursor
+            field.text = text[0].upper() + text[1:]
+            field.cursor = cursor
+
     def clear_table_data(self):
         """Clear the data in the table and update the UI."""
         # Empty the in-memory CSV data
