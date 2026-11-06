@@ -2509,12 +2509,23 @@ class MainApp(MDApp):
     def refresh_bluetooth_devices(self):
         if self.bluetooth_helper is None:
             return False
-        devices = tuple(self.bluetooth_helper.getScanResults())
-        if not devices or devices == self.bluetooth_scan_results:
+        devices = []
+        for device in self.bluetooth_helper.getScanResults():
+            address, name = device.split("|", 1)
+            if name.strip() and name.strip().casefold() != "unknown":
+                devices.append((address, name))
+        devices = tuple(devices)
+        if devices == self.bluetooth_scan_results:
             return True
         self.bluetooth_device_buttons.clear_widgets()
-        for device in devices:
-            address, name = device.split("|", 1)
+        if not devices:
+            self.bluetooth_device_buttons.add_widget(MDFlatButton(
+                text="Scanning for Kestrel devices...",
+                disabled=True,
+                size_hint_y=None,
+                height=dp(48),
+            ))
+        for address, name in devices:
             button = MDFlatButton(
                 text=f"{name} ({address})",
                 on_release=lambda x, addr=address: self.connect_bluetooth_device(addr),
