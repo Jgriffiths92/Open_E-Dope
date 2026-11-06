@@ -1,0 +1,58 @@
+name: Build Signed AAB
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+
+    - name: Set up Java Development Kit (JDK)
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'temurin'
+        java-version: '17'
+
+    - name: Install System Dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y autoconf automake libtool libltdl-dev pkg-config git zip unzip cmake libffi-dev libssl-dev libncurses-dev zlib1g-dev
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Install Buildozer
+      run: pip install --upgrade Cython==0.29.36 virtualenv buildozer
+
+    - name: Decode Keystore
+      run: echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > "$RUNNER_TEMP/release.jks"
+
+    - name: Set API level and version code
+      run: |
+        sed -i 's/^android.api = .*/android.api = 35/' buildozer.spec
+        sed -i 's/^# *android.numeric_version = .*/android.numeric_version = ${{ github.run_number }}/' buildozer.spec
+        sed -i 's/^android.numeric_version = .*/android.numeric_version = ${{ github.run_number }}/' buildozer.spec
+        grep -nE '^android\.(api|numeric_version)' buildozer.spec
+
+    - name: Build Signed Release AAB
+      env:
+        P4A_RELEASE_KEYSTORE: ${{ runner.temp }}/release.jks
+        P4A_RELEASE_KEYSTORE_PASSWD: ${{ secrets.KEYSTORE_PASSWORD }}
+        P4A_RELEASE_KEYALIAS: ${{ secrets.KEY_ALIAS }}
+        P4A_RELEASE_KEYALIAS_PASSWD: ${{ secrets.KEY_PASSWORD }}
+      run: yes | buildozer -v android release
+
+    - name: Upload Signed AAB
+      uses: actions/upload-artifact@v4
+      with:
+        name: open-edope-release-aab
+        path: bin/*.aab
