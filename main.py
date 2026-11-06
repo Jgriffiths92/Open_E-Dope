@@ -238,6 +238,8 @@ class SavedCardsScreen(Screen):
             caller=caller,
             items=menu_items,
             width_mult=3,
+            hor_growth="left",
+            ver_growth="down",
         )
         self.sort_menu.open()
 from kivymd.uix.card import MDCardSwipe
