@@ -2475,6 +2475,8 @@ class MainApp(MDApp):
                 ),
                 MDFlatButton(
                     text="CLOSE",
+                    theme_text_color="Custom",
+                    text_color=(0, 0.4, 1, 1),
                     on_release=lambda x: self.close_bluetooth_dialog(),
                 ),
             ],
