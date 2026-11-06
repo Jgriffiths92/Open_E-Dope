@@ -1388,7 +1388,7 @@ class MainApp(MDApp):
             header = data[0]
             filtered_data_zeros = [header]
             for row in data[1:]:
-                if not all(str(v).strip() == "0" for v in row.values()):
+                if not all(str(v).strip() == "0" for k, v in row.items() if k != "Target"):
                     filtered_data_zeros.append(row)
             data = filtered_data_zeros
 
@@ -3483,8 +3483,8 @@ SwipeFileItem:
                 for key, field in row_fields.items():
                     manual_data[key] = field.text if field.text.strip() else "0"
 
-                # Only add if at least one field is non-empty (not all zeros)
-                if all(str(v).strip() == "0" for v in manual_data.values()):
+                # Skip rows with no entered data; the auto-generated Target label alone doesn't count
+                if all(str(v).strip() == "0" for k, v in manual_data.items() if k != "Target"):
                     continue
 
                 if not manual_data["Target"]:
