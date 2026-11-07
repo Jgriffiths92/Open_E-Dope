@@ -2648,11 +2648,23 @@ class MainApp(MDApp):
         if "Wnd2" in row_fields:
             row_fields["Wnd2"].text = ""
         
-        # If queue was empty, we can send immediately (no pending Kestrel request)
+        # If queue was empty, schedule first send with 250ms delay (Kestrel needs settling time)
         if was_empty:
-            print(f"[QUEUE] Queue was empty, sending range {value}m immediately")
-            value, row_fields = self.kestrel_pending_rows[0]
-            self.send_kestrel_range(value, row_fields)
+            print(f"[QUEUE] Queue was empty, scheduling range {value}m with 250ms delay")
+            self.kestrel_range_event = Clock.schedule_once(
+                lambda dt: self.send_first_kestrel_range(), 0.25
+            )
+
+    def send_first_kestrel_range(self):
+        """Send the first queued range to Kestrel"""
+        if not self.kestrel_pending_rows:
+            self.kestrel_range_event = None
+            return
+        
+        value, row_fields = self.kestrel_pending_rows[0]
+        print(f"[QUEUE] Sending first range {value}m to Kestrel")
+        self.send_kestrel_range(value, row_fields)
+        self.kestrel_range_event = None
 
     def send_kestrel_range(self, value, row_fields):
         self.kestrel_range_event = None
@@ -2733,12 +2745,14 @@ class MainApp(MDApp):
         self.bluetooth_helper.clearKestrelNewSolutionFlag()
         self.kestrel_awaiting_calculation = False
         
-        # If there are more ranges queued, send the next one immediately
-        # (don't wait for timer - wait for Kestrel to respond)
+        # If there are more ranges queued, schedule next send with 50ms delay
+        # (Kestrel needs settling time between calculations)
         if self.kestrel_pending_rows:
             next_value, next_row_fields = self.kestrel_pending_rows[0]
-            print(f"[QUEUE] Sending next range {next_value}m to Kestrel immediately")
-            self.send_kestrel_range(next_value, next_row_fields)
+            print(f"[QUEUE] Scheduling next range {next_value}m with 50ms delay")
+            self.kestrel_range_event = Clock.schedule_once(
+                lambda dt: self.send_kestrel_range(next_value, next_row_fields), 0.05
+            )
         
         return True
 
