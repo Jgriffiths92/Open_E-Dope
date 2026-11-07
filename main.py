@@ -2560,6 +2560,7 @@ class MainApp(MDApp):
         if status == "Connected" and bool(self.bluetooth_helper.isKestrelAuthenticated()):
             toast(f"Connected to {address}")
             self.set_bluetooth_button_connected(True)
+            self.close_bluetooth_dialog()
             if self.kestrel_elevation_event is None:
                 self.kestrel_elevation_event = Clock.schedule_interval(
                     lambda dt: self.poll_kestrel_elevation(), 0.25
