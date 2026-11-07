@@ -2584,7 +2584,6 @@ class MainApp(MDApp):
         status = str(self.bluetooth_helper.getStatus())
         last_error = str(self.bluetooth_helper.getLastError())
         if status == "Connected" and bool(self.bluetooth_helper.isKestrelAuthenticated()):
-            toast(f"Connected to {address}")
             self.set_bluetooth_button_connected(True)
             self.kestrel_is_connected = True
             self.last_connected_kestrel_address = address
