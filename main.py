@@ -1878,7 +1878,7 @@ class MainApp(MDApp):
             self.sort_order = "asc"
             self.kestrel_direction_style = "DIRECTION"
             self.target_identifier_style = "ALPHA"
-            show_range = False
+            show_range = True
             hide_range_in_bitmap = True
         
         # Update the available_fields dictionary to match loaded visibility settings
