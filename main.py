@@ -2707,18 +2707,9 @@ class MainApp(MDApp):
                 wind2_value *= 3.43774677
             wind2_field.text = self.format_kestrel_wind_hold(wind2_value)
         
-        values_changed = False
-        for i, (old_val, new_val) in enumerate(zip(self.kestrel_last_received_values, current_values)):
-            if old_val != old_val and new_val != new_val:
-                continue
-            if old_val != old_val or new_val != new_val:
-                values_changed = True
-                break
-            if old_val != new_val:
-                values_changed = True
-                break
-        
-        if values_changed:
+        # Check if we received new valid data (not NaN) that differs from before
+        has_any_valid_data = any(v == v for v in current_values)
+        if has_any_valid_data:
             self.kestrel_last_received_values = current_values
             self.kestrel_awaiting_calculation = False
         
