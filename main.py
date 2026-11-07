@@ -3,6 +3,7 @@ from kivy.core.window import Window
 Window.softinput_mode = "below_target"
 import csv
 import time
+import math
 from kivy.lang import Builder
 from kivy.uix.screenmanager import Screen
 from kivymd.app import MDApp
@@ -2669,7 +2670,7 @@ class MainApp(MDApp):
 
         elevation_field = self.kestrel_active_row_fields.get("Elv")
         elevation_mil = float(self.bluetooth_helper.getLastElevationMil())
-        if elevation_field is not None and elevation_mil == elevation_mil:
+        if elevation_field is not None and elevation_mil == elevation_mil and not math.isnan(elevation_mil):
             elevation_value = elevation_mil
             if self.kestrel_hold_uses_moa("ELEVATION"):
                 elevation_value *= 3.43774677
@@ -2677,7 +2678,7 @@ class MainApp(MDApp):
 
         wind1_field = self.kestrel_active_row_fields.get("Wnd1")
         wind1_mil = float(self.bluetooth_helper.getLastWind1Mil())
-        if wind1_field is not None and wind1_mil == wind1_mil:
+        if wind1_field is not None and wind1_mil == wind1_mil and not math.isnan(wind1_mil):
             wind1_value = wind1_mil
             if self.kestrel_hold_uses_moa("WIND"):
                 wind1_value *= 3.43774677
@@ -2685,7 +2686,7 @@ class MainApp(MDApp):
 
         wind2_field = self.kestrel_active_row_fields.get("Wnd2")
         wind2_mil = float(self.bluetooth_helper.getLastWind2Mil())
-        if wind2_field is not None and wind2_mil == wind2_mil:
+        if wind2_field is not None and wind2_mil == wind2_mil and not math.isnan(wind2_mil):
             wind2_value = wind2_mil
             if self.kestrel_hold_uses_moa("WIND"):
                 wind2_value *= 3.43774677
