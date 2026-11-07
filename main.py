@@ -847,6 +847,7 @@ class MainApp(MDApp):
         self.kestrel_range_event = None
         self.kestrel_elevation_event = None
         self.kestrel_active_row_fields = None
+        self.kestrel_is_connected = False
         # User preference: sort swipe file list by date, name, or type
         self.sort_type = "date"   # Default sort type
         # Sort order: ascending or descending
@@ -2560,6 +2561,7 @@ class MainApp(MDApp):
         if status == "Connected" and bool(self.bluetooth_helper.isKestrelAuthenticated()):
             toast(f"Connected to {address}")
             self.set_bluetooth_button_connected(True)
+            self.kestrel_is_connected = True
             self.close_bluetooth_dialog()
             if self.kestrel_elevation_event is None:
                 self.kestrel_elevation_event = Clock.schedule_interval(
@@ -2568,11 +2570,24 @@ class MainApp(MDApp):
             self.bluetooth_status_event = None
             return False
         if status == "Disconnected" and last_error:
+            if self.kestrel_is_connected:
+                toast(f"Disconnected from Kestrel: {last_error}")
+                self.kestrel_is_connected = False
+                if self.kestrel_elevation_event is not None:
+                    self.kestrel_elevation_event.cancel()
+                    self.kestrel_elevation_event = None
+                self.kestrel_active_row_fields = None
             self.set_bluetooth_button_connected(False, error=True)
-            toast(last_error)
             self.bluetooth_status_event = None
             return False
         if status == "Disconnected":
+            if self.kestrel_is_connected:
+                toast("Kestrel disconnected")
+                self.kestrel_is_connected = False
+                if self.kestrel_elevation_event is not None:
+                    self.kestrel_elevation_event.cancel()
+                    self.kestrel_elevation_event = None
+                self.kestrel_active_row_fields = None
             self.set_bluetooth_button_connected(False)
             self.bluetooth_status_event = None
             return False
