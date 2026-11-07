@@ -498,6 +498,7 @@ public class BluetoothHelper {
         lastElevationMil = Double.NaN;
         lastWind1Mil = Double.NaN;
         lastWind2Mil = Double.NaN;
+        lastRangeMeters = Double.NaN;
 
         // 0x0089 SetFullInputs writes range, inclination and direction of fire
         // together. Read the current target first so changing range does not
