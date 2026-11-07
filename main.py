@@ -43,7 +43,7 @@ from kivy.factory import Factory
 
 # Global configuration variables
 show_lead = False # Default to not showing the Lead field
-show_range = False  # Default to not showing the Range field
+show_range = True  # Default to show the Range field
 hide_range_in_bitmap = True  # Settings-only: hide Range in generated bitmap/Data Card image
 range_bitmap_visibility_override = None  # Three-dot menu temporary visibility override
 show_2_wind_holds = True # Default to showing the two wind holds
@@ -834,7 +834,7 @@ class MainApp(MDApp):
         # Portrait vs Landscape orientation preference
         self.selected_orientation = "Portrait"  # Default orientation
         self.kestrel_direction_style = "DIRECTION"
-        self.target_identifier_style = "NUMERIC"
+        self.target_identifier_style = "ALPHA"
         # Folder where CSV files will be saved when user chooses an event
         self.selected_save_folder = None  # Store the selected folder for saving CSV files
         # The NFC tag detected from an intent (used during NFC operations)
@@ -1875,7 +1875,7 @@ class MainApp(MDApp):
             self.sort_type = "date"
             self.sort_order = "asc"
             self.kestrel_direction_style = "DIRECTION"
-            self.target_identifier_style = "NUMERIC"
+            self.target_identifier_style = "ALPHA"
             show_range = False
             hide_range_in_bitmap = True
         
