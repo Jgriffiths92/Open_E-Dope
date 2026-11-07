@@ -2633,7 +2633,6 @@ class MainApp(MDApp):
 
     def queue_kestrel_range(self, range_field, value, row_fields):
         self.kestrel_active_row_fields = row_fields
-        self.kestrel_awaiting_calculation = True
         if self.kestrel_range_event is not None:
             self.kestrel_range_event.cancel()
         # Clear elevation and wind fields to prevent old data from showing
@@ -2660,7 +2659,6 @@ class MainApp(MDApp):
         if not bool(self.bluetooth_helper.isKestrelAuthenticated()):
             print("Kestrel range send skipped: not authenticated")
             return
-        self.kestrel_last_received_values = (float('nan'), float('nan'), float('nan'))
         if not bool(self.bluetooth_helper.sendKestrelRange(
                 range_meters)):
             error = str(self.bluetooth_helper.getLastError())
@@ -2678,22 +2676,8 @@ class MainApp(MDApp):
         if self.kestrel_active_row_fields is None:
             return True
 
-        elevation_mil = float(self.bluetooth_helper.getLastElevationMil())
-        wind1_mil = float(self.bluetooth_helper.getLastWind1Mil())
-        wind2_mil = float(self.bluetooth_helper.getLastWind2Mil())
-        
-        current_values = (elevation_mil, wind1_mil, wind2_mil)
-        
-        # Check if we received new valid data (not NaN)
-        has_any_valid_data = any(v == v for v in current_values)
-        if has_any_valid_data:
-            self.kestrel_awaiting_calculation = False
-        
-        # Only update fields if NOT awaiting calculation
-        if self.kestrel_awaiting_calculation:
-            return True
-
         elevation_field = self.kestrel_active_row_fields.get("Elv")
+        elevation_mil = float(self.bluetooth_helper.getLastElevationMil())
         if elevation_field is not None and elevation_mil == elevation_mil:
             elevation_value = elevation_mil
             if self.kestrel_hold_uses_moa("ELEVATION"):
@@ -2701,6 +2685,7 @@ class MainApp(MDApp):
             elevation_field.text = self.format_kestrel_elevation_hold(elevation_value)
 
         wind1_field = self.kestrel_active_row_fields.get("Wnd1")
+        wind1_mil = float(self.bluetooth_helper.getLastWind1Mil())
         if wind1_field is not None and wind1_mil == wind1_mil:
             wind1_value = wind1_mil
             if self.kestrel_hold_uses_moa("WIND"):
@@ -2708,6 +2693,7 @@ class MainApp(MDApp):
             wind1_field.text = self.format_kestrel_wind_hold(wind1_value)
 
         wind2_field = self.kestrel_active_row_fields.get("Wnd2")
+        wind2_mil = float(self.bluetooth_helper.getLastWind2Mil())
         if wind2_field is not None and wind2_mil == wind2_mil:
             wind2_value = wind2_mil
             if self.kestrel_hold_uses_moa("WIND"):
