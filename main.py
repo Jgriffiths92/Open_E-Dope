@@ -2677,16 +2677,23 @@ class MainApp(MDApp):
             return True
         if self.kestrel_active_row_fields is None:
             return True
-        if self.kestrel_awaiting_calculation:
-            return True
 
-        elevation_field = self.kestrel_active_row_fields.get("Elv")
         elevation_mil = float(self.bluetooth_helper.getLastElevationMil())
         wind1_mil = float(self.bluetooth_helper.getLastWind1Mil())
         wind2_mil = float(self.bluetooth_helper.getLastWind2Mil())
         
         current_values = (elevation_mil, wind1_mil, wind2_mil)
         
+        # Check if we received new valid data (not NaN)
+        has_any_valid_data = any(v == v for v in current_values)
+        if has_any_valid_data:
+            self.kestrel_awaiting_calculation = False
+        
+        # Only update fields if NOT awaiting calculation
+        if self.kestrel_awaiting_calculation:
+            return True
+
+        elevation_field = self.kestrel_active_row_fields.get("Elv")
         if elevation_field is not None and elevation_mil == elevation_mil:
             elevation_value = elevation_mil
             if self.kestrel_hold_uses_moa("ELEVATION"):
@@ -2706,12 +2713,6 @@ class MainApp(MDApp):
             if self.kestrel_hold_uses_moa("WIND"):
                 wind2_value *= 3.43774677
             wind2_field.text = self.format_kestrel_wind_hold(wind2_value)
-        
-        # Check if we received new valid data (not NaN) that differs from before
-        has_any_valid_data = any(v == v for v in current_values)
-        if has_any_valid_data:
-            self.kestrel_last_received_values = current_values
-            self.kestrel_awaiting_calculation = False
         
         return True
 
