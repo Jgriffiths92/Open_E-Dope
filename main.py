@@ -850,6 +850,7 @@ class MainApp(MDApp):
         self.kestrel_is_connected = False
         self.last_connected_kestrel_address = None
         self.kestrel_awaiting_calculation = False
+        self.kestrel_range_sent_time = None
         self.kestrel_last_received_values = (float('nan'), float('nan'), float('nan'))
         # User preference: sort swipe file list by date, name, or type
         self.sort_type = "date"   # Default sort type
@@ -2633,6 +2634,7 @@ class MainApp(MDApp):
 
     def queue_kestrel_range(self, range_field, value, row_fields):
         self.kestrel_active_row_fields = row_fields
+        self.kestrel_awaiting_calculation = True
         if self.kestrel_range_event is not None:
             self.kestrel_range_event.cancel()
         # Clear elevation and wind fields to prevent old data from showing
@@ -2659,6 +2661,8 @@ class MainApp(MDApp):
         if not bool(self.bluetooth_helper.isKestrelAuthenticated()):
             print("Kestrel range send skipped: not authenticated")
             return
+        import time
+        self.kestrel_range_sent_time = time.time()
         if not bool(self.bluetooth_helper.sendKestrelRange(
                 range_meters)):
             error = str(self.bluetooth_helper.getLastError())
@@ -2676,8 +2680,31 @@ class MainApp(MDApp):
         if self.kestrel_active_row_fields is None:
             return True
 
-        elevation_field = self.kestrel_active_row_fields.get("Elv")
         elevation_mil = float(self.bluetooth_helper.getLastElevationMil())
+        wind1_mil = float(self.bluetooth_helper.getLastWind1Mil())
+        wind2_mil = float(self.bluetooth_helper.getLastWind2Mil())
+        
+        # If awaiting calculation, check if minimum time has passed
+        if self.kestrel_awaiting_calculation:
+            import time
+            elapsed = time.time() - self.kestrel_range_sent_time if self.kestrel_range_sent_time else 0
+            
+            # Wait at least 100ms for Java to process and clear old values
+            if elapsed < 0.1:
+                return True
+            
+            all_nan = (elevation_mil != elevation_mil and 
+                      wind1_mil != wind1_mil and 
+                      wind2_mil != wind2_mil)
+            
+            # If still all NaN after 100ms, keep waiting
+            if all_nan:
+                return True
+            
+            # Got non-NaN data after minimum delay, accept it
+            self.kestrel_awaiting_calculation = False
+
+        elevation_field = self.kestrel_active_row_fields.get("Elv")
         if elevation_field is not None and elevation_mil == elevation_mil:
             elevation_value = elevation_mil
             if self.kestrel_hold_uses_moa("ELEVATION"):
@@ -2685,7 +2712,6 @@ class MainApp(MDApp):
             elevation_field.text = self.format_kestrel_elevation_hold(elevation_value)
 
         wind1_field = self.kestrel_active_row_fields.get("Wnd1")
-        wind1_mil = float(self.bluetooth_helper.getLastWind1Mil())
         if wind1_field is not None and wind1_mil == wind1_mil:
             wind1_value = wind1_mil
             if self.kestrel_hold_uses_moa("WIND"):
@@ -2693,7 +2719,6 @@ class MainApp(MDApp):
             wind1_field.text = self.format_kestrel_wind_hold(wind1_value)
 
         wind2_field = self.kestrel_active_row_fields.get("Wnd2")
-        wind2_mil = float(self.bluetooth_helper.getLastWind2Mil())
         if wind2_field is not None and wind2_mil == wind2_mil:
             wind2_value = wind2_mil
             if self.kestrel_hold_uses_moa("WIND"):
