@@ -849,6 +849,7 @@ class MainApp(MDApp):
         self.kestrel_active_row_fields = None
         self.kestrel_is_connected = False
         self.last_connected_kestrel_address = None
+        self.kestrel_awaiting_calculation = False
         # User preference: sort swipe file list by date, name, or type
         self.sort_type = "date"   # Default sort type
         # Sort order: ascending or descending
@@ -2631,6 +2632,7 @@ class MainApp(MDApp):
 
     def queue_kestrel_range(self, range_field, value, row_fields):
         self.kestrel_active_row_fields = row_fields
+        self.kestrel_awaiting_calculation = True
         if self.kestrel_range_event is not None:
             self.kestrel_range_event.cancel()
         # Clear elevation and wind fields to prevent old data from showing
@@ -2673,6 +2675,8 @@ class MainApp(MDApp):
             return True
         if self.kestrel_active_row_fields is None:
             return True
+        if self.kestrel_awaiting_calculation:
+            return True
 
         elevation_field = self.kestrel_active_row_fields.get("Elv")
         elevation_mil = float(self.bluetooth_helper.getLastElevationMil())
@@ -2681,6 +2685,7 @@ class MainApp(MDApp):
             if self.kestrel_hold_uses_moa("ELEVATION"):
                 elevation_value *= 3.43774677
             elevation_field.text = self.format_kestrel_elevation_hold(elevation_value)
+            self.kestrel_awaiting_calculation = False
 
         wind1_field = self.kestrel_active_row_fields.get("Wnd1")
         wind1_mil = float(self.bluetooth_helper.getLastWind1Mil())
@@ -2689,6 +2694,7 @@ class MainApp(MDApp):
             if self.kestrel_hold_uses_moa("WIND"):
                 wind1_value *= 3.43774677
             wind1_field.text = self.format_kestrel_wind_hold(wind1_value)
+            self.kestrel_awaiting_calculation = False
 
         wind2_field = self.kestrel_active_row_fields.get("Wnd2")
         wind2_mil = float(self.bluetooth_helper.getLastWind2Mil())
@@ -2697,6 +2703,71 @@ class MainApp(MDApp):
             if self.kestrel_hold_uses_moa("WIND"):
                 wind2_value *= 3.43774677
             wind2_field.text = self.format_kestrel_wind_hold(wind2_value)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            self.kestrel_awaiting_calculation = False
         return True
 
     def kestrel_hold_uses_moa(self, hold_type):
