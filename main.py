@@ -858,7 +858,7 @@ class MainApp(MDApp):
         # Controls which columns are shown in the table/form (Target, Range, Lead, etc.)
         self.available_fields = {
             "Target": {"hint_text": "Target", "show": True},
-            "Range": {"hint_text": "Range", "show": False},
+            "Range": {"hint_text": "Range", "show": True},
             "Elv": {"hint_text": "Elv", "show": True},
             "Wnd1": {"hint_text": "Wnd1", "show": True},
             "Wnd2": {"hint_text": "Wnd2", "show": True},
