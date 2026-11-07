@@ -848,6 +848,7 @@ class MainApp(MDApp):
         self.kestrel_elevation_event = None
         self.kestrel_active_row_fields = None
         self.kestrel_is_connected = False
+        self.last_connected_kestrel_address = None
         # User preference: sort swipe file list by date, name, or type
         self.sort_type = "date"   # Default sort type
         # Sort order: ascending or descending
@@ -1814,6 +1815,10 @@ class MainApp(MDApp):
             self.config_parser.set("Settings", "delete_folders_after", getattr(self, "delete_folders_after", "never"))
             self.config_parser.set("Settings", "manage_data_dialog_shown", str(getattr(self, "manage_data_dialog_shown", False)))
             
+            # Save last connected Kestrel device address for auto-reconnection
+            if self.last_connected_kestrel_address:
+                self.config_parser.set("Settings", "last_connected_kestrel_address", self.last_connected_kestrel_address)
+            
             # Write the updated config to disk
             with open(self.config_file, "w") as config_file:
                 self.config_parser.write(config_file)
@@ -1862,6 +1867,9 @@ class MainApp(MDApp):
             # Load file list sorting preferences (how files are ordered in the browser)
             self.sort_type = settings.get("sort_type", "date")  # Sort by: date, name, or type
             self.sort_order = settings.get("sort_order", "asc")  # Order: ascending or descending
+            
+            # Load last connected Kestrel device address for auto-reconnection
+            self.last_connected_kestrel_address = settings.get("last_connected_kestrel_address", None)
         else:
             # Use sensible defaults if no settings file exists (first run)
             self.sort_type = "date"
@@ -2433,12 +2441,28 @@ class MainApp(MDApp):
                 toast("BLE is not supported on this device.")
                 return False
             print("Bluetooth BLE helper initialized.")
+            self.attempt_auto_reconnect()
             return True
         except Exception as e:
             print(f"Error initializing Bluetooth: {e}")
             self.set_bluetooth_button_connected(False, error=True)
             toast("Bluetooth initialization failed.")
             return False
+
+    def attempt_auto_reconnect(self):
+        """Attempt to automatically reconnect to the last known Kestrel device."""
+        if not self.last_connected_kestrel_address:
+            return
+        if not self.bluetooth_helper.isEnabled():
+            return
+        print(f"Attempting auto-reconnect to Kestrel at {self.last_connected_kestrel_address}")
+        if not self.bluetooth_helper.connect(self.last_connected_kestrel_address):
+            print(f"Auto-reconnect failed: {self.bluetooth_helper.getLastError()}")
+            return
+        toast("Reconnecting to Kestrel...")
+        self.bluetooth_status_event = Clock.schedule_interval(
+            lambda dt: self.refresh_bluetooth_status(self.last_connected_kestrel_address), 1
+        )
 
     def on_bluetooth_button_press(self):
         if not is_android():
@@ -2562,6 +2586,8 @@ class MainApp(MDApp):
             toast(f"Connected to {address}")
             self.set_bluetooth_button_connected(True)
             self.kestrel_is_connected = True
+            self.last_connected_kestrel_address = address
+            self.save_settings()
             self.close_bluetooth_dialog()
             if self.kestrel_elevation_event is None:
                 self.kestrel_elevation_event = Clock.schedule_interval(
