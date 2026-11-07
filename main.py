@@ -850,8 +850,6 @@ class MainApp(MDApp):
         self.kestrel_is_connected = False
         self.last_connected_kestrel_address = None
         self.kestrel_awaiting_calculation = False
-        self.kestrel_range_sent_time = None
-        self.kestrel_last_received_values = (float('nan'), float('nan'), float('nan'))
         # User preference: sort swipe file list by date, name, or type
         self.sort_type = "date"   # Default sort type
         # Sort order: ascending or descending
@@ -2634,7 +2632,6 @@ class MainApp(MDApp):
 
     def queue_kestrel_range(self, range_field, value, row_fields):
         self.kestrel_active_row_fields = row_fields
-        self.kestrel_awaiting_calculation = True
         if self.kestrel_range_event is not None:
             self.kestrel_range_event.cancel()
         # Clear elevation and wind fields to prevent old data from showing
@@ -2661,8 +2658,6 @@ class MainApp(MDApp):
         if not bool(self.bluetooth_helper.isKestrelAuthenticated()):
             print("Kestrel range send skipped: not authenticated")
             return
-        import time
-        self.kestrel_range_sent_time = time.time()
         if not bool(self.bluetooth_helper.sendKestrelRange(
                 range_meters)):
             error = str(self.bluetooth_helper.getLastError())
