@@ -850,6 +850,8 @@ class MainApp(MDApp):
         self.kestrel_is_connected = False
         self.last_connected_kestrel_address = None
         self.kestrel_awaiting_calculation = False
+        self.kestrel_active_row_fields = None
+        self.kestrel_pending_rows = []  # Queue of row_fields awaiting results
         # User preference: sort swipe file list by date, name, or type
         self.sort_type = "date"   # Default sort type
         # Sort order: ascending or descending
@@ -2631,7 +2633,9 @@ class MainApp(MDApp):
         return True
 
     def queue_kestrel_range(self, range_field, value, row_fields):
-        self.kestrel_active_row_fields = row_fields
+        # Add this row to pending queue
+        self.kestrel_pending_rows.append(row_fields)
+        
         if self.kestrel_range_event is not None:
             self.kestrel_range_event.cancel()
         # Clear elevation and wind fields to prevent old data from showing
@@ -2672,39 +2676,47 @@ class MainApp(MDApp):
             return True
         if not bool(self.bluetooth_helper.isKestrelAuthenticated()):
             return True
-        if self.kestrel_active_row_fields is None:
+        
+        # Only process if we have pending rows waiting for results
+        if not self.kestrel_pending_rows:
             return True
 
         # Only read and display values if Kestrel has new solution data
         if not bool(self.bluetooth_helper.hasKestrelNewSolution()):
             return True
 
+        # Get the FIRST row in queue (FIFO - first in, first out)
+        row_fields = self.kestrel_pending_rows[0]
+
         elevation_mil = float(self.bluetooth_helper.getLastElevationMil())
         wind1_mil = float(self.bluetooth_helper.getLastWind1Mil())
         wind2_mil = float(self.bluetooth_helper.getLastWind2Mil())
         
-        elevation_field = self.kestrel_active_row_fields.get("Elv")
+        elevation_field = row_fields.get("Elv")
         if elevation_field is not None and elevation_mil == elevation_mil:
             elevation_value = elevation_mil
             if self.kestrel_hold_uses_moa("ELEVATION"):
                 elevation_value *= 3.43774677
             elevation_field.text = self.format_kestrel_elevation_hold(elevation_value)
 
-        wind1_field = self.kestrel_active_row_fields.get("Wnd1")
+        wind1_field = row_fields.get("Wnd1")
         if wind1_field is not None and wind1_mil == wind1_mil:
             wind1_value = wind1_mil
             if self.kestrel_hold_uses_moa("WIND"):
                 wind1_value *= 3.43774677
             wind1_field.text = self.format_kestrel_wind_hold(wind1_value)
 
-        wind2_field = self.kestrel_active_row_fields.get("Wnd2")
+        wind2_field = row_fields.get("Wnd2")
         if wind2_field is not None and wind2_mil == wind2_mil:
             wind2_value = wind2_mil
             if self.kestrel_hold_uses_moa("WIND"):
                 wind2_value *= 3.43774677
             wind2_field.text = self.format_kestrel_wind_hold(wind2_value)
         
-        # Clear the flag so we don't process this solution multiple times
+        # Remove this row from queue (result processed)
+        self.kestrel_pending_rows.pop(0)
+        
+        # Clear the flag so next result can be processed
         self.bluetooth_helper.clearKestrelNewSolutionFlag()
         self.kestrel_awaiting_calculation = False
         
