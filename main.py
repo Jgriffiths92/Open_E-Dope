@@ -2675,35 +2675,36 @@ class MainApp(MDApp):
             return True
         if self.kestrel_active_row_fields is None:
             return True
-        if self.kestrel_awaiting_calculation:
-            return True
 
         elevation_field = self.kestrel_active_row_fields.get("Elv")
         elevation_mil = float(self.bluetooth_helper.getLastElevationMil())
         if elevation_field is not None and elevation_mil == elevation_mil:
+            if self.kestrel_awaiting_calculation:
+                self.kestrel_awaiting_calculation = False
             elevation_value = elevation_mil
             if self.kestrel_hold_uses_moa("ELEVATION"):
                 elevation_value *= 3.43774677
             elevation_field.text = self.format_kestrel_elevation_hold(elevation_value)
-            self.kestrel_awaiting_calculation = False
 
         wind1_field = self.kestrel_active_row_fields.get("Wnd1")
         wind1_mil = float(self.bluetooth_helper.getLastWind1Mil())
         if wind1_field is not None and wind1_mil == wind1_mil:
+            if self.kestrel_awaiting_calculation:
+                self.kestrel_awaiting_calculation = False
             wind1_value = wind1_mil
             if self.kestrel_hold_uses_moa("WIND"):
                 wind1_value *= 3.43774677
             wind1_field.text = self.format_kestrel_wind_hold(wind1_value)
-            self.kestrel_awaiting_calculation = False
 
         wind2_field = self.kestrel_active_row_fields.get("Wnd2")
         wind2_mil = float(self.bluetooth_helper.getLastWind2Mil())
         if wind2_field is not None and wind2_mil == wind2_mil:
+            if self.kestrel_awaiting_calculation:
+                self.kestrel_awaiting_calculation = False
             wind2_value = wind2_mil
             if self.kestrel_hold_uses_moa("WIND"):
                 wind2_value *= 3.43774677
             wind2_field.text = self.format_kestrel_wind_hold(wind2_value)
-            self.kestrel_awaiting_calculation = False
         return True
 
     def kestrel_hold_uses_moa(self, hold_type):
