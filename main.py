@@ -851,7 +851,7 @@ class MainApp(MDApp):
         self.last_connected_kestrel_address = None
         self.kestrel_awaiting_calculation = False
         self.kestrel_active_row_fields = None
-        self.kestrel_pending_rows = []  # Queue of row_fields awaiting results
+        self.kestrel_pending_rows = []  # Queue of (range_value, row_fields) tuples
         # User preference: sort swipe file list by date, name, or type
         self.sort_type = "date"   # Default sort type
         # Sort order: ascending or descending
@@ -2633,11 +2633,13 @@ class MainApp(MDApp):
         return True
 
     def queue_kestrel_range(self, range_field, value, row_fields):
-        # Add this row to pending queue
-        self.kestrel_pending_rows.append(row_fields)
+        # Queue was empty before adding this
+        was_empty = not self.kestrel_pending_rows
         
-        if self.kestrel_range_event is not None:
-            self.kestrel_range_event.cancel()
+        # Add (value, row_fields) tuple to queue
+        self.kestrel_pending_rows.append((value, row_fields))
+        print(f"[QUEUE] Added row (range={value}), queue now has {len(self.kestrel_pending_rows)} rows")
+        
         # Clear elevation and wind fields to prevent old data from showing
         if "Elv" in row_fields:
             row_fields["Elv"].text = ""
@@ -2645,9 +2647,12 @@ class MainApp(MDApp):
             row_fields["Wnd1"].text = ""
         if "Wnd2" in row_fields:
             row_fields["Wnd2"].text = ""
-        self.kestrel_range_event = Clock.schedule_once(
-            lambda dt: self.send_kestrel_range(value, row_fields), 0.25
-        )
+        
+        # If queue was empty, we can send immediately (no pending Kestrel request)
+        if was_empty:
+            print(f"[QUEUE] Queue was empty, sending range {value}m immediately")
+            value, row_fields = self.kestrel_pending_rows[0]
+            self.send_kestrel_range(value, row_fields)
 
     def send_kestrel_range(self, value, row_fields):
         self.kestrel_range_event = None
@@ -2682,22 +2687,27 @@ class MainApp(MDApp):
             return True
 
         # Only read and display values if Kestrel has new solution data
-        if not bool(self.bluetooth_helper.hasKestrelNewSolution()):
+        has_solution = bool(self.bluetooth_helper.hasKestrelNewSolution())
+        if not has_solution:
             return True
 
         # Get the FIRST row in queue (FIFO - first in, first out)
-        row_fields = self.kestrel_pending_rows[0]
+        value, row_fields = self.kestrel_pending_rows[0]
+        queue_len = len(self.kestrel_pending_rows)
 
         elevation_mil = float(self.bluetooth_helper.getLastElevationMil())
         wind1_mil = float(self.bluetooth_helper.getLastWind1Mil())
         wind2_mil = float(self.bluetooth_helper.getLastWind2Mil())
         
+        print(f"[POLL] Processing result for range {value}m, queue len: {queue_len}, Elv: {elevation_mil}, Wnd1: {wind1_mil}, Wnd2: {wind2_mil}")
+
         elevation_field = row_fields.get("Elv")
         if elevation_field is not None and elevation_mil == elevation_mil:
             elevation_value = elevation_mil
             if self.kestrel_hold_uses_moa("ELEVATION"):
                 elevation_value *= 3.43774677
             elevation_field.text = self.format_kestrel_elevation_hold(elevation_value)
+            print(f"[POLL] Set Elv to: {elevation_field.text}")
 
         wind1_field = row_fields.get("Wnd1")
         if wind1_field is not None and wind1_mil == wind1_mil:
@@ -2705,6 +2715,7 @@ class MainApp(MDApp):
             if self.kestrel_hold_uses_moa("WIND"):
                 wind1_value *= 3.43774677
             wind1_field.text = self.format_kestrel_wind_hold(wind1_value)
+            print(f"[POLL] Set Wnd1 to: {wind1_field.text}")
 
         wind2_field = row_fields.get("Wnd2")
         if wind2_field is not None and wind2_mil == wind2_mil:
@@ -2712,13 +2723,22 @@ class MainApp(MDApp):
             if self.kestrel_hold_uses_moa("WIND"):
                 wind2_value *= 3.43774677
             wind2_field.text = self.format_kestrel_wind_hold(wind2_value)
+            print(f"[POLL] Set Wnd2 to: {wind2_field.text}")
         
         # Remove this row from queue (result processed)
         self.kestrel_pending_rows.pop(0)
+        print(f"[POLL] Removed row from queue, {len(self.kestrel_pending_rows)} remaining")
         
         # Clear the flag so next result can be processed
         self.bluetooth_helper.clearKestrelNewSolutionFlag()
         self.kestrel_awaiting_calculation = False
+        
+        # If there are more ranges queued, send the next one immediately
+        # (don't wait for timer - wait for Kestrel to respond)
+        if self.kestrel_pending_rows:
+            next_value, next_row_fields = self.kestrel_pending_rows[0]
+            print(f"[QUEUE] Sending next range {next_value}m to Kestrel immediately")
+            self.send_kestrel_range(next_value, next_row_fields)
         
         return True
 
