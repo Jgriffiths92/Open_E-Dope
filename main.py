@@ -3,7 +3,6 @@ from kivy.core.window import Window
 Window.softinput_mode = "below_target"
 import csv
 import time
-import math
 from kivy.lang import Builder
 from kivy.uix.screenmanager import Screen
 from kivymd.app import MDApp
@@ -2584,6 +2583,7 @@ class MainApp(MDApp):
         status = str(self.bluetooth_helper.getStatus())
         last_error = str(self.bluetooth_helper.getLastError())
         if status == "Connected" and bool(self.bluetooth_helper.isKestrelAuthenticated()):
+            toast(f"Connected to Kestrel")
             self.set_bluetooth_button_connected(True)
             self.kestrel_is_connected = True
             self.last_connected_kestrel_address = address
