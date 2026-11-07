@@ -2745,13 +2745,12 @@ class MainApp(MDApp):
         self.bluetooth_helper.clearKestrelNewSolutionFlag()
         self.kestrel_awaiting_calculation = False
         
-        # If there are more ranges queued, schedule next send with 50ms delay
-        # (Kestrel needs settling time between calculations)
+        # If there are more ranges queued, schedule next send with 250ms delay (safe)
         if self.kestrel_pending_rows:
             next_value, next_row_fields = self.kestrel_pending_rows[0]
-            print(f"[QUEUE] Scheduling next range {next_value}m with 50ms delay")
+            print(f"[QUEUE] Scheduling next range {next_value}m with 250ms delay")
             self.kestrel_range_event = Clock.schedule_once(
-                lambda dt: self.send_kestrel_range(next_value, next_row_fields), 0.05
+                lambda dt: self.send_kestrel_range(next_value, next_row_fields), 0.25
             )
         
         return True
