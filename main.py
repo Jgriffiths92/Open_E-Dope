@@ -2680,30 +2680,14 @@ class MainApp(MDApp):
         if self.kestrel_active_row_fields is None:
             return True
 
+        # Only read and display values if Kestrel has new solution data
+        if not bool(self.bluetooth_helper.hasKestrelNewSolution()):
+            return True
+
         elevation_mil = float(self.bluetooth_helper.getLastElevationMil())
         wind1_mil = float(self.bluetooth_helper.getLastWind1Mil())
         wind2_mil = float(self.bluetooth_helper.getLastWind2Mil())
         
-        # If awaiting calculation, check if minimum time has passed
-        if self.kestrel_awaiting_calculation:
-            import time
-            elapsed = time.time() - self.kestrel_range_sent_time if self.kestrel_range_sent_time else 0
-            
-            # Wait at least 100ms for Java to process and clear old values
-            if elapsed < 0.1:
-                return True
-            
-            all_nan = (elevation_mil != elevation_mil and 
-                      wind1_mil != wind1_mil and 
-                      wind2_mil != wind2_mil)
-            
-            # If still all NaN after 100ms, keep waiting
-            if all_nan:
-                return True
-            
-            # Got non-NaN data after minimum delay, accept it
-            self.kestrel_awaiting_calculation = False
-
         elevation_field = self.kestrel_active_row_fields.get("Elv")
         if elevation_field is not None and elevation_mil == elevation_mil:
             elevation_value = elevation_mil
@@ -2724,6 +2708,10 @@ class MainApp(MDApp):
             if self.kestrel_hold_uses_moa("WIND"):
                 wind2_value *= 3.43774677
             wind2_field.text = self.format_kestrel_wind_hold(wind2_value)
+        
+        # Clear the flag so we don't process this solution multiple times
+        self.bluetooth_helper.clearKestrelNewSolutionFlag()
+        self.kestrel_awaiting_calculation = False
         
         return True
 

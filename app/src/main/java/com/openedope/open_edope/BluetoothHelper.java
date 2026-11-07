@@ -83,6 +83,7 @@ public class BluetoothHelper {
     private double lastWind1Mil = Double.NaN;
     private double lastWind2Mil = Double.NaN;
     private double lastRangeMeters;
+    private volatile boolean kestrelNewSolutionReceived = false;
     private volatile int elevationUnit = 1;
     private volatile int windUnit = 1;
     private volatile int activeGunIndex = -1;
@@ -364,6 +365,14 @@ public class BluetoothHelper {
         return lastRangeMeters;
     }
 
+    public boolean hasKestrelNewSolution() {
+        return kestrelNewSolutionReceived;
+    }
+
+    public void clearKestrelNewSolutionFlag() {
+        kestrelNewSolutionReceived = false;
+    }
+
     public int getElevationUnit() {
         return elevationUnit;
     }
@@ -499,6 +508,7 @@ public class BluetoothHelper {
         lastWind1Mil = Double.NaN;
         lastWind2Mil = Double.NaN;
         lastRangeMeters = Double.NaN;
+        kestrelNewSolutionReceived = false;
 
         // 0x0089 SetFullInputs writes range, inclination and direction of fire
         // together. Read the current target first so changing range does not
@@ -1217,6 +1227,7 @@ public class BluetoothHelper {
                 lastElevationMil = readF32(solution, 11);
                 lastWind1Mil = readF32(solution, 15);
                 lastWind2Mil = readF32(solution, 19);
+                kestrelNewSolutionReceived = true;
                 status = "Connected";
 
                 appendDebug("Solution 0x008a received: elevationMIL="
