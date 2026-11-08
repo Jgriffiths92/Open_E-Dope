@@ -4,10 +4,10 @@
 title = Open E-Dope
 
 # (str) Package name
-package.name = open_edope
+package.name = openedope
 
 # (str) Package domain (needed for android/ios packaging)
-package.domain = com.openedope
+package.domain = com
 
 # (str) Source code where the main.py live
 source.dir = .

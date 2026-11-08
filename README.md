@@ -152,6 +152,16 @@ Note: NFC features will be disabled on desktop; other functionality fully testab
 
 The workflow is defined in `.github/workflows/build-apk.yml`.
 
+### Google Play release bundle
+
+The Android application ID is `com.openedope`, formed from `package.domain`
+and `package.name` in `buildozer.spec`. Run the **Build Signed AAB** workflow
+from the Actions tab and upload the new `open-edope-release-aab` artifact to
+Google Play. The workflow requires the repository's existing signing secrets.
+
+Builds previously made with `com.openedope.open_edope` are a different Android
+application: the new build will not update them or retain their private data.
+
 ---
 
 ### Method 2: Local Build (Linux/Mac)
@@ -466,7 +476,6 @@ Status: Active Development
 - NFC writing is one-way; data cannot be read back from the tag.
 - App is Android-only (iOS support is not currently planned for future versions).
 - Color displays are supported but rendering may vary by model.
-
 
 
 
