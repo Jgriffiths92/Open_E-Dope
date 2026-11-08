@@ -2771,11 +2771,7 @@ class MainApp(MDApp):
             send_time = self.kestrel_row_send_times[row_key]
             elapsed = time.time() - send_time
             if elapsed > 5.0:  # 5 second timeout
-                print(f"[POLL] Timeout! Range {value}m waited {elapsed:.1f}s, Kestrel likely NACK'd it. Removing from queue.")
-                self.kestrel_pending_rows.pop(0)
-                if row_key in self.kestrel_row_send_times:
-                    del self.kestrel_row_send_times[row_key]
-                print(f"[POLL] {len(self.kestrel_pending_rows)} rows remaining")
+                print(f"[POLL] Timeout! Range {value}m waited {elapsed:.1f}s, Kestrel likely NACK'd it. Attempting recovery.")
                 
                 # Try to clear error state by refreshing the Kestrel profile
                 # This forces Kestrel to re-sync and clear error screens like "Unstable Data"
@@ -2786,9 +2782,10 @@ class MainApp(MDApp):
                 except Exception as e:
                     print(f"[POLL] Failed to refresh Kestrel: {e}")
                 
-                # Try next row
-                if self.kestrel_pending_rows:
-                    Clock.schedule_once(lambda dt: self.send_first_kestrel_range(), 0.25)
+                # Reset the send time so we retry this range after 2 seconds (give Kestrel time to recover)
+                self.kestrel_row_send_times[row_key] = time.time()
+                print(f"[POLL] Resetting timeout for range {value}m, will retry after 2s")
+                Clock.schedule_once(lambda dt: self.send_first_kestrel_range(), 2.0)
                 return True
 
         # Only read and display values if Kestrel has new solution data
