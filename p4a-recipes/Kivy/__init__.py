@@ -89,7 +89,11 @@ class KivyRecipe(PyProjectRecipe):
         ensure_dir(sub_build_dir)
 
         # Preserve the expected executable path for later recipes.
-        shprint(sh.cp, self.real_hostpython_location, self.ctx.python_recipe.python_exe)
+        shprint(
+            sh.cp,
+            self.real_hostpython_location,
+            self.ctx.python_recipe.get_android_python_exe(arch),
+        )
 
         build_args = [
             "-m",
