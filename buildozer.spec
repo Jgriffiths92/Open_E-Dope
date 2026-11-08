@@ -107,7 +107,7 @@ android.permissions = INTERNET, WRITE_EXTERNAL_STORAGE, READ_EXTERNAL_STORAGE, F
 # (str) Android application meta-data to set (key=value format)
 #android.windowSoftInputMode = adjustResize
 # (int) Target Android API, should be as high as possible.
-android.api = 34
+android.api = 36
 
 # (int) Minimum API your APK / AAB will support.
 android.minapi = 24
