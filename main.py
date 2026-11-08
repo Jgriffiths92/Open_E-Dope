@@ -852,6 +852,7 @@ class MainApp(MDApp):
         self.kestrel_awaiting_calculation = False
         self.kestrel_active_row_fields = None
         self.kestrel_pending_rows = []  # Queue of (range_value, row_fields) tuples
+        self.kestrel_debounce_timers = {}  # Map of row_fields -> scheduled debounce timer (to delay queue until user stops typing)
         # User preference: sort swipe file list by date, name, or type
         self.sort_type = "date"   # Default sort type
         # Sort order: ascending or descending
@@ -2633,16 +2634,37 @@ class MainApp(MDApp):
         return True
 
     def queue_kestrel_range(self, range_field, value, row_fields):
-        # Queue was empty before adding this
-        was_empty = not self.kestrel_pending_rows
-        
         # IMPORTANT: Capture the VALUE NOW, don't store a reference
         # Convert to float and back to string to ensure it's a fixed value
         try:
             captured_value = float(str(value).strip())
         except (TypeError, ValueError):
-            print(f"[QUEUE] Invalid range value: {value}")
+            print(f"[QUEUE] Invalid range value (not yet a float): {value}")
             return
+        
+        # Use a unique key for this row's debounce timer
+        row_key = id(row_fields)
+        
+        # Cancel any existing debounce timer for this row
+        if row_key in self.kestrel_debounce_timers:
+            self.kestrel_debounce_timers[row_key].cancel()
+            print(f"[DEBOUNCE] Cancelled previous timer for row {row_key}")
+        
+        # Schedule a new debounce timer - only queue after user stops typing for 300ms
+        def do_queue():
+            print(f"[DEBOUNCE] User stopped typing, now queueing {captured_value}m")
+            self._actually_queue_kestrel_range(captured_value, row_fields)
+            if row_key in self.kestrel_debounce_timers:
+                del self.kestrel_debounce_timers[row_key]
+        
+        timer = Clock.schedule_once(lambda dt: do_queue(), 0.3)
+        self.kestrel_debounce_timers[row_key] = timer
+        print(f"[DEBOUNCE] Scheduled queue for {captured_value}m (waiting 300ms for more typing)")
+    
+    def _actually_queue_kestrel_range(self, captured_value, row_fields):
+        """Actually queue the range after debounce delay"""
+        # Queue was empty before adding this
+        was_empty = not self.kestrel_pending_rows
         
         # Check if this exact row_fields is already in the queue
         # If so, update its value (user is correcting a typo or re-editing)
