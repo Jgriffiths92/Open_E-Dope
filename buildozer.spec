@@ -329,8 +329,8 @@ android.debug_artifact = apk
 # (str) python-for-android branch to use, defaults to master
 p4a.branch = master
 
-# Keep the Python 3.11-compatible p4a revision and use local PEP 517 recipe fixes.
-p4a.commit = 2473ddeabb286b826924c49e62ea6c42a9acfd7a
+# Pin the Android 15+ system-bar inset helper and retain local PEP 517 recipe fixes.
+p4a.commit = 70f922439f43e3e4923ed4944744ace500762fc6
 
 # Run PEP 517 recipe backends with host Python, not the Android target interpreter.
 p4a.local_recipes = p4a-recipes
