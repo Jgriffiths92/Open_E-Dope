@@ -556,6 +556,46 @@ if is_android() and autoclass and _java_class_available('com.openedope.open_edop
                     # self.app.on_keyboard_hidden()
 
 
+AndroidSystemBarInsetsListener = None
+if (
+    is_android()
+    and autoclass
+    and _java_class_available('android.view.View$OnApplyWindowInsetsListener')
+):
+    from jnius import PythonJavaClass, java_method
+
+    class AndroidSystemBarInsetsListener(PythonJavaClass):
+        __javainterfaces__ = ['android/view/View$OnApplyWindowInsetsListener']
+        __javacontext__ = 'app'
+
+        def __init__(self):
+            super().__init__()
+            self.initial_padding = None
+
+        @java_method('(Landroid/view/View;Landroid/view/WindowInsets;)Landroid/view/WindowInsets;')
+        def onApplyWindowInsets(self, view, window_insets):
+            if self.initial_padding is None:
+                self.initial_padding = (
+                    view.getPaddingLeft(),
+                    view.getPaddingTop(),
+                    view.getPaddingRight(),
+                    view.getPaddingBottom(),
+                )
+
+            inset_types = autoclass('android.view.WindowInsets$Type')
+            insets = window_insets.getInsets(
+                inset_types.systemBars() | inset_types.displayCutout()
+            )
+            left, top, right, bottom = self.initial_padding
+            view.setPadding(
+                left + insets.left,
+                top + insets.top,
+                right + insets.right,
+                bottom + insets.bottom,
+            )
+            return window_insets
+
+
 
 # === MainApp Class ===
 # The main application class: lifecycle, UI, data, settings, and NFC.
@@ -997,8 +1037,22 @@ class MainApp(MDApp):
             return
 
         try:
-            SystemBarInsets = autoclass("com.openedope.open_edope.SystemBarInsets")
-            SystemBarInsets.apply(mActivity)
+            sdk_int = autoclass('android.os.Build$VERSION').SDK_INT
+            if sdk_int < 35:
+                return
+            if AndroidSystemBarInsetsListener is None:
+                raise RuntimeError("Android system-bar inset listener is unavailable")
+
+            content_view_id = autoclass('android.R$id').content
+            content_view = mActivity.findViewById(content_view_id)
+            if content_view is None:
+                raise RuntimeError("Android content view is unavailable")
+
+            self._android_system_bar_insets_listener = AndroidSystemBarInsetsListener()
+            content_view.setOnApplyWindowInsetsListener(
+                self._android_system_bar_insets_listener
+            )
+            content_view.requestApplyInsets()
         except Exception as e:
             print(f"Could not apply Android system-bar insets: {e}")
 
