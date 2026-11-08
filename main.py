@@ -853,6 +853,7 @@ class MainApp(MDApp):
         self.kestrel_active_row_fields = None
         self.kestrel_pending_rows = []  # Queue of (range_value, row_fields) tuples
         self.kestrel_debounce_timers = {}  # Map of row_fields -> scheduled debounce timer (to delay queue until user stops typing)
+        self.kestrel_row_send_times = {}  # Map of row_fields -> time when range was sent (for timeout detection)
         # User preference: sort swipe file list by date, name, or type
         self.sort_type = "date"   # Default sort type
         # Sort order: ascending or descending
@@ -2747,6 +2748,9 @@ class MainApp(MDApp):
             return False
         else:
             print(f"[SEND] Kestrel range sent successfully: {range_meters} m")
+            # Record when this row was sent (for timeout detection)
+            row_key = id(row_fields)
+            self.kestrel_row_send_times[row_key] = time.time()
             return True
 
     def poll_kestrel_elevation(self):
@@ -2759,13 +2763,40 @@ class MainApp(MDApp):
         if not self.kestrel_pending_rows:
             return True
 
+        value, row_fields = self.kestrel_pending_rows[0]
+        row_key = id(row_fields)
+        
+        # Check if this row has been waiting too long (5 seconds) - Kestrel likely rejected it
+        if row_key in self.kestrel_row_send_times:
+            send_time = self.kestrel_row_send_times[row_key]
+            elapsed = time.time() - send_time
+            if elapsed > 5.0:  # 5 second timeout
+                print(f"[POLL] Timeout! Range {value}m waited {elapsed:.1f}s, Kestrel likely NACK'd it. Removing from queue.")
+                self.kestrel_pending_rows.pop(0)
+                if row_key in self.kestrel_row_send_times:
+                    del self.kestrel_row_send_times[row_key]
+                print(f"[POLL] {len(self.kestrel_pending_rows)} rows remaining")
+                
+                # Try to clear error state by refreshing the Kestrel profile
+                # This forces Kestrel to re-sync and clear error screens like "Unstable Data"
+                try:
+                    if self.bluetooth_helper and bool(self.bluetooth_helper.isKestrelAuthenticated()):
+                        self.bluetooth_helper.refreshKestrelProfile()
+                        print(f"[POLL] Sent profile refresh to clear Kestrel error state")
+                except Exception as e:
+                    print(f"[POLL] Failed to refresh Kestrel: {e}")
+                
+                # Try next row
+                if self.kestrel_pending_rows:
+                    Clock.schedule_once(lambda dt: self.send_first_kestrel_range(), 0.25)
+                return True
+
         # Only read and display values if Kestrel has new solution data
         has_solution = bool(self.bluetooth_helper.hasKestrelNewSolution())
         if not has_solution:
             return True
 
         # Get the FIRST row in queue (FIFO - first in, first out)
-        value, row_fields = self.kestrel_pending_rows[0]
         queue_len = len(self.kestrel_pending_rows)
 
         elevation_mil = float(self.bluetooth_helper.getLastElevationMil())
@@ -2800,6 +2831,8 @@ class MainApp(MDApp):
         
         # Remove this row from queue (result processed)
         self.kestrel_pending_rows.pop(0)
+        if row_key in self.kestrel_row_send_times:
+            del self.kestrel_row_send_times[row_key]
         print(f"[POLL] Removed row from queue, {len(self.kestrel_pending_rows)} remaining")
         
         # Clear the flag so next result can be processed
