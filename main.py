@@ -979,19 +979,7 @@ class MainApp(MDApp):
         # Bind global key handler for Tab/Enter navigation
         from kivy.core.window import Window
 
-        if is_android():
-            try:
-                from android.display_cutout import update_system_ui
-
-                update_system_ui(
-                    "#AD00F7",
-                    "#303030",
-                    "Light",
-                    pad_status=True,
-                    pad_nav=True,
-                )
-            except Exception as e:
-                print(f"Could not configure Android system bars: {e}")
+        self.apply_android_system_bar_insets()
 
         # Apply to the stage name field
         stage_name_field = self.root.ids.home_screen.ids.stage_name_field
@@ -1002,6 +990,101 @@ class MainApp(MDApp):
         stage_notes_field.bind(text=self.auto_capitalize)
 
         Window.bind(on_key_down=self.global_key_handler)
+
+    def apply_android_system_bar_insets(self):
+        if not is_android() or mActivity is None or autoclass is None:
+            return
+
+        try:
+            from android.runnable import run_on_ui_thread
+        except Exception as e:
+            print(f"Could not configure Android system bars: {e}")
+            return
+
+        @run_on_ui_thread
+        def configure_system_bars():
+            try:
+                from jnius import PythonJavaClass, java_method
+
+                activity = mActivity
+                window = activity.getWindow()
+                decor_view = window.getDecorView()
+                content_view = window.findViewById(
+                    autoclass("android.R$id").content
+                )
+                if content_view is None:
+                    raise RuntimeError("Android content view is unavailable")
+
+                sdk_version = autoclass("android.os.Build$VERSION").SDK_INT
+                color = autoclass("android.graphics.Color")
+                status_color = color.parseColor("#AD00F7")
+                navigation_color = color.parseColor("#303030")
+
+                if sdk_version >= 30:
+                    controller = window.getInsetsController()
+                    controller_type = autoclass(
+                        "android.view.WindowInsetsController"
+                    )
+                    light_bar_flags = (
+                        controller_type.APPEARANCE_LIGHT_STATUS_BARS
+                        | controller_type.APPEARANCE_LIGHT_NAVIGATION_BARS
+                    )
+                    controller.setSystemBarsAppearance(0, light_bar_flags)
+                else:
+                    view = autoclass("android.view.View")
+                    visibility = decor_view.getSystemUiVisibility()
+                    visibility &= ~view.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
+                    if sdk_version >= 26:
+                        visibility &= ~view.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR
+                    decor_view.setSystemUiVisibility(visibility)
+
+                if sdk_version >= 35:
+                    inset_types = autoclass("android.view.WindowInsets$Type")
+
+                    class SystemBarInsetsListener(PythonJavaClass):
+                        __javainterfaces__ = [
+                            "android/view/View$OnApplyWindowInsetsListener"
+                        ]
+                        __javacontext__ = "app"
+
+                        @java_method(
+                            "(Landroid/view/View;Landroid/view/WindowInsets;)"
+                            "Landroid/view/WindowInsets;"
+                        )
+                        def onApplyWindowInsets(self, view, window_insets):
+                            try:
+                                status_insets = window_insets.getInsets(
+                                    inset_types.statusBars()
+                                )
+                                navigation_insets = window_insets.getInsets(
+                                    inset_types.navigationBars()
+                                )
+                                content_view.setPadding(
+                                    0,
+                                    status_insets.top,
+                                    0,
+                                    navigation_insets.bottom,
+                                )
+                                content_view.setBackgroundColor(status_color)
+                                window.setNavigationBarColor(navigation_color)
+                            except Exception as e:
+                                print(
+                                    f"Could not apply Android system-bar insets: {e}"
+                                )
+                            return window_insets
+
+                    self._system_bar_insets_listener = SystemBarInsetsListener()
+                    decor_view.setOnApplyWindowInsetsListener(
+                        self._system_bar_insets_listener
+                    )
+                    decor_view.requestApplyInsets()
+                else:
+                    window.setStatusBarColor(status_color)
+                    window.setNavigationBarColor(navigation_color)
+            except Exception as e:
+                print(f"Could not configure Android system bars: {e}")
+
+        configure_system_bars()
 
     def auto_capitalize(self, instance, value):
         """
