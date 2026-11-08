@@ -329,10 +329,10 @@ android.debug_artifact = apk
 # The Android 15+ inset helper is on p4a's develop branch.
 p4a.branch = develop
 
-# Pin the Android 15+ system-bar inset helper and retain local PEP 517 recipe fixes.
+# Pin the Android 15+ system-bar inset helper.
 p4a.commit = 70f922439f43e3e4923ed4944744ace500762fc6
 
-# Run PEP 517 recipe backends with host Python, not the Android target interpreter.
+# Keep the project's SDL2 recipe compatibility changes.
 p4a.local_recipes = p4a-recipes
 
 # (str) python-for-android git clone directory (if empty, it will be automatically cloned from github)
