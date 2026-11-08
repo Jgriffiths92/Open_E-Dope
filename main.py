@@ -2636,9 +2636,17 @@ class MainApp(MDApp):
         # Queue was empty before adding this
         was_empty = not self.kestrel_pending_rows
         
-        # Add (value, row_fields) tuple to queue
-        self.kestrel_pending_rows.append((value, row_fields))
-        print(f"[QUEUE] Added row (range={value}), queue now has {len(self.kestrel_pending_rows)} rows")
+        # IMPORTANT: Capture the VALUE NOW, don't store a reference
+        # Convert to float and back to string to ensure it's a fixed value
+        try:
+            captured_value = float(str(value).strip())
+        except (TypeError, ValueError):
+            print(f"[QUEUE] Invalid range value: {value}")
+            return
+        
+        # Add (captured_value, row_fields) tuple to queue
+        self.kestrel_pending_rows.append((captured_value, row_fields))
+        print(f"[QUEUE] Added row (range={captured_value}m), queue now has {len(self.kestrel_pending_rows)} rows")
         
         # Clear elevation and wind fields to prevent old data from showing
         if "Elv" in row_fields:
@@ -2650,7 +2658,7 @@ class MainApp(MDApp):
         
         # If queue was empty, schedule first send with 250ms delay (Kestrel needs settling time)
         if was_empty:
-            print(f"[QUEUE] Queue was empty, scheduling range {value}m with 250ms delay")
+            print(f"[QUEUE] Queue was empty, scheduling range {captured_value}m with 250ms delay")
             self.kestrel_range_event = Clock.schedule_once(
                 lambda dt: self.send_first_kestrel_range(), 0.25
             )
@@ -2669,24 +2677,29 @@ class MainApp(MDApp):
     def send_kestrel_range(self, value, row_fields):
         self.kestrel_range_event = None
         if self.bluetooth_helper is None:
+            print("[SEND] Bluetooth helper is None")
             return
         try:
             range_meters = float(str(value).strip())
-        except (TypeError, ValueError):
+        except (TypeError, ValueError) as e:
+            print(f"[SEND] Invalid range value: {value}, error: {e}")
             return
         if range_meters < 0:
+            print(f"[SEND] Range is negative: {range_meters}")
             return
         if not bool(self.bluetooth_helper.isKestrelAuthenticated()):
             print("Kestrel range send skipped: not authenticated")
             return
-        if not bool(self.bluetooth_helper.sendKestrelRange(
-                range_meters)):
+        
+        print(f"[SEND] Sending range {range_meters}m to Kestrel")
+        if not bool(self.bluetooth_helper.sendKestrelRange(range_meters)):
             error = str(self.bluetooth_helper.getLastError())
+            print(f"[SEND] Failed to send range! Error: {error}")
             self.set_bluetooth_button_connected(False, error=True)
             if error:
                 print(error)
         else:
-            print(f"Kestrel range sent: {range_meters} m")
+            print(f"[SEND] Kestrel range sent successfully: {range_meters} m")
 
     def poll_kestrel_elevation(self):
         if self.bluetooth_helper is None:
