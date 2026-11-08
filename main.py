@@ -2709,25 +2709,33 @@ class MainApp(MDApp):
         
         value, row_fields = self.kestrel_pending_rows[0]
         print(f"[QUEUE] Sending first range {value}m to Kestrel")
-        self.send_kestrel_range(value, row_fields)
-        self.kestrel_range_event = None
+        success = self.send_kestrel_range(value, row_fields)
+        
+        # If send failed, retry after 500ms
+        if not success:
+            print(f"[QUEUE] Send failed, will retry after 500ms")
+            self.kestrel_range_event = Clock.schedule_once(
+                lambda dt: self.send_first_kestrel_range(), 0.5
+            )
+        else:
+            self.kestrel_range_event = None
 
     def send_kestrel_range(self, value, row_fields):
-        self.kestrel_range_event = None
+        """Send range to Kestrel. Returns True if successful, False if failed."""
         if self.bluetooth_helper is None:
             print("[SEND] Bluetooth helper is None")
-            return
+            return False
         try:
             range_meters = float(str(value).strip())
         except (TypeError, ValueError) as e:
             print(f"[SEND] Invalid range value: {value}, error: {e}")
-            return
+            return False
         if range_meters < 0:
             print(f"[SEND] Range is negative: {range_meters}")
-            return
+            return False
         if not bool(self.bluetooth_helper.isKestrelAuthenticated()):
             print("Kestrel range send skipped: not authenticated")
-            return
+            return False
         
         print(f"[SEND] Sending range {range_meters}m to Kestrel")
         if not bool(self.bluetooth_helper.sendKestrelRange(range_meters)):
@@ -2736,8 +2744,10 @@ class MainApp(MDApp):
             self.set_bluetooth_button_connected(False, error=True)
             if error:
                 print(error)
+            return False
         else:
             print(f"[SEND] Kestrel range sent successfully: {range_meters} m")
+            return True
 
     def poll_kestrel_elevation(self):
         if self.bluetooth_helper is None:
