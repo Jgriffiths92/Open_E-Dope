@@ -326,8 +326,8 @@ android.debug_artifact = apk
 # (str) python-for-android fork to use in case if p4a.url is not specified, defaults to upstream (kivy)
 #p4a.fork = kivy
 
-# (str) python-for-android branch to use, defaults to master
-p4a.branch = master
+# The Android 15+ inset helper is on p4a's develop branch.
+p4a.branch = develop
 
 # Pin the Android 15+ system-bar inset helper and retain local PEP 517 recipe fixes.
 p4a.commit = 70f922439f43e3e4923ed4944744ace500762fc6
