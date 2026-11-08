@@ -556,65 +556,6 @@ if is_android() and autoclass and _java_class_available('com.openedope.open_edop
                     # self.app.on_keyboard_hidden()
 
 
-def android_safe_area(window_size, decor_rect, surface_rect, insets):
-    """Map Android's safe area to Kivy coordinates, relative to the SDL surface."""
-    window_width, window_height = window_size
-    decor_x, decor_y, decor_width, decor_height = decor_rect
-    surface_x, surface_y, surface_width, surface_height = surface_rect
-    left, top, right, bottom = insets
-    if surface_width <= 0 or surface_height <= 0:
-        raise ValueError("SDL surface has no size")
-
-    scale_x = window_width / surface_width
-    scale_y = window_height / surface_height
-    safe_left = max(0, decor_x + left - surface_x) * scale_x
-    safe_top = max(0, decor_y + top - surface_y) * scale_y
-    safe_right = max(
-        0, surface_x + surface_width - (decor_x + decor_width - right)
-    ) * scale_x
-    safe_bottom = max(
-        0, surface_y + surface_height - (decor_y + decor_height - bottom)
-    ) * scale_y
-    return (
-        safe_left,
-        safe_bottom,
-        max(0, window_width - safe_left - safe_right),
-        max(0, window_height - safe_top - safe_bottom),
-    )
-
-
-AndroidSystemBarInsetsListener = None
-AndroidSurfaceLayoutListener = None
-if is_android() and autoclass:
-    from jnius import PythonJavaClass, java_method
-
-    class AndroidSystemBarInsetsListener(PythonJavaClass):
-        __javainterfaces__ = ['android/view/View$OnApplyWindowInsetsListener']
-        __javacontext__ = 'app'
-
-        def __init__(self, app):
-            super().__init__()
-            self.app = app
-
-        @java_method('(Landroid/view/View;Landroid/view/WindowInsets;)Landroid/view/WindowInsets;')
-        def onApplyWindowInsets(self, view, window_insets):
-            self.app.read_android_safe_area(window_insets)
-            return view.onApplyWindowInsets(window_insets)
-
-    class AndroidSurfaceLayoutListener(PythonJavaClass):
-        __javainterfaces__ = ['android/view/ViewTreeObserver$OnGlobalLayoutListener']
-        __javacontext__ = 'app'
-
-        def __init__(self, app):
-            super().__init__()
-            self.app = app
-
-        @java_method('()V')
-        def onGlobalLayout(self):
-            self.app.read_android_safe_area()
-
-
-
 # === MainApp Class ===
 # The main application class: lifecycle, UI, data, settings, and NFC.
 class MainApp(MDApp):
@@ -1038,7 +979,19 @@ class MainApp(MDApp):
         # Bind global key handler for Tab/Enter navigation
         from kivy.core.window import Window
 
-        self.apply_android_system_bar_insets()
+        if is_android():
+            try:
+                from android.display_cutout import update_system_ui
+
+                update_system_ui(
+                    "#AD00F7",
+                    "#303030",
+                    "Light",
+                    pad_status=True,
+                    pad_nav=True,
+                )
+            except Exception as e:
+                print(f"Could not configure Android system bars: {e}")
 
         # Apply to the stage name field
         stage_name_field = self.root.ids.home_screen.ids.stage_name_field
@@ -1049,91 +1002,6 @@ class MainApp(MDApp):
         stage_notes_field.bind(text=self.auto_capitalize)
 
         Window.bind(on_key_down=self.global_key_handler)
-
-    def apply_android_system_bar_insets(self):
-        if not is_android() or mActivity is None or autoclass is None:
-            return
-
-        try:
-            sdk_int = autoclass('android.os.Build$VERSION').SDK_INT
-            if sdk_int < 35:
-                return
-            from android.runnable import run_on_ui_thread
-
-            self._android_safe_area_data = None
-            Window.bind(size=self.update_android_safe_area)
-            self._android_system_bar_insets_listener = AndroidSystemBarInsetsListener(self)
-            self._android_surface_layout_listener = AndroidSurfaceLayoutListener(self)
-
-            @run_on_ui_thread
-            def register_listeners():
-                try:
-                    sdl_layout = autoclass('org.libsdl.app.SDLActivity').getContentView()
-                    if sdl_layout is None:
-                        raise RuntimeError("SDL layout is unavailable")
-                    sdl_layout.setOnApplyWindowInsetsListener(
-                        self._android_system_bar_insets_listener
-                    )
-                    sdl_layout.getViewTreeObserver().addOnGlobalLayoutListener(
-                        self._android_surface_layout_listener
-                    )
-                    sdl_layout.requestApplyInsets()
-                    self.read_android_safe_area()
-                except Exception as e:
-                    print(f"Could not register Android system-bar listeners: {e}")
-
-            register_listeners()
-        except Exception as e:
-            print(f"Could not apply Android system-bar insets: {e}")
-
-    def read_android_safe_area(self, window_insets=None):
-        """Read Android view geometry on the Android UI thread."""
-        try:
-            decor = mActivity.getWindow().getDecorView()
-            root_insets = decor.getRootWindowInsets()
-            if root_insets is not None:
-                window_insets = root_insets
-            if window_insets is None:
-                return
-            sdl_layout = cast(
-                'android.view.ViewGroup',
-                autoclass('org.libsdl.app.SDLActivity').getContentView(),
-            )
-            surface = sdl_layout.getChildAt(0)
-            if surface is None or surface.getWidth() <= 0 or surface.getHeight() <= 0:
-                return
-            decor_location = [0, 0]
-            surface_location = [0, 0]
-            decor.getLocationInWindow(decor_location)
-            surface.getLocationInWindow(surface_location)
-            inset_types = autoclass('android.view.WindowInsets$Type')
-            insets = window_insets.getInsets(
-                inset_types.systemBars() | inset_types.displayCutout()
-            )
-            data = (
-                (*decor_location, decor.getWidth(), decor.getHeight()),
-                (*surface_location, surface.getWidth(), surface.getHeight()),
-                (insets.left, insets.top, insets.right, insets.bottom),
-            )
-            Clock.schedule_once(lambda dt: self.set_android_safe_area(data), 0)
-        except Exception as e:
-            print(f"Could not read Android system-bar insets: {e}")
-
-    def set_android_safe_area(self, data):
-        if self._android_safe_area_data != data:
-            print(f"Android safe area (decor, surface, insets): {data}")
-        self._android_safe_area_data = data
-        self.root.size_hint = (None, None)
-        self.update_android_safe_area()
-
-    def update_android_safe_area(self, *args):
-        if self._android_safe_area_data is None:
-            return
-        x, y, width, height = android_safe_area(
-            Window.size, *self._android_safe_area_data
-        )
-        self.root.pos = (x, y)
-        self.root.size = (width, height)
 
     def auto_capitalize(self, instance, value):
         """
