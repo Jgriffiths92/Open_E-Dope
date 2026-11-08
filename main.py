@@ -2645,21 +2645,24 @@ class MainApp(MDApp):
             return
         
         # Check if this exact row_fields is already in the queue
-        # If so, update its value (user is correcting a typo)
-        # If not, add it as a new entry
+        # If so, update its value (user is correcting a typo or re-editing)
+        # If not, add it as a new entry (either new row, or re-editing after calculation)
         row_already_queued = False
         for i, (queued_value, queued_fields) in enumerate(self.kestrel_pending_rows):
             if queued_fields is row_fields:  # Same row object
                 # Replace the value (user is still typing and correcting)
                 self.kestrel_pending_rows[i] = (captured_value, row_fields)
-                print(f"[QUEUE] Updated row value from {queued_value}m to {captured_value}m (user typing)")
+                print(f"[QUEUE] Updated row value from {queued_value}m to {captured_value}m (user still editing)")
                 row_already_queued = True
                 break
         
         if not row_already_queued:
-            # New row - add to queue
+            # Either a brand new row, or re-editing an already-calculated row
             self.kestrel_pending_rows.append((captured_value, row_fields))
-            print(f"[QUEUE] Added row (range={captured_value}m), queue now has {len(self.kestrel_pending_rows)} rows")
+            if self.kestrel_pending_rows.__len__() > 1:
+                print(f"[QUEUE] Re-queued edited row (range={captured_value}m), queue now has {len(self.kestrel_pending_rows)} rows")
+            else:
+                print(f"[QUEUE] Added new row (range={captured_value}m), queue now has {len(self.kestrel_pending_rows)} rows")
         
         # Clear elevation and wind fields to prevent old data from showing
         if "Elv" in row_fields:
