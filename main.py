@@ -2644,9 +2644,22 @@ class MainApp(MDApp):
             print(f"[QUEUE] Invalid range value: {value}")
             return
         
-        # Add (captured_value, row_fields) tuple to queue
-        self.kestrel_pending_rows.append((captured_value, row_fields))
-        print(f"[QUEUE] Added row (range={captured_value}m), queue now has {len(self.kestrel_pending_rows)} rows")
+        # Check if this exact row_fields is already in the queue
+        # If so, update its value (user is correcting a typo)
+        # If not, add it as a new entry
+        row_already_queued = False
+        for i, (queued_value, queued_fields) in enumerate(self.kestrel_pending_rows):
+            if queued_fields is row_fields:  # Same row object
+                # Replace the value (user is still typing and correcting)
+                self.kestrel_pending_rows[i] = (captured_value, row_fields)
+                print(f"[QUEUE] Updated row value from {queued_value}m to {captured_value}m (user typing)")
+                row_already_queued = True
+                break
+        
+        if not row_already_queued:
+            # New row - add to queue
+            self.kestrel_pending_rows.append((captured_value, row_fields))
+            print(f"[QUEUE] Added row (range={captured_value}m), queue now has {len(self.kestrel_pending_rows)} rows")
         
         # Clear elevation and wind fields to prevent old data from showing
         if "Elv" in row_fields:
@@ -3395,9 +3408,10 @@ SwipeFileItem:
         )
 
         # ADD ROW button: adds a new data entry row
+        # Capture any pending Range values before adding new row
         add_button = MDRaisedButton(
             text="ADD ROW",
-            on_release=lambda x: self.add_data_row(rows_layout),
+            on_release=lambda x: self.on_add_row_clicked(rows_layout),
             size_hint=(0.5, None),
         )
         
@@ -3468,6 +3482,11 @@ SwipeFileItem:
         finally:
             self._manual_target_text_suppress = False
 
+    def on_add_row_clicked(self, rows_layout):
+        """Handle ADD ROW button click: add new row."""
+        # Now add the new row
+        self.add_data_row(rows_layout)
+
     def add_data_row(self, rows_layout, focus_row=True):
         """Create and add a new row of data input fields based on available_fields configuration."""
         # This dynamically builds a row with one text field for each visible column
@@ -3493,16 +3512,20 @@ SwipeFileItem:
                     text_field.text = next_target_label
                     text_field._target_identifier_auto_generated = True
                     text_field.bind(text=self.on_manual_target_text_change)
+                
                 # Scroll to button area when user focuses on this field
                 # (makes the buttons visible for adding/deleting rows)
-                text_field.bind(
-                    on_focus=lambda instance, value: self.scroll_manual_input_to_buttons() if value else None
-                )
                 if field_name == "Range":
+                    # Bind to text change for almost-live Kestrel calculation
+                    # Value is captured as fixed float in queue_kestrel_range, so typing doesn't break it
                     text_field.bind(
                         text=lambda instance, value, fields=row_fields:
                             self.queue_kestrel_range(instance, value, fields)
                     )
+                
+                text_field.bind(
+                    on_focus=lambda instance, value: self.scroll_manual_input_to_buttons() if value else None
+                )
                 row_fields[field_name] = text_field
                 manual_fields.append(text_field)
                 row_layout.add_widget(text_field)
@@ -3661,10 +3684,6 @@ SwipeFileItem:
 
             # Do NOT call self.display_table(self.current_data) here!
             # Just clear manual input fields after adding data
-            #for row_fields in self.manual_data_rows:
-            #    for field in row_fields.values():
-            #        field.text = ""
-            # Also clear the corresponding manual_data_rows entry if you want
             if hasattr(self, "manual_data_rows") and self.manual_data_rows:
                 self.clear_manual_data_fields()
             print("Manual data added:", self.current_data)
