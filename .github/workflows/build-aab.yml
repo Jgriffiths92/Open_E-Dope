@@ -38,7 +38,7 @@ jobs:
 
     - name: Set API level and version code
       run: |
-        sed -i 's/^android.api = .*/android.api = 35/' buildozer.spec
+        sed -i 's/^android.api = .*/android.api = 36/' buildozer.spec
         sed -i 's/^# *android.numeric_version = .*/android.numeric_version = ${{ github.run_number }}/' buildozer.spec
         sed -i 's/^android.numeric_version = .*/android.numeric_version = ${{ github.run_number }}/' buildozer.spec
         grep -nE '^android\.(api|numeric_version)' buildozer.spec
