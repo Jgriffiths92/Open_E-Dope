@@ -15,6 +15,7 @@ Open e-Dope is a system that converts CSV data into a bitmap and transmits it vi
 - Manual data entry mode (no CSV required)
 - Bitmap export for debugging and verification
 - Real-time NFC transfer with progress feedback
+- Directly connects to the Kestrel 5700 elite
 
 ## 🚀 Overview
 
@@ -242,6 +243,7 @@ adb install bin/open_edope-0.1-debug.apk
 - Toggle column visibility for Range, Lead, and second wind hold
 - Generate bitmap output for e-ink displays and save to `assets/bitmap/`
 - Works fully offline after installation
+- Works directly with Kestrel 5700 elite with link 
 
 ### Managing Saved Cards
 - **Browse Files**: Navigate folders and select CSV files to load rangecard data.
@@ -423,6 +425,7 @@ https://github.com/Jgriffiths92/Open_E-Dope/issues
 - PIL/Pillow - Image processing (https://python-pillow.org)
 - Good Display - E-ink display kits (https://www.good-display.com)
 - Buildozer - APK building (https://github.com/kivy/buildozer)
+- Eamars - Kestrel 5700 decoding (https://github.com/eamars/kestrel_5700_connect_library)
 
 ### Special Thanks
 - Ballistics community for feature feedback
@@ -440,6 +443,7 @@ https://github.com/Jgriffiths92/Open_E-Dope/issues
 - Settings persistence
 - Manual data input
 - Bitmap generation for e-ink
+- Bluetooth connectivity with Kestrel 5700 elite
 
 ### Upcoming (v.2.0.0)
 - Color display support
@@ -448,7 +452,7 @@ https://github.com/Jgriffiths92/Open_E-Dope/issues
 
 ---
 
-Last Updated: April 2026
+Last Updated: Nov 2027
 Status: Active Development
 
 ---
