@@ -980,6 +980,8 @@ class MainApp(MDApp):
         # Bind global key handler for Tab/Enter navigation
         from kivy.core.window import Window
 
+        self.apply_android_system_bar_insets()
+
         # Apply to the stage name field
         stage_name_field = self.root.ids.home_screen.ids.stage_name_field
         stage_name_field.bind(text=self.auto_capitalize)
@@ -989,6 +991,16 @@ class MainApp(MDApp):
         stage_notes_field.bind(text=self.auto_capitalize)
 
         Window.bind(on_key_down=self.global_key_handler)
+
+    def apply_android_system_bar_insets(self):
+        if not is_android() or mActivity is None or autoclass is None:
+            return
+
+        try:
+            SystemBarInsets = autoclass("com.openedope.open_edope.SystemBarInsets")
+            SystemBarInsets.apply(mActivity)
+        except Exception as e:
+            print(f"Could not apply Android system-bar insets: {e}")
 
     def auto_capitalize(self, instance, value):
         """
