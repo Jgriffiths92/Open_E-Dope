@@ -49,7 +49,25 @@ jobs:
         P4A_RELEASE_KEYSTORE_PASSWD: ${{ secrets.KEYSTORE_PASSWORD }}
         P4A_RELEASE_KEYALIAS: ${{ secrets.KEY_ALIAS }}
         P4A_RELEASE_KEYALIAS_PASSWD: ${{ secrets.KEY_PASSWORD }}
-      run: yes | buildozer -v android release
+      run: |
+        set -o pipefail
+        for attempt in 1 2 3; do
+          log_file="$(mktemp)"
+          if buildozer -v android release 2>&1 | tee "$log_file"; then
+            rm "$log_file"
+            exit 0
+          else
+            status=$?
+          fi
+
+          if ! grep -Eq 'HTTP Error 5[0-9][0-9]' "$log_file" || [ "$attempt" -eq 3 ]; then
+            rm "$log_file"
+            exit "$status"
+          fi
+
+          rm "$log_file"
+          sleep $((attempt * 30))
+        done
 
     - name: Upload Signed AAB
       uses: actions/upload-artifact@v4

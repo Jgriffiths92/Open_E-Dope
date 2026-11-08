@@ -38,7 +38,25 @@ jobs:
       run: pip install --upgrade Cython==0.29.36 virtualenv buildozer
 
     - name: Compile APK
-      run: yes | buildozer -v android debug
+      run: |
+        set -o pipefail
+        for attempt in 1 2 3; do
+          log_file="$(mktemp)"
+          if buildozer -v android debug 2>&1 | tee "$log_file"; then
+            rm "$log_file"
+            exit 0
+          else
+            status=$?
+          fi
+
+          if ! grep -Eq 'HTTP Error 5[0-9][0-9]' "$log_file" || [ "$attempt" -eq 3 ]; then
+            rm "$log_file"
+            exit "$status"
+          fi
+
+          rm "$log_file"
+          sleep $((attempt * 30))
+        done
 
     - name: Upload Output Artifact
       uses: actions/upload-artifact@v4
