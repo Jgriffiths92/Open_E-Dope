@@ -2650,16 +2650,16 @@ class MainApp(MDApp):
             self.kestrel_debounce_timers[row_key].cancel()
             print(f"[DEBOUNCE] Cancelled previous timer for row {row_key}")
         
-        # Schedule a new debounce timer - only queue after user stops typing for 300ms
+        # Schedule a new debounce timer - only queue after user stops typing for 500ms
         def do_queue():
             print(f"[DEBOUNCE] User stopped typing, now queueing {captured_value}m")
             self._actually_queue_kestrel_range(captured_value, row_fields)
             if row_key in self.kestrel_debounce_timers:
                 del self.kestrel_debounce_timers[row_key]
         
-        timer = Clock.schedule_once(lambda dt: do_queue(), 0.3)
+        timer = Clock.schedule_once(lambda dt: do_queue(), 0.5)
         self.kestrel_debounce_timers[row_key] = timer
-        print(f"[DEBOUNCE] Scheduled queue for {captured_value}m (waiting 300ms for more typing)")
+        print(f"[DEBOUNCE] Scheduled queue for {captured_value}m (waiting 500ms for more typing)")
     
     def _actually_queue_kestrel_range(self, captured_value, row_fields):
         """Actually queue the range after debounce delay"""
